@@ -159,9 +159,9 @@ On a pull request that means someone changed the model without rebuilding; on th
 weekday run it means FLEX moved and these docs have not caught up. It then runs the render
 check, lint, typecheck and tests, and publishes `site/` to Pages from `main`.
 
-> Two things this repository needs configured, both one-off:
+> Pages must be configured with **Source: GitHub Actions**, not a branch — `site/` is
+> gitignored, so a branch-based build would publish nothing.
 >
-> - **Pages source must be "GitHub Actions"**, not a branch. `site/` is gitignored, so a
->   branch-based build would publish nothing.
-> - **A `FLEX_READ_TOKEN` secret** with `Contents: read` on `govuk-once/flex`. The default
->   `GITHUB_TOKEN` is scoped to this repository alone and cannot check FLEX out.
+> No token is needed while FLEX is public. If it is ever made private, the checkout step
+> needs one with `Contents: read` on it; the default `GITHUB_TOKEN` is scoped to this
+> repository alone and cannot read another.

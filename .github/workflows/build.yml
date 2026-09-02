@@ -40,16 +40,15 @@ jobs:
       # Checked out to exactly where explorer.config.json's `source.root` points, so CI and
       # a local `pnpm sync` put it in the same place and nothing has a second opinion.
       #
-      # FLEX is a separate private repository, so this needs a token with read access to it —
-      # the default GITHUB_TOKEN is scoped to this repository alone. Set FLEX_READ_TOKEN to a
-      # fine-grained PAT or GitHub App token with Contents: read on govuk-once/flex.
+      # FLEX is public, so no token is needed. If it is ever made private this step needs one
+      # with Contents: read on it — the default GITHUB_TOKEN is scoped to this repository
+      # alone and cannot read another.
       - name: Checkout the FLEX source it documents
         uses: actions/checkout@v5
         with:
           repository: govuk-once/flex
           ref: ${{ env.FLEX_REF }}
           path: architecture-docs/.sources/flex
-          token: ${{ secrets.FLEX_READ_TOKEN }}
           persist-credentials: false
 
       - name: Setup pnpm
