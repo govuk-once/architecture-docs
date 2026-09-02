@@ -1,0 +1,127 @@
+name: Build and publish
+
+# The explorer is derived from the FLEX source, so every run checks out FLEX beside this
+# repository and rebuilds from it. That is also the drift check: architecture-facts.json is
+# committed, so if a rebuild changes it, something in FLEX moved and the docs have not
+# caught up yet.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  # Nothing here changes when FLEX changes, so a scheduled run is the only thing that
+  # notices a route, domain or alarm added over there.
+  schedule:
+    - cron: "17 7 * * 1-5"
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  FLEX_REF: main
+
+jobs:
+  build:
+    name: Build and verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout the docs
+        uses: actions/checkout@v5
+        with:
+          path: architecture-docs
+          persist-credentials: false
+
+      # Checked out to exactly where explorer.config.json's `source.root` points, so CI and
+      # a local `pnpm sync` put it in the same place and nothing has a second opinion.
+      #
+      # FLEX is a separate private repository, so this needs a token with read access to it —
+      # the default GITHUB_TOKEN is scoped to this repository alone. Set FLEX_READ_TOKEN to a
+      # fine-grained PAT or GitHub App token with Contents: read on govuk-once/flex.
+      - name: Checkout the FLEX source it documents
+        uses: actions/checkout@v5
+        with:
+          repository: govuk-once/flex
+          ref: ${{ env.FLEX_REF }}
+          path: architecture-docs/.sources/flex
+          token: ${{ secrets.FLEX_READ_TOKEN }}
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup node
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: architecture-docs/.nvmrc
+          cache: pnpm
+          cache-dependency-path: architecture-docs/pnpm-lock.yaml
+
+      # The domain and gateway configs are imported as modules rather than parsed, so the
+      # FLEX checkout needs its own dependencies resolvable. The alarm constructs are read
+      # as text and need nothing.
+      - name: Install FLEX dependencies
+        working-directory: architecture-docs/.sources/flex
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Install dependencies
+        working-directory: architecture-docs
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        working-directory: architecture-docs
+        run: pnpm build
+
+      # The facts are committed so a change in FLEX is a reviewable diff here. If this
+      # fails on a scheduled run, FLEX moved; if it fails on a pull request, someone
+      # changed the model without rebuilding.
+      - name: Check the committed facts are up to date
+        working-directory: architecture-docs
+        run: |
+          if ! git diff --exit-code --stat architecture-facts.json; then
+            echo "::error file=architecture-facts.json::Out of date against ${{ env.FLEX_REF }}. Run 'pnpm build' and commit the result."
+            exit 1
+          fi
+
+      - name: Install Chromium
+        working-directory: architecture-docs
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Render checks
+        working-directory: architecture-docs
+        run: pnpm check
+
+      - name: Lint, typecheck and test
+        working-directory: architecture-docs
+        run: |
+          pnpm lint
+          pnpm tsc
+          pnpm test --run
+
+      - name: Upload Pages artifact
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: architecture-docs/site
+
+  deploy:
+    name: Deploy to Pages
+    needs: build
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - name: Deploy
+        id: deploy
+        uses: actions/deploy-pages@v4

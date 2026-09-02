@@ -1,0 +1,13 @@
+# A single package, but pnpm reads its settings from here.
+
+# A newly published version is quarantined for seven days. If an install fails for a
+# fresh release, that is why — pick an older version rather than lowering this.
+minimumReleaseAge: 10080
+
+savePrefix: ""
+
+# esbuild backs tsx and vitest and needs its install script to produce a binary, and
+# Playwright downloads the browser the render check drives. Nothing else may run one.
+allowBuilds:
+  "@playwright/browser-chromium": true
+  esbuild: true

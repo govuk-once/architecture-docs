@@ -1,0 +1,12 @@
+node_modules/
+
+# The built site, assembled by `pnpm build` and published by CI. Regenerating it is
+# deterministic, and a 400KB generated blob makes for meaningless diffs.
+site/
+
+.DS_Store
+coverage/
+
+# The source repositories this explorer documents, pulled in by `pnpm sync`.
+# Disposable: `pnpm clean` removes them.
+.sources/

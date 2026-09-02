@@ -1,0 +1,41 @@
+{
+  "name": "architecture-docs",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "The FLEX architecture explorer: a LikeC4 model, and the pipeline that renders and verifies it.",
+  "packageManager": "pnpm@11.17.0",
+  "scripts": {
+    "sync": "tsx scripts/syncSource.ts",
+    "clean": "tsx scripts/syncSource.ts --clean",
+    "facts": "tsx scripts/architectureFacts.ts",
+    "build": "pnpm facts && tsx scripts/buildArchitectureExplorer.ts",
+    "check": "tsx scripts/checkArchitectureExplorer.ts",
+    "serve": "pnpm build && tsx scripts/serveArchitectureDocs.ts",
+    "tsc": "tsc --noEmit",
+    "lint": "eslint --max-warnings=0 .",
+    "test": "vitest --passWithNoTests"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@eslint/json": "2.0.1",
+    "@eslint/markdown": "8.0.3",
+    "@types/node": "26.1.1",
+    "eslint": "10.7.0",
+    "eslint-config-prettier": "10.1.8",
+    "eslint-plugin-prettier": "5.5.6",
+    "eslint-plugin-simple-import-sort": "14.0.0",
+    "eslint-plugin-sonarjs": "4.2.0",
+    "eslint-plugin-unicorn": "72.0.0",
+    "globals": "17.7.0",
+    "likec4": "1.59.2",
+    "playwright": "1.61.0",
+    "prettier": "3.8.3",
+    "react": "19.2.7",
+    "react-dom": "19.2.7",
+    "tsx": "4.23.1",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.65.0",
+    "vitest": "4.1.10"
+  }
+}
