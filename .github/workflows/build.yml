@@ -13,7 +13,16 @@ on:
   # notices a route, domain or alarm added over there.
   schedule:
     - cron: "17 7 * * 1-5"
+  # A manual run can publish whatever branch it is started from. There is one Pages site
+  # per repository, so this replaces what is live until the next push to main rebuilds it —
+  # which is the point on a branch nobody can review yet, and a footgun otherwise. It is
+  # opt-in per run for that reason.
   workflow_dispatch:
+    inputs:
+      deploy:
+        description: "Publish this build to GitHub Pages (replaces the live site)"
+        type: boolean
+        default: false
 
 concurrency:
   group: build-${{ github.ref }}
@@ -95,16 +104,33 @@ jobs:
           pnpm tsc
           pnpm test --run
 
+      # A push to main always publishes. Any other run publishes only when asked, and a
+      # scheduled run never does: it is a drift check, and a drifted build fails before it
+      # gets here anyway.
       - name: Upload Pages artifact
-        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        if: >-
+          (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+          (github.event_name == 'workflow_dispatch' && inputs.deploy)
         uses: actions/upload-pages-artifact@v4
         with:
           path: site
 
+      # On a pull request the build is still worth looking at, so it is kept as a plain
+      # artifact: download it, open index.html. Nothing is published.
+      - name: Upload the built site for review
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: site-${{ github.event.pull_request.number }}
+          path: site
+          retention-days: 14
+
   deploy:
     name: Deploy to Pages
     needs: build
-    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    if: >-
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_dispatch' && inputs.deploy)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
