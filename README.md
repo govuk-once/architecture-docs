@@ -1,5 +1,7 @@
 # FLEX Architecture
 
+**→ [govuk-once.github.io/architecture-docs](https://govuk-once.github.io/architecture-docs/)**
+
 The architecture of **FLEX** documented as one interactive page, built from versioned source
 in [`explorer/`](explorer/) and derived from the FLEX code itself rather than from prior
 design documents.
@@ -11,8 +13,9 @@ and the checks that keep it honest; it reads the FLEX source and never writes to
 
 ## View it
 
-Published to GitHub Pages on every merge to `main`. To read it locally, this repository
-pulls the source it documents for you:
+Published to **[govuk-once.github.io/architecture-docs](https://govuk-once.github.io/architecture-docs/)**
+on every merge to `main`. To read it locally, this repository pulls the source it documents
+for you:
 
 ```bash
 pnpm install
