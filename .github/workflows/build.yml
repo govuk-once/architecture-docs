@@ -34,7 +34,6 @@ jobs:
       - name: Checkout the docs
         uses: actions/checkout@v5
         with:
-          path: architecture-docs
           persist-credentials: false
 
       # Checked out to exactly where explorer.config.json's `source.root` points, so CI and
@@ -48,7 +47,7 @@ jobs:
         with:
           repository: govuk-once/flex
           ref: ${{ env.FLEX_REF }}
-          path: architecture-docs/.sources/flex
+          path: .sources/flex
           persist-credentials: false
 
       - name: Setup pnpm
@@ -57,30 +56,27 @@ jobs:
       - name: Setup node
         uses: actions/setup-node@v6
         with:
-          node-version-file: architecture-docs/.nvmrc
+          node-version-file: .nvmrc
           cache: pnpm
-          cache-dependency-path: architecture-docs/pnpm-lock.yaml
+          cache-dependency-path: pnpm-lock.yaml
 
       # The domain and gateway configs are imported as modules rather than parsed, so the
       # FLEX checkout needs its own dependencies resolvable. The alarm constructs are read
       # as text and need nothing.
       - name: Install FLEX dependencies
-        working-directory: architecture-docs/.sources/flex
+        working-directory: .sources/flex
         run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Install dependencies
-        working-directory: architecture-docs
         run: pnpm install --frozen-lockfile
 
       - name: Build
-        working-directory: architecture-docs
         run: pnpm build
 
       # The facts are committed so a change in FLEX is a reviewable diff here. If this
       # fails on a scheduled run, FLEX moved; if it fails on a pull request, someone
       # changed the model without rebuilding.
       - name: Check the committed facts are up to date
-        working-directory: architecture-docs
         run: |
           if ! git diff --exit-code --stat architecture-facts.json; then
             echo "::error file=architecture-facts.json::Out of date against ${{ env.FLEX_REF }}. Run 'pnpm build' and commit the result."
@@ -88,15 +84,12 @@ jobs:
           fi
 
       - name: Install Chromium
-        working-directory: architecture-docs
         run: pnpm exec playwright install --with-deps chromium
 
       - name: Render checks
-        working-directory: architecture-docs
         run: pnpm check
 
       - name: Lint, typecheck and test
-        working-directory: architecture-docs
         run: |
           pnpm lint
           pnpm tsc
@@ -106,7 +99,7 @@ jobs:
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@v4
         with:
-          path: architecture-docs/site
+          path: site
 
   deploy:
     name: Deploy to Pages
