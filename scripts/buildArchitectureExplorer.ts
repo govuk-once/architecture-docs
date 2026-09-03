@@ -1,23 +1,25 @@
 /**
- * Builds the interactive architecture explorer from its parts.
+ * Builds the site: one self-contained page per project, and an index over them.
  *
- *   docs/architecture/explorer/model/*.c4      the diagrams, as a LikeC4 model
- *   docs/architecture/explorer/model/views.json tab order, audience, tables
- *   docs/architecture/explorer/model/resources.json  the AWS inventory
- *   docs/architecture/explorer/styles.css     presentation
- *   docs/architecture/explorer/shell.html     page markup
- *   docs/architecture/explorer/app.js         renderer and interactions
- *   docs/architecture/explorer/icons.svg      optional AWS icon symbols
+ *   explorer/theme.css, styles.css, shell.html, app.js, icons.svg   the renderer
+ *   explorer/index.html, index.css                                  the index page
+ *   projects/<id>/model/*.c4, views.json, resources.json            one architecture
+ *   projects/<id>/architecture-facts.json                           its derived counts
  *        │
- *        └─> docs/architecture/explorer.html  single self-contained page (committed)
+ *        ├─> site/index.html      the grid of architectures
+ *        └─> site/<id>/index.html one self-contained page each (generated, gitignored)
  *
- * The page has to stay single-file: it is served straight from the docs folder and
- * published as a shareable artifact, neither of which can fetch a sibling file.
+ * The renderer knows nothing about any project: everything specific to one arrives as
+ * `CONFIG`, injected above `app.js`. That is what makes a second architecture a directory
+ * under `projects/` and a line in `explorer.config.json` rather than a fork of this file.
  *
- * Run:  pnpm architecture:build
- *       pnpm architecture:build --body /tmp/body.html   (same page without the
- *                                                        html/head/body wrapper,
- *                                                        for artifact publishing)
+ * A page has to stay single-file: it is opened straight off disk and published as a
+ * shareable artifact, neither of which can fetch a sibling file.
+ *
+ * Run:  pnpm build                        every project, and the index
+ *       pnpm build flex                   one project, and the index
+ *       pnpm build flex --body /tmp/b.html  that page without the html/head/body
+ *                                           wrapper, for artifact publishing
  */
 import {
   existsSync,
@@ -30,25 +32,26 @@ import path from "node:path";
 
 import { check } from "prettier";
 
-import type { ArchitectureFacts, PerStage } from "./lib/architectureTypes.js";
 import { loadLikeC4Views } from "./lib/loadLikeC4Views.js";
 import {
   DOCS_ROOT,
   inDocs,
-  inSource,
-  SITE_PAGE,
+  SITE_CONFIG,
+  SITE_INDEX,
   SITE_ROOT,
-  type SiteContract,
-  type SourceContract,
 } from "./lib/paths.js";
+import {
+  inSource,
+  loadProjects,
+  type Project,
+  selectProjects,
+} from "./lib/projects.js";
+import { readState, short } from "./lib/sourceState.js";
 
 const SRC = inDocs("explorer");
-const OUT = SITE_PAGE;
-const FACTS = inDocs("architecture-facts.json");
 const ICONS = path.join(SRC, "icons.svg");
-const CONFIG = path.join(SRC, "explorer.config.json");
-const MODEL = path.join(SRC, "model");
 
+const asset = (name: string) => readFileSync(path.join(SRC, name), "utf8");
 /**
  * CloudFormation namespace to icon, so every `AWS::X::Y` in a `type` field picks up the
  * right service icon without anything being tagged by hand. Defined here rather than in
@@ -116,90 +119,24 @@ function loadIcons(): { markup: string; ids: Set<string> } {
 }
 
 /**
- * Everything about this page that belongs to one project: what it is called, the
- * ownership kinds and their colours, the deployment stages, and which resource counts
- * come from the generated facts. Ported to another repository, this file and the views
- * are what change — the build, the renderer and the checks do not.
+ * Colour is presentation, so the kind palette lives in theme.css with every other theme
+ * token rather than in a project's config. What a project owns is which kinds exist —
+ * which means the two can fall out of step, and a kind with no colour would draw a box
+ * with no stroke and say nothing. So the build checks instead of generating: every
+ * configured kind needs a `--legend-<colour>` token in all three theme blocks, and no two
+ * kinds may name the same one. The rules that use them are generic — the renderer passes
+ * the colour down as `--kind`, so adding a kind is one token.
  */
-interface ExplorerConfig {
-  title: string;
-  tagline: string;
-  docsTitle: string;
-  repo: string;
-  slug: string;
-  inventoryView: string;
-  iconLabel: string;
-  filterHint: string;
-  kinds: { id: string; label: string; colour: string }[];
-  stages: { id: string; label: string; facts: string }[];
-  /** Where the FLEX checkout is and what is read from it — see lib/paths.ts. */
-  source: SourceContract;
-  /** Where the built site is assembled — see lib/paths.ts. */
-  site: SiteContract;
-}
-
-function loadConfig(): ExplorerConfig {
-  let cfg: ExplorerConfig;
-  try {
-    cfg = JSON.parse(readFileSync(CONFIG, "utf8")) as ExplorerConfig;
-  } catch (err) {
-    throw new Error("explorer.config.json is missing or not valid JSON", {
-      cause: err,
-    });
-  }
-  const blank = (
-    [
-      "title",
-      "tagline",
-      "docsTitle",
-      "repo",
-      "slug",
-      "inventoryView",
-      "iconLabel",
-      "filterHint",
-    ] as const
-  ).filter((k) => !cfg[k].trim());
-  if (blank.length)
-    throw new Error(`explorer.config.json has no ${blank.join(", ")}`);
-  // paths.ts reads `source` before this runs and fails loudly if it is malformed, so this
-  // only guards against it being dropped from the type's point of view.
-  if (!cfg.source.root)
-    throw new Error("explorer.config.json has no source.root");
-  if (!cfg.site.root) throw new Error("explorer.config.json has no site.root");
-  if (!cfg.kinds.length) throw new Error("explorer.config.json has no kinds");
-  if (!cfg.stages.length) throw new Error("explorer.config.json has no stages");
-  if (!/^[a-z][a-z0-9-]*$/.test(cfg.slug))
-    throw new Error(
-      "slug must be lowercase kebab-case — it names exported files",
-    );
-  for (const k of cfg.kinds)
-    if (!/^[a-z][a-z0-9-]*$/.test(k.id))
-      throw new Error(`kind id "${k.id}" must be lowercase kebab-case`);
-  for (const k of cfg.kinds)
-    if (!k.colour.trim())
-      throw new Error(`kind "${k.id}" names no colour from the palette`);
-  return cfg;
-}
-
-/**
- * Colour is presentation, so the kind palette lives in styles.css with every other theme
- * token rather than in the config. What the config owns is which kinds exist — which
- * means the two can fall out of step, and a kind with no colour would draw a box with no
- * stroke and say nothing. So the build checks instead of generating: every configured
- * kind needs a `--p-<id>` token in all three theme blocks, and no token may be
- * left behind after its kind is gone. The rules that use them are generic — the
- * renderer passes the colour down as `--kind`, so adding a kind is one token.
- */
-function checkKindStyles(kinds: ExplorerConfig["kinds"]): string[] {
-  const css = readFileSync(path.join(SRC, "styles.css"), "utf8");
+function checkKindStyles(project: Project): string[] {
+  const css = asset("theme.css");
   const problems: string[] = [];
   const palette = new Set(
     [...css.matchAll(/--legend-([a-z0-9-]+):/g)].map((m) => m[1] ?? ""),
   );
-  for (const k of kinds) {
+  for (const k of project.config.kinds) {
     if (!palette.has(k.colour)) {
       problems.push(
-        `styles.css: kind "${k.id}" wants --legend-${k.colour}, which the palette does not define`,
+        `theme.css: kind "${k.id}" wants --legend-${k.colour}, which the palette does not define`,
       );
       continue;
     }
@@ -207,27 +144,57 @@ function checkKindStyles(kinds: ExplorerConfig["kinds"]): string[] {
       .length;
     if (defined < 3)
       problems.push(
-        `styles.css: --legend-${k.colour} is defined in ${String(defined)} of the 3 theme blocks — light, dark media, dark attribute`,
+        `theme.css: --legend-${k.colour} is defined in ${String(defined)} of the 3 theme blocks — light, dark media, dark attribute`,
       );
   }
   // Two kinds sharing a colour makes the legend unreadable.
   const used = new Map<string, string>();
-  for (const k of kinds) {
+  for (const k of project.config.kinds) {
     const first = used.get(k.colour);
     if (first)
       problems.push(
-        `explorer.config.json: kinds "${first}" and "${k.id}" both use --legend-${k.colour}`,
+        `projects/${project.id}: kinds "${first}" and "${k.id}" both use --legend-${k.colour}`,
       );
     else used.set(k.colour, k.id);
   }
   return problems;
 }
 
-/** Walks a dotted path from explorer.config.json into the generated facts. */
+/**
+ * Why there are no facts to check against — which is a different bug depending on whether
+ * the project declares a derivation at all. One is "you have not run it yet"; the other is
+ * a model claiming a number that nothing in this repository could ever produce.
+ */
+function noFacts(project: Project, claim: string): string {
+  return project.derive
+    ? `${project.id}: ${claim}, but there is no architecture-facts.json — run ` +
+        `\`pnpm facts ${project.id}\``
+    : `${project.id}: ${claim}, but the project declares no \`derive\` block, so nothing ` +
+        `generates one. Add a derivation in scripts/derive/, or drop the binding and ` +
+        `maintain the number by hand.`;
+}
+
+/** A project's derived facts, or null when it has none. The checks skip either way. */
+function readFacts(project: Project): Record<string, unknown> | null {
+  if (!existsSync(project.factsPath)) return null;
+  try {
+    return JSON.parse(readFileSync(project.factsPath, "utf8")) as Record<
+      string,
+      unknown
+    >;
+  } catch {
+    return null;
+  }
+}
+
+/** One number per stage, keyed by whatever the project calls its stages in the facts. */
+type StageCounts = Record<string, number>;
+
+/** Walks a dotted path from a resource row into that project's generated facts. */
 function resolvePath(
-  facts: ArchitectureFacts,
+  facts: Record<string, unknown>,
   dotted: string,
-): PerStage | undefined {
+): StageCounts | undefined {
   let node: unknown = facts;
   for (const key of dotted.split(".")) {
     if (typeof node !== "object" || node === null) return undefined;
@@ -235,7 +202,7 @@ function resolvePath(
       ? node.find((d) => (d as { name?: string }).name === key)
       : (node as Record<string, unknown>)[key];
   }
-  return node as PerStage | undefined;
+  return node as StageCounts | undefined;
 }
 
 const FONTS =
@@ -243,7 +210,25 @@ const FONTS =
   '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>\n' +
   '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">';
 
-type Kind = "person" | "flex" | "govuk" | "third";
+/** The theme choice is the reader's and this is one site, so every page shares one key. */
+const THEME_KEY = "arch-theme";
+
+const esc = (s: string) =>
+  s.replace(
+    /[&<>"]/g,
+    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c] ?? c,
+  );
+
+/** One page, wrapped. Assembled from parts rather than by slicing the body into lines. */
+function page(title: string, head: string, body: string): string {
+  return (
+    `<!doctype html>\n<html lang="en">\n<head>\n` +
+    `<meta charset="utf-8">\n<meta name="viewport" content="width=device-width,initial-scale=1">\n` +
+    `<title>${esc(title)}</title>\n${FONTS}\n${head}\n</head>\n` +
+    `<body>\n${body}\n</body>\n</html>\n`
+  );
+}
+/** Whatever the project's config declares; checkGeometry holds a node to that set. */
 type Plane = "request" | "control";
 
 /** The payload behind every clickable thing: what it is, and the code that proves it. */
@@ -270,7 +255,7 @@ interface Box {
 
 interface ViewNode extends Box {
   sub: string;
-  kind: Kind;
+  kind: string;
   plane: Plane;
   /** AWS service icon, without the "i-" prefix. Optional. */
   icon?: string;
@@ -310,7 +295,7 @@ interface DocItem {
   id: string;
   name: string;
   n: Count;
-  /** Dotted path into architecture-facts.json — the count above must match it. */
+  /** Dotted path into that project's architecture-facts.json — the count must match. */
   from?: string;
   meta: string[];
   d: Detail;
@@ -343,18 +328,6 @@ interface View {
   /** Reference views only — set to "doc" by loadViews(). */
   type?: string;
   groups?: DocGroup[];
-}
-
-/**
- * The LikeC4 model is the source. Nothing is generated to disk between it and the page: a
- * derived JSON would either be committed and drift, or gitignored and so never reviewed.
- */
-async function loadViews(): Promise<View[]> {
-  const views = (await loadLikeC4Views(MODEL)) as unknown as View[];
-
-  // A view with groups and no nodes is a reference tab; the renderer keys off this.
-  for (const v of views) if (!v.nodes && v.groups) v.type = "doc";
-  return views;
 }
 
 /** Catches the class of bug where a literal <name> is eaten as an unknown HTML tag. */
@@ -462,9 +435,9 @@ function checkGeometry(views: View[], kindIds: Set<string>) {
 }
 
 /** Every derivable count must equal what the configs actually say. */
-function checkDerivedCounts(views: View[], cfg: ExplorerConfig): string[] {
+function checkDerivedCounts(project: Project, views: View[]): string[] {
   const problems: string[] = [];
-  const resources = views.find((v) => v.id === "resources");
+  const resources = views.find((v) => v.id === project.config.inventoryView);
   // A resource says where its own count comes from, so a renamed or deleted row takes
   // its mapping with it rather than leaving a dangling key somewhere else.
   const claims = (resources?.groups ?? [])
@@ -472,12 +445,9 @@ function checkDerivedCounts(views: View[], cfg: ExplorerConfig): string[] {
     .filter((it) => it.from);
   if (!claims.length) return problems;
 
-  let facts: ArchitectureFacts;
-  try {
-    facts = JSON.parse(readFileSync(FACTS, "utf8")) as ArchitectureFacts;
-  } catch {
-    return ["architecture-facts.json is missing — run pnpm architecture:facts"];
-  }
+  const facts = readFacts(project);
+  if (!facts)
+    return [noFacts(project, "model/resources.json claims a derived count")];
 
   for (const item of claims) {
     const id = item.id;
@@ -487,13 +457,14 @@ function checkDerivedCounts(views: View[], cfg: ExplorerConfig): string[] {
       problems.push(`architecture-facts.json has no ${where}`);
       continue;
     }
-    for (const st of cfg.stages) {
+    for (const st of project.config.stages) {
       const claimed = typeof item.n === "number" ? item.n : item.n?.[st.id];
-      const actual = truth[st.facts as keyof PerStage];
+      const actual = truth[st.facts];
       if (claimed !== actual)
         problems.push(
           `resources/${id}: says ${String(claimed)} for ${st.id}, but the configs say ` +
-            `${String(actual)} (${where}.${st.facts}). Update model/resources.json, or fix the config.`,
+            `${String(actual)} (${where}.${st.facts}). Update ` +
+            `projects/${project.id}/model/resources.json, or fix the config.`,
         );
     }
   }
@@ -505,7 +476,7 @@ function checkDerivedCounts(views: View[], cfg: ExplorerConfig): string[] {
  * thing tying a hand-written table back to the code, so a moved or deleted file has to fail
  * here — a dead link is worse than no link, because it still looks like provenance.
  */
-function checkTableCitations(views: View[]): string[] {
+function checkTableCitations(project: Project, views: View[]): string[] {
   const problems: string[] = [];
   for (const v of views)
     for (const t of v.tables ?? []) {
@@ -514,7 +485,7 @@ function checkTableCitations(views: View[]): string[] {
         continue;
       }
       for (const [label, rel] of t.code)
-        if (!existsSync(inSource(rel)))
+        if (!existsSync(inSource(project, rel)))
           problems.push(
             `${v.id}/"${t.name}": cites ${rel} (${label}), which does not exist`,
           );
@@ -527,7 +498,7 @@ function checkTableCitations(views: View[]): string[] {
  * table to the code: an alarm added, removed or renamed in the CDK constructs breaks the
  * build here rather than leaving a table that reads as current and is not.
  */
-function checkDerivedTables(views: View[]): string[] {
+function checkDerivedTables(project: Project, views: View[]): string[] {
   const problems: string[] = [];
   const bound = views.flatMap((v) =>
     (v.tables ?? []).flatMap((t) =>
@@ -536,16 +507,15 @@ function checkDerivedTables(views: View[]): string[] {
   );
   if (!bound.length) return problems;
 
-  let facts: ArchitectureFacts;
-  try {
-    facts = JSON.parse(readFileSync(FACTS, "utf8")) as ArchitectureFacts;
-  } catch {
-    return ["architecture-facts.json is missing — run pnpm architecture:facts"];
-  }
+  const facts = readFacts(project);
+  if (!facts)
+    return [
+      noFacts(project, `"${bound[0]?.t.name ?? ""}" is bound to derived facts`),
+    ];
 
   for (const { v, t, d } of bound) {
     const { from, key, col } = d;
-    const truth = (facts as unknown as Record<string, unknown>)[from];
+    const truth = facts[from];
     if (!Array.isArray(truth)) {
       problems.push(
         `${v.id}/"${t.name}": architecture-facts.json has no ${from}`,
@@ -577,7 +547,7 @@ function checkDerivedTables(views: View[]): string[] {
     if (claimed.length !== actual.length)
       problems.push(
         `${v.id}/"${t.name}": ${String(claimed.length)} rows but the code has ` +
-          `${String(actual.length)} ${from}. Run pnpm architecture:facts, then update the table.`,
+          `${String(actual.length)} ${from}. Run \`pnpm facts ${project.id}\`, then update the table.`,
       );
   }
   return problems;
@@ -588,14 +558,17 @@ function checkDerivedTables(views: View[]): string[] {
  * else. Checking it here means a hand-edited view fails the build immediately, rather than
  * passing locally and failing lint in CI.
  */
-async function checkFormatting(): Promise<string[]> {
+async function checkFormatting(project: Project): Promise<string[]> {
   const problems: string[] = [];
   // The .c4 files are checked by LikeC4 itself; these are the committed JSON beside them.
-  for (const f of readdirSync(MODEL).filter((n) => n.endsWith(".json"))) {
-    const file = path.join(MODEL, f);
+  for (const f of readdirSync(project.modelDir).filter((n) =>
+    n.endsWith(".json"),
+  )) {
+    const file = path.join(project.modelDir, f);
     if (!(await check(readFileSync(file, "utf8"), { filepath: file })))
       problems.push(
-        `model/${f}: not prettier-formatted — run pnpm exec eslint --fix ${path.relative(DOCS_ROOT, file)}`,
+        `${path.relative(DOCS_ROOT, file)}: not prettier-formatted — run ` +
+          `pnpm exec eslint --fix ${path.relative(DOCS_ROOT, file)}`,
       );
   }
   return problems;
@@ -632,9 +605,12 @@ function checkIcons(views: View[], ids: Set<string>): string[] {
   return problems;
 }
 
-function checkPlacement(views: View[]) {
-  const resources = views.find((v) => v.id === "resources");
-  if (!resources) return ["no resources view — placement cannot be checked"];
+function checkPlacement(project: Project, views: View[]) {
+  const resources = views.find((v) => v.id === project.config.inventoryView);
+  if (!resources)
+    return [
+      `no ${project.config.inventoryView} view — placement cannot be checked`,
+    ];
   const known = new Set<string>();
   for (const g of resources.groups ?? [])
     for (const it of g.items) known.add(it.id);
@@ -654,74 +630,227 @@ function checkPlacement(views: View[]) {
   return problems;
 }
 
-async function main() {
-  const bodyFlag = process.argv.indexOf("--body");
-  const views = await loadViews();
-  const cfg = loadConfig();
-  const kindIds = new Set(cfg.kinds.map((k) => k.id));
+/**
+ * The LikeC4 model is the source. Nothing is generated to disk between it and the page: a
+ * derived JSON would either be committed and drift, or gitignored and so never reviewed.
+ */
+async function loadViews(project: Project): Promise<View[]> {
+  const views = (await loadLikeC4Views(project.modelDir)) as unknown as View[];
+  // A view with groups and no nodes is a reference tab; the renderer keys off this.
+  for (const v of views) if (!v.nodes && v.groups) v.type = "doc";
+  return views;
+}
+
+/** Everything one project's page needs, and the report of what was wrong with it. */
+interface Built {
+  project: Project;
+  views: View[];
+  problems: string[];
+  body: string;
+}
+
+async function buildProject(project: Project): Promise<Built> {
+  const views = await loadViews(project);
+  const kindIds = new Set(project.config.kinds.map((k) => k.id));
+  const icons = loadIcons();
 
   checkAngleBrackets(views);
-  const icons = loadIcons();
   const problems = [
-    ...(await checkFormatting()),
+    ...(await checkFormatting(project)),
     ...checkIcons(views, icons.ids),
-    ...(views.some((v) => v.id === cfg.inventoryView)
+    ...(views.some((v) => v.id === project.config.inventoryView)
       ? []
       : [
-          `explorer.config.json: inventoryView "${cfg.inventoryView}" is not one of the views`,
+          `projects/${project.id}: inventoryView "${project.config.inventoryView}" is not one of its views`,
         ]),
-    ...checkKindStyles(cfg.kinds),
+    ...checkKindStyles(project),
     ...checkGeometry(views, kindIds),
-    ...checkPlacement(views),
-    ...checkDerivedCounts(views, cfg),
-    ...checkTableCitations(views),
-    ...checkDerivedTables(views),
+    ...checkPlacement(project, views),
+    ...checkDerivedCounts(project, views),
+    ...checkTableCitations(project, views),
+    ...checkDerivedTables(project, views),
   ];
-  const strict = !process.argv.includes("--lenient");
-  if (problems.length) {
-    console.error(`\n${String(problems.length)} problem(s):`);
-    problems.forEach((p) => {
-      console.error(`  - ${p}`);
-    });
-    if (strict) process.exit(1);
-  }
 
   const placement = Object.fromEntries(
     views.map((v) => [v.id, v.placement ?? {}]),
   );
-  const { source: _source, site: _site, ...pageConfig } = cfg;
+  // `source` and `derive` say where the checkout is and how to read it. Both are build
+  // concerns, and the page is published, so they are dropped rather than shipped as
+  // filesystem paths.
+  const { source: _source, derive: _derive, ...rest } = project.config;
+  const pageConfig = { id: project.id, ...rest };
   const data =
-    `/* Generated from explorer/model/*.c4 — edit those, not this file. */\n` +
+    `/* Generated from projects/${project.id}/model/*.c4 — edit those, not this file. */\n` +
     `const VIEWS=${JSON.stringify(views)};\n` +
     `const PLACEMENT=${JSON.stringify(placement)};\n` +
-    // `source` says where the FLEX checkout is. That is a build concern, and the page
-    // is published, so it is dropped rather than shipped as a filesystem path.
     `const CONFIG=${JSON.stringify(pageConfig)};\n` +
     `const ICON_IDS=${JSON.stringify([...icons.ids])};\n` +
     `const SERVICE_ICON=${JSON.stringify(SERVICE_ICON)};\n` +
-    `const TYPE_ICON=${JSON.stringify(TYPE_ICON)};\n`;
+    `const TYPE_ICON=${JSON.stringify(TYPE_ICON)};\n` +
+    `const THEME_KEY=${JSON.stringify(THEME_KEY)};\n`;
 
   const body = [
-    `<title>${cfg.title}</title>`,
-    FONTS,
-    `<style>\n${readFileSync(path.join(SRC, "styles.css"), "utf8")}</style>`,
     icons.markup,
-    readFileSync(path.join(SRC, "shell.html"), "utf8"),
-    `<script>\n${data}\n${readFileSync(path.join(SRC, "app.js"), "utf8")}\n</script>`,
+    asset("shell.html"),
+    `<script>\n${data}\n${asset("app.js")}\n</script>`,
   ].join("\n");
 
-  if (bodyFlag !== -1) {
-    const dest = process.argv[bodyFlag + 1];
-    if (!dest) throw new Error("--body needs a destination path");
-    writeFileSync(dest, body);
-    console.log(`Wrote ${dest} (artifact body, no wrapper)`);
+  return { project, views, problems, body };
+}
+
+/* ------------------------------------------------------------------------------------ *
+ * The index over the projects
+ * ------------------------------------------------------------------------------------ */
+
+/** `git@github.com:govuk-once/flex.git` and its https form both read as owner/name. */
+const repoName = (url: string) =>
+  /[:/]([^/:]+\/[^/]+?)(?:\.git)?$/.exec(url)?.[1] ?? url;
+
+function projectCard(built: Built): string {
+  const { project, views } = built;
+  const state = readState(project);
+  const meta = [
+    `<span><b>${String(views.length)}</b> tabs</span>`,
+    `<span>${esc(repoName(project.source.repo))}</span>`,
+    state
+      ? `<span>built from <b>${esc(short(state.sha))}</b> · ${esc(state.committed.slice(0, 10))}</span>`
+      : "",
+  ].filter(Boolean);
+  return (
+    `<a class="card" href="${esc(project.href)}">` +
+    `<span class="tagline">${esc(project.config.tagline)}</span>` +
+    `<h2>${esc(project.config.name)}</h2>` +
+    `<p>${esc(project.config.blurb)}</p>` +
+    `<div class="meta">${meta.join("")}</div>` +
+    `</a>`
+  );
+}
+
+/**
+ * A planned architecture gets the same card and no link. It is worth showing that the
+ * site intends to cover it — but the card must not read as a door, and it must say where
+ * its description came from: a description of UDP written while reading FLEX is evidence
+ * about FLEX.
+ */
+function plannedCard(
+  p: (typeof SITE_CONFIG.planned)[number],
+  named: Map<string, string>,
+): string {
+  const from = p.seenFrom
+    ? `<span>as ${esc(named.get(p.seenFrom) ?? p.seenFrom)} sees it</span>`
+    : "";
+  return (
+    `<div class="card planned">` +
+    `<span class="tagline">${esc(p.tagline)}</span>` +
+    `<h2>${esc(p.name)}</h2>` +
+    `<p>${esc(p.blurb)}</p>` +
+    `<div class="meta"><span class="badge">Not yet documented</span>${from}</div>` +
+    `</div>`
+  );
+}
+
+function buildIndex(built: Built[]): string {
+  // A planned card credits the project whose model its description came from, by the
+  // name that project calls itself rather than by its directory.
+  const named = new Map(
+    built.map((b) => [b.project.id, b.project.config.name]),
+  );
+  const cards =
+    built.map((b) => projectCard(b)).join("\n") +
+    SITE_CONFIG.planned.map((p) => plannedCard(p, named)).join("\n");
+
+  const counted =
+    `${String(built.length)} documented` +
+    (SITE_CONFIG.planned.length
+      ? `, ${String(SITE_CONFIG.planned.length)} planned`
+      : "");
+  const footer =
+    `<p>Each architecture here is derived from its own source repository and rebuilt ` +
+    `against it on every merge. The models are the only part written by hand, and every ` +
+    `claim in one names the code that proves it.</p>`;
+
+  const body = asset("index.html")
+    .replace(
+      "<!--MASTHEAD-->",
+      `<span class="eyebrow">${esc(counted)}</span>` +
+        `<h1>${esc(SITE_CONFIG.title)}</h1>` +
+        `<p>${esc(SITE_CONFIG.blurb)}</p>`,
+    )
+    .replace("<!--CARDS-->", cards)
+    .replace("<!--FOOTER-->", footer)
+    .replace(
+      "<script>",
+      `<script>\nconst THEME_KEY=${JSON.stringify(THEME_KEY)};`,
+    );
+
+  return page(
+    SITE_CONFIG.title,
+    `<style>\n${asset("theme.css")}${asset("index.css")}</style>`,
+    body,
+  );
+}
+
+/* ------------------------------------------------------------------------------------ *
+ * Run
+ * ------------------------------------------------------------------------------------ */
+
+async function main() {
+  const bodyFlag = process.argv.indexOf("--body");
+  const asked = selectProjects(
+    // --body takes a path, which must not be read as a project id.
+    process.argv.slice(2).filter((a, i) => i + 2 !== bodyFlag + 1),
+  );
+  if (bodyFlag !== -1 && asked.length > 1)
+    throw new Error(
+      "--body writes one page — name the project: pnpm build <id> --body <path>",
+    );
+
+  const built: Built[] = [];
+  const problems: string[] = [];
+  for (const project of asked) {
+    const b = await buildProject(project);
+    built.push(b);
+    problems.push(...b.problems);
   }
 
-  const page = `<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width,initial-scale=1">\n${body.split("\n").slice(0, 4).join("\n")}\n</head>\n<body>\n${body.split("\n").slice(4).join("\n")}\n</body>\n</html>\n`;
+  const strict = !process.argv.includes("--lenient");
+  if (problems.length) {
+    console.error(`\n${String(problems.length)} problem(s):`);
+    for (const p of problems) console.error(`  - ${p}`);
+    if (strict) process.exit(1);
+  }
+
+  for (const b of built) {
+    const head = `<style>\n${asset("theme.css")}${asset("styles.css")}</style>`;
+    mkdirSync(path.dirname(b.project.pagePath), { recursive: true });
+    const html = page(b.project.config.title, head, b.body);
+    writeFileSync(b.project.pagePath, html);
+    console.log(
+      `${b.project.id}: wrote ${path.relative(DOCS_ROOT, b.project.pagePath)} ` +
+        `(${(html.length / 1024).toFixed(0)} KB, ${String(b.views.length)} tabs)`,
+    );
+    if (bodyFlag !== -1) {
+      const dest = process.argv[bodyFlag + 1];
+      if (!dest) throw new Error("--body needs a destination path");
+      writeFileSync(dest, `${head}\n${b.body}`);
+      console.log(`  wrote ${dest} (artifact body, no wrapper)`);
+    }
+  }
+
+  /*
+   * The index lists every project the site publishes, not only the ones just built, so a
+   * one-project rebuild cannot quietly drop the others off the front page. Rebuilding a
+   * card needs that project's views, so the ones not asked for are loaded here.
+   */
+  const shown =
+    asked.length === loadProjects().length
+      ? built
+      : await Promise.all(loadProjects().map((p) => buildProject(p)));
   mkdirSync(SITE_ROOT, { recursive: true });
-  writeFileSync(OUT, page);
+  writeFileSync(SITE_INDEX, buildIndex(shown));
   console.log(
-    `Wrote ${path.relative(DOCS_ROOT, OUT)} (${(page.length / 1024).toFixed(0)} KB, ${String(views.length)} tabs)`,
+    `index: wrote ${path.relative(DOCS_ROOT, SITE_INDEX)} ` +
+      `(${String(shown.length)} documented, ${String(SITE_CONFIG.planned.length)} planned)`,
   );
 }
 

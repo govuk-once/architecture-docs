@@ -1,0 +1,10 @@
+{
+  "repo": "git@github.com:govuk-once/flex.git",
+  "ref": "main",
+  "sha": "e52ee3e541a65c9368ccd36bdd18ebd5c53f2f3b",
+  "subject": "FLEX-483 docs: rewrite gateways and test fixtures (#502)",
+  "committed": "2026-09-02T09:59:18+01:00",
+  "builtFrom": "domains/*/domain.config.ts, platform/domains/*/gateway.config.ts, platform/infra/flex/src/constructs/alarms",
+  "derivation": "7c4f19fa22bf7a2a",
+  "facts": "78ae7c1e09529b84"
+}

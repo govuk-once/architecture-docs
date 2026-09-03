@@ -1,10 +1,11 @@
 /**
- * Renders the built explorer in a real browser and checks what static validation
- * cannot see: whether text fits, whether edges cross boxes they have nothing to do
- * with, whether labels sit on top of each other, and whether every clickable thing
- * actually opens something.
+ * Renders the built pages in a real browser and checks what static validation cannot
+ * see: whether text fits, whether edges cross boxes they have nothing to do with,
+ * whether labels sit on top of each other, and whether every clickable thing actually
+ * opens something. Every project's explorer, and the index over them.
  *
- *   pnpm architecture:check
+ *   pnpm check          every project, and the index
+ *   pnpm check flex     one of them, and the index
  *
  * Playwright is a devDependency of this repository, but its browser binaries are not in
  * the lockfile. If the import or the binary is missing the script says so and exits 0
@@ -17,9 +18,8 @@ import path from "node:path";
 
 import type { ConsoleMessage } from "playwright";
 
-import { DOCS_ROOT, SITE_PAGE } from "./lib/paths.js";
-
-const PAGE = SITE_PAGE;
+import { DOCS_ROOT, SITE_INDEX } from "./lib/paths.js";
+import { type Project, selectProjects } from "./lib/projects.js";
 
 /**
  * Two classes of problem.
@@ -32,8 +32,13 @@ const PAGE = SITE_PAGE;
  * labels touching. On dense views a handful are unavoidable without hand-routing
  * every edge. This is a ratchet, not a target: it may fall, never rise. If a change
  * genuinely needs a higher budget, raise it deliberately and say why in the commit.
+ *
+ * The ratchet is per project — `softBudget` in its config, and zero when it says nothing.
+ * A single number across the whole site would rise the moment a project was added, and
+ * would let one project's improvement hide another's regression, which is the one thing a
+ * ratchet exists to stop.
  */
-const SOFT_BUDGET = 12;
+const softBudget = (project: Project) => project.config.softBudget ?? 0;
 
 /** Type-only, so it is erased at runtime and the import below stays optional. */
 type ChromiumLauncher = typeof import("playwright").chromium;
@@ -47,10 +52,14 @@ async function loadChromium(): Promise<ChromiumLauncher | null> {
 }
 
 async function main() {
-  if (!existsSync(PAGE)) {
-    console.error(
-      `No ${path.relative(DOCS_ROOT, PAGE)} — run pnpm build first.`,
-    );
+  const projects = selectProjects(process.argv.slice(2));
+  const missing = projects
+    .filter((p) => !existsSync(p.pagePath))
+    .map((p) => path.relative(DOCS_ROOT, p.pagePath));
+  if (!existsSync(SITE_INDEX))
+    missing.push(path.relative(DOCS_ROOT, SITE_INDEX));
+  if (missing.length) {
+    console.error(`No ${missing.join(", ")} — run pnpm build first.`);
     process.exit(1);
   }
   const chromium = await loadChromium();
@@ -59,128 +68,204 @@ async function main() {
     console.log(
       "  pnpm add -Dw playwright && pnpm exec playwright install chromium",
     );
-    console.log(
-      "Static validation still ran as part of pnpm architecture:build.",
-    );
+    console.log("Static validation still ran as part of pnpm build.");
     return;
   }
 
   const browser = await chromium.launch();
-  let hard = 0,
-    soft = 0;
+  /** One row per page checked, so the verdict is given per project and then overall. */
+  const scores = new Map<
+    string,
+    { hard: number; soft: number; budget: number }
+  >();
+  const score = (id: string) => {
+    const at = scores.get(id) ?? { hard: 0, soft: 0, budget: 0 };
+    scores.set(id, at);
+    return at;
+  };
 
-  for (const colorScheme of ["light", "dark"] as const) {
+  /**
+   * The index is the site's front door and carries no diagram, so it gets the checks that
+   * apply to any page — it renders, it has no console errors, and every card that looks
+   * like a link is one — rather than the geometry pass.
+   */
+  async function checkIndex(): Promise<void> {
+    const index = score("index");
     const page = await browser.newPage({
-      viewport: { width: 1680, height: 950 },
-      colorScheme,
+      viewport: { width: 1280, height: 900 },
     });
-    // tsx compiles with esbuild's keepNames, which wraps functions in a __name() helper.
-    // That helper does not exist inside the page, so serialised callbacks throw without it.
-    // Passed as a raw string so it is not itself compiled.
-    await page.addInitScript(
-      "globalThis.__name = globalThis.__name || ((f) => f);",
-    );
     const errors: string[] = [];
     page.on("pageerror", (e: Error) => errors.push(e.message));
     page.on("console", (m: ConsoleMessage) => {
       if (m.type() === "error") errors.push("console: " + m.text());
     });
-    await page.goto("file://" + PAGE);
-    /*
-     * Every text measurement below depends on IBM Plex, which the page pulls from
-     * Google Fonts. A fixed timeout is enough on a warm cache and not enough on a cold
-     * one, so CI measured fallback metrics and reported overflow that does not exist.
-     * Wait for font loading to settle, then confirm the faces are actually usable.
-     */
-    await page.evaluate(() => document.fonts.ready);
-    const fontsLoaded = await page.evaluate(
-      () =>
-        document.fonts.check('11px "IBM Plex Mono"') &&
-        document.fonts.check('13px "IBM Plex Sans"'),
+    await page.goto("file://" + SITE_INDEX);
+    const seen = await page.evaluate(() => ({
+      cards: document.querySelectorAll(".card").length,
+      links: [...document.querySelectorAll("a.card")].map(
+        (a) => a.getAttribute("href") ?? "",
+      ),
+      planned: document.querySelectorAll(".card.planned").length,
+      themed: !!document.getElementById("themetoggle")?.textContent.trim(),
+    }));
+    const dead = seen.links.filter(
+      (href) =>
+        !existsSync(path.join(path.dirname(SITE_INDEX), href, "index.html")),
     );
-    if (!fontsLoaded)
-      console.log(
-        "IBM Plex unavailable — geometry not checked. The build's static text-fit gate still applies.",
-      );
-    await page.waitForTimeout(800);
-
-    const tabs: string[] = await page.locator(".tab").allTextContents();
-    if (colorScheme === "light")
-      console.log(`${String(tabs.length)} tabs: ${tabs.join(" · ")}\n`);
-
-    for (const tab of tabs) {
-      await page.click(`.tab:has-text("${tab}")`);
-      await page.waitForTimeout(400);
-      const r = await page.evaluate(measure);
-      if (colorScheme !== "light") continue;
-      if (r.doc) {
-        console.log(
-          `  ${tab.padEnd(13)} reference view · ${String(r.groups)} sections · ${String(r.rows)} rows`,
-        );
-        continue;
-      }
-      /* Overflow measured against fallback metrics is noise; the build checks text fit
-         statically from the real advances, so nothing goes unchecked here. */
-      if (fontsLoaded) hard += r.over.length;
-      /* Same reasoning as overflow: every geometry number here is measured from rendered
-         text, so without the real faces none of it means anything. */
-      if (fontsLoaded) soft += r.cross.length + r.onBox.length + r.clash.length;
-      console.log(
-        `  ${tab.padEnd(13)}${String(r.nodes).padStart(3)} boxes ${String(r.edges).padStart(3)} lines` +
-          ` · overflow ${String(r.over.length)} · crossings ${String(r.cross.length)}` +
-          ` · label-on-box ${String(r.onBox.length)} · label-clash ${String(r.clash.length)}`,
-      );
-      for (const [label, list] of [
-        ["overflow", fontsLoaded ? r.over : []],
-        ["crossing", r.cross],
-        ["on box", r.onBox],
-        ["clash", r.clash],
-      ] as const)
-        if (list.length)
-          console.log(`      ${label}: ${list.slice(0, 3).join(" | ")}`);
-    }
-
-    const audit = await page.evaluate(auditTargets);
     console.log(
-      `[${colorScheme}] ${String(audit.n)} clickable targets · ` +
-        (audit.empty.length
-          ? `EMPTY INSPECTOR: ${audit.empty.slice(0, 4).join(", ")}`
-          : "all open a populated inspector") +
-        (audit.noAudience.length
-          ? ` · MISSING AUDIENCE: ${audit.noAudience.join(", ")}`
-          : " · audience shown on every tab"),
+      `[index] ${String(seen.cards)} cards · ${String(seen.links.length)} link to a built page · ` +
+        `${String(seen.planned)} planned · theme toggle ${seen.themed ? "renders" : "BLANK"}`,
     );
-    hard += audit.empty.length + audit.noAudience.length;
-
+    if (!seen.cards) {
+      console.log("  FAIL — the index lists nothing");
+      index.hard++;
+    }
+    if (dead.length) {
+      console.log(
+        `  FAIL — card links to a page that was not built: ${dead.join(", ")}`,
+      );
+      index.hard += dead.length;
+    }
+    if (!seen.themed) index.hard++;
     const unique = [...new Set(errors)];
     if (unique.length) {
-      console.log(
-        `[${colorScheme}] ERRORS:\n  ${unique.slice(0, 4).join("\n  ")}`,
-      );
-      hard += unique.length;
-    } else console.log(`[${colorScheme}] no console or page errors`);
+      console.log(`[index] ERRORS:\n  ${unique.slice(0, 4).join("\n  ")}`);
+      index.hard += unique.length;
+    }
     await page.close();
   }
 
+  async function checkExplorer(project: Project): Promise<void> {
+    const PAGE = project.pagePath;
+    const tally = score(project.id);
+    tally.budget = softBudget(project);
+    console.log(`\n${project.id}: ${path.relative(DOCS_ROOT, PAGE)}`);
+    for (const colorScheme of ["light", "dark"] as const) {
+      const page = await browser.newPage({
+        viewport: { width: 1680, height: 950 },
+        colorScheme,
+      });
+      // tsx compiles with esbuild's keepNames, which wraps functions in a __name() helper.
+      // That helper does not exist inside the page, so serialised callbacks throw without it.
+      // Passed as a raw string so it is not itself compiled.
+      await page.addInitScript(
+        "globalThis.__name = globalThis.__name || ((f) => f);",
+      );
+      const errors: string[] = [];
+      page.on("pageerror", (e: Error) => errors.push(e.message));
+      page.on("console", (m: ConsoleMessage) => {
+        if (m.type() === "error") errors.push("console: " + m.text());
+      });
+      await page.goto("file://" + PAGE);
+      /*
+       * Every text measurement below depends on IBM Plex, which the page pulls from
+       * Google Fonts. A fixed timeout is enough on a warm cache and not enough on a cold
+       * one, so CI measured fallback metrics and reported overflow that does not exist.
+       * Wait for font loading to settle, then confirm the faces are actually usable.
+       */
+      await page.evaluate(() => document.fonts.ready);
+      const fontsLoaded = await page.evaluate(
+        () =>
+          document.fonts.check('11px "IBM Plex Mono"') &&
+          document.fonts.check('13px "IBM Plex Sans"'),
+      );
+      if (!fontsLoaded)
+        console.log(
+          "IBM Plex unavailable — geometry not checked. The build's static text-fit gate still applies.",
+        );
+      await page.waitForTimeout(800);
+
+      const tabs: string[] = await page.locator(".tab").allTextContents();
+      if (colorScheme === "light")
+        console.log(`${String(tabs.length)} tabs: ${tabs.join(" · ")}\n`);
+
+      for (const tab of tabs) {
+        await page.click(`.tab:has-text("${tab}")`);
+        await page.waitForTimeout(400);
+        const r = await page.evaluate(measure);
+        if (colorScheme !== "light") continue;
+        if (r.doc) {
+          console.log(
+            `  ${tab.padEnd(13)} reference view · ${String(r.groups)} sections · ${String(r.rows)} rows`,
+          );
+          continue;
+        }
+        /* Overflow measured against fallback metrics is noise; the build checks text fit
+         statically from the real advances, so nothing goes unchecked here. */
+        if (fontsLoaded) tally.hard += r.over.length;
+        /* Same reasoning as overflow: every geometry number here is measured from rendered
+         text, so without the real faces none of it means anything. */
+        if (fontsLoaded)
+          tally.soft += r.cross.length + r.onBox.length + r.clash.length;
+        console.log(
+          `  ${tab.padEnd(13)}${String(r.nodes).padStart(3)} boxes ${String(r.edges).padStart(3)} lines` +
+            ` · overflow ${String(r.over.length)} · crossings ${String(r.cross.length)}` +
+            ` · label-on-box ${String(r.onBox.length)} · label-clash ${String(r.clash.length)}`,
+        );
+        for (const [label, list] of [
+          ["overflow", fontsLoaded ? r.over : []],
+          ["crossing", r.cross],
+          ["on box", r.onBox],
+          ["clash", r.clash],
+        ] as const)
+          if (list.length)
+            console.log(`      ${label}: ${list.slice(0, 3).join(" | ")}`);
+      }
+
+      const audit = await page.evaluate(auditTargets);
+      console.log(
+        `[${colorScheme}] ${String(audit.n)} clickable targets · ` +
+          (audit.empty.length
+            ? `EMPTY INSPECTOR: ${audit.empty.slice(0, 4).join(", ")}`
+            : "all open a populated inspector") +
+          (audit.noAudience.length
+            ? ` · MISSING AUDIENCE: ${audit.noAudience.join(", ")}`
+            : " · audience shown on every tab"),
+      );
+      tally.hard += audit.empty.length + audit.noAudience.length;
+
+      const unique = [...new Set(errors)];
+      if (unique.length) {
+        console.log(
+          `[${colorScheme}] ERRORS:\n  ${unique.slice(0, 4).join("\n  ")}`,
+        );
+        tally.hard += unique.length;
+      } else console.log(`[${colorScheme}] no console or page errors`);
+      await page.close();
+    }
+  }
+
+  for (const project of projects) await checkExplorer(project);
+  await checkIndex();
+
   await browser.close();
-  console.log(
-    `\nhard defects: ${String(hard)}   soft geometry: ${String(soft)} of ${String(SOFT_BUDGET)} budget`,
-  );
-  if (hard)
+
+  console.log("");
+  let failed = 0;
+  for (const [id, { hard, soft, budget }] of scores) {
+    const over = soft > budget;
     console.log(
-      `FAIL — ${String(hard)} hard defect(s). Text must fit, every target must open, every tab keeps its audience, no errors.`,
+      `${id.padEnd(12)} hard ${String(hard)} · soft ${String(soft)} of ${String(budget)}`,
     );
-  else if (soft > SOFT_BUDGET)
-    console.log(
-      `FAIL — soft geometry rose to ${String(soft)}, above the ${String(SOFT_BUDGET)} ratchet. Fix the layout or raise SOFT_BUDGET deliberately.`,
-    );
-  else
-    console.log(
-      soft < SOFT_BUDGET
-        ? `PASS — and soft geometry improved; lower SOFT_BUDGET to ${String(soft)} to lock it in.`
-        : "PASS",
-    );
-  process.exit(hard || soft > SOFT_BUDGET ? 1 : 0);
+    if (hard)
+      console.log(
+        `  FAIL — ${String(hard)} hard defect(s). Text must fit, every target must ` +
+          `open, every tab keeps its audience, no errors.`,
+      );
+    else if (over)
+      console.log(
+        `  FAIL — soft geometry rose to ${String(soft)}, above the ${String(budget)} ` +
+          `ratchet. Fix the layout, or raise softBudget in ` +
+          `projects/${id}/project.config.json deliberately and say why.`,
+      );
+    else if (soft < budget)
+      console.log(
+        `  PASS — and soft geometry improved; lower softBudget to ${String(soft)} to lock it in.`,
+      );
+    if (hard || over) failed++;
+  }
+  console.log(failed ? `\nFAIL — ${String(failed)} page(s)` : "\nPASS");
+  process.exit(failed ? 1 : 0);
 }
 
 /** Runs inside the page. Geometry is measured, never eyeballed. */

@@ -1,5 +1,5 @@
 /**
- * Shape of docs/architecture/architecture-facts.json.
+ * Shape of architecture-facts.json.
  *
  * Written by architectureFacts.ts and read back by buildArchitectureExplorer.ts to check
  * that the counts on the diagrams still match the domain and gateway configs. Both ends
