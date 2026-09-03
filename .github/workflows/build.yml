@@ -1,16 +1,20 @@
 name: Build and publish
 
-# The explorer is derived from the FLEX source, so every run checks out FLEX beside this
-# repository and rebuilds from it. That is also the drift check: architecture-facts.json is
-# committed, so if a rebuild changes it, something in FLEX moved and the docs have not
-# caught up yet.
+# Every architecture here is derived from its own source repository, so every run checks
+# those out beside this one and rebuilds from them. That is also the drift check: each
+# project's architecture-facts.json is committed, so if a rebuild changes one, something
+# moved over there and these docs have not caught up yet.
+#
+# Adding a project means adding its checkout step below, next to the others. That is the
+# one manual step: a workflow cannot loop `actions/checkout`, and a project may be private
+# and need its own token, so the steps are written out rather than generated.
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
-  # Nothing here changes when FLEX changes, so a scheduled run is the only thing that
-  # notices a route, domain or alarm added over there.
+  # Nothing here changes when a documented repository changes, so a scheduled run is the
+  # only thing that notices a route, domain or alarm added over there.
   schedule:
     - cron: "17 7 * * 1-5"
   # A manual run can publish whatever branch it is started from. There is one Pages site
@@ -32,6 +36,7 @@ permissions:
   contents: read
 
 env:
+  # Each project's ref, matching the `source.ref` in its project.config.json.
   FLEX_REF: main
 
 jobs:
@@ -45,13 +50,15 @@ jobs:
         with:
           persist-credentials: false
 
-      # Checked out to exactly where explorer.config.json's `source.root` points, so CI and
-      # a local `pnpm sync` put it in the same place and nothing has a second opinion.
+      # One step per project, each checked out to exactly where that project's
+      # `source.root` points, so CI and a local `pnpm sync` put it in the same place and
+      # nothing has a second opinion. `pnpm build` fails naming the project and the path
+      # if one of these is missing.
       #
-      # FLEX is public, so no token is needed. If it is ever made private this step needs one
-      # with Contents: read on it — the default GITHUB_TOKEN is scoped to this repository
-      # alone and cannot read another.
-      - name: Checkout the FLEX source it documents
+      # FLEX is public, so no token is needed. A private one needs a token with
+      # Contents: read on it — the default GITHUB_TOKEN is scoped to this repository alone
+      # and cannot read another.
+      - name: Checkout FLEX
         uses: actions/checkout@v5
         with:
           repository: govuk-once/flex
@@ -69,9 +76,10 @@ jobs:
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
 
-      # The domain and gateway configs are imported as modules rather than parsed, so the
-      # FLEX checkout needs its own dependencies resolvable. The alarm constructs are read
-      # as text and need nothing.
+      # FLEX's domain and gateway configs are imported as modules rather than parsed, so
+      # its checkout needs its own dependencies resolvable. The alarm constructs are read
+      # as text and need nothing. A project whose derivation only reads text needs no step
+      # here at all.
       - name: Install FLEX dependencies
         working-directory: .sources/flex
         run: pnpm install --frozen-lockfile --ignore-scripts
@@ -79,16 +87,37 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # Before the build, because the build advances each recorded commit as soon as it
+      # re-derives — run afterwards this would compare every checkout against itself and
+      # always report that nothing had moved.
+      #
+      # The facts gate below only covers the derived counts and the alarms. Everything
+      # else in the explorer is prose written by reading the code, and a rewritten CDK
+      # stack moves no number here at all. So this lists which of the files the docs cite
+      # changed since the commit they were built from: a reading list, never a gate.
+      - name: Report what moved that these docs cite
+        continue-on-error: true
+        run: pnpm drift
+
+      # Locally the facts step reuses its last result when nothing it reads has moved.
+      # Here it never does: deriving them again and diffing is the entire point of the
+      # run, so `pnpm facts` sees CI is set and re-reads every config.
       - name: Build
         run: pnpm build
 
-      # The facts are committed so a change in FLEX is a reviewable diff here. If this
-      # fails on a scheduled run, FLEX moved; if it fails on a pull request, someone
-      # changed the model without rebuilding.
+      # Every project's facts are committed, so a change over there is a reviewable diff
+      # here. If this fails on a scheduled run, a source moved; if it fails on a pull
+      # request, someone changed a model without rebuilding.
+      #
+      # architecture-source.json is deliberately not part of this gate, and the build has
+      # just rewritten it with this run's commit. It records which source commit the facts
+      # came from, and it changes on every commit over there — including the great
+      # majority that change nothing here. Gating on it would fail this job constantly,
+      # which is the same as it never failing at all.
       - name: Check the committed facts are up to date
         run: |
-          if ! git diff --exit-code --stat architecture-facts.json; then
-            echo "::error file=architecture-facts.json::Out of date against ${{ env.FLEX_REF }}. Run 'pnpm build' and commit the result."
+          if ! git diff --exit-code --stat -- 'projects/*/architecture-facts.json'; then
+            echo "::error::Derived facts are out of date. Run 'pnpm build' and commit the result."
             exit 1
           fi
 

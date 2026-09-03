@@ -141,7 +141,7 @@ function exportPng(){
       const url=URL.createObjectURL(blob);
       const a=document.createElement("a");
       a.href=url;
-      a.download=`${CONFIG.slug}-${view.id}-${deployStage}.png`;
+      a.download=`${CONFIG.id}-${view.id}-${deployStage}.png`;
       document.body.appendChild(a); a.click(); a.remove();
       setTimeout(()=>URL.revokeObjectURL(url),1000);
     },"image/png");
@@ -874,7 +874,10 @@ function stageTotal(){
 /* Three states, not two: someone who overrides the theme needs a way back to following
    the system. The CSS was written for this — :root[data-theme] blocks existed from the
    start — but nothing ever set the attribute, so the override half was never reachable. */
-const THEME_KEY=`${CONFIG.slug}-arch-theme`;
+/* THEME_KEY is injected above this file, site-wide rather than per project: the theme is
+   the reader's preference for the site, so choosing dark on the index or on one project's
+   page holds on every other. The index page's toggle is handed the same constant, from
+   the same place, so the two cannot disagree. */
 const THEMES=[
   {id:"system",label:"Match system",
    d:'<rect x="2" y="3" width="12" height="8" rx="1.5"/><path d="M6 14h4M8 11v3"/>'},
@@ -902,7 +905,7 @@ const themeBtn=document.getElementById("themetoggle");
   });
 }
 
-const ICON_KEY=`${CONFIG.slug}-arch-icons`;
+const ICON_KEY="arch-icons";
 const iconBtn=document.getElementById("icontoggle");
 if(!ICON_IDS.length){ if(iconBtn)iconBtn.hidden=true; }
 else{

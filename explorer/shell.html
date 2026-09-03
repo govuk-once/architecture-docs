@@ -1,5 +1,11 @@
 <header>
   <div class="hrow">
+    <!-- Every project page is built to site/<id>/, so the index over them is one level
+         up. A relative href, because the site is served from a repository path on Pages
+         and from the filesystem locally, and neither can assume the other's origin. -->
+    <a class="home" href="../" title="All architectures">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M9.8 3.5 5.3 8l4.5 4.5"/></svg>
+    </a>
     <div class="brand" id="brand"></div>
     <div class="spacer"></div>
     <div class="stagepick" role="group" aria-label="Deployment stage"><span class="eyebrow">Stage</span><div id="stages"></div></div>

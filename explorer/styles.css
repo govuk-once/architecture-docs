@@ -1,44 +1,8 @@
-:root{
-  --bg:#f4f6f8; --surface:#ffffff; --surface-2:#eef1f5; --ink:#0f1720; --ink-2:#3d4b5a; --muted:#66768a;
-  --line:#dbe1e8; --line-2:#c3ccd6; --line-strong:#93a1b0; --accent:#12539f; --accent-soft:#e3ecf8;
-  --focus:#12539f;
-  /* A palette, not a mapping. Nothing here knows what a kind is called: each kind in
-     explorer.config.json picks one of these by name, and the build checks it resolves.
-     That keeps this file the same in every project that uses the explorer. */
-  --legend-purple:#5f3f9e; --legend-blue:#12539f; --legend-teal:#0b6b7d;
-  --legend-amber:#8a5a1a; --legend-green:#2f6b3a; --legend-rose:#9c2f52;
-  --zone-fill:#e2e8ef; --zone-line:#c8d2dd; --canvas:#eff3f7; --grid:#e0e7ee;
-  --shadow:0 1px 2px rgba(15,23,32,.06),0 8px 24px -12px rgba(15,23,32,.18);
-}
-@media (prefers-color-scheme:dark){
-  :root:not([data-theme="light"]){
-    --bg:#0b1119; --surface:#121b26; --surface-2:#182432; --ink:#e8eef5; --ink-2:#b9c6d4; --muted:#8394a6;
-    --line:#25333f; --line-2:#33465a; --line-strong:#6b8199; --accent:#63a4f5; --accent-soft:#152a44;
-    --focus:#63a4f5;
-    --legend-purple:#a98ce8; --legend-blue:#63a4f5; --legend-teal:#4fc0d4;
-    --legend-amber:#e0a44a; --legend-green:#7fc98d; --legend-rose:#ef8fa8;
-    --zone-fill:#101a25; --zone-line:#25333f; --canvas:#0d151e; --grid:#16212d;
-    --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 28px -14px rgba(0,0,0,.7);
-  }
-}
-:root[data-theme="dark"]{
-  --bg:#0b1119; --surface:#121b26; --surface-2:#182432; --ink:#e8eef5; --ink-2:#b9c6d4; --muted:#8394a6;
-  --line:#25333f; --line-2:#33465a; --line-strong:#6b8199; --accent:#63a4f5; --accent-soft:#152a44;
-  --focus:#63a4f5;
-  --legend-purple:#a98ce8; --legend-blue:#63a4f5; --legend-teal:#4fc0d4;
-  --legend-amber:#e0a44a; --legend-green:#7fc98d; --legend-rose:#ef8fa8;
-  --zone-fill:#101a25; --zone-line:#25333f; --canvas:#0d151e; --grid:#16212d;
-  --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 28px -14px rgba(0,0,0,.7);
-}
-*{box-sizing:border-box}
-html,body{height:100%}
-body{
-  margin:0;background:var(--bg);color:var(--ink);
-  font-family:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
-  font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased;
-  display:flex;flex-direction:column;
-}
-.mono{font-family:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace}
+/*
+ * The explorer: header, canvas, inspector, reference tables. Colour and type are in
+ * theme.css, which the build inlines before this file on every page.
+ */
+body{display:flex;flex-direction:column}
 
 /* ---------- header ---------- */
 /* Two rows on purpose. The tab bar is ~1300px once the group labels are in, so a
@@ -50,6 +14,12 @@ header{
 }
 .hrow{display:flex;align-items:center;gap:20px;min-width:0}
 .ctrls{margin-left:auto}
+.home{
+  display:flex;align-items:center;justify-content:center;width:26px;height:26px;flex:0 0 auto;
+  margin-right:-6px;border:1px solid transparent;border-radius:7px;color:var(--muted);
+}
+.home:hover{border-color:var(--line-2);color:var(--accent);background:var(--surface)}
+.home svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
 .brand{display:flex;flex-direction:column;gap:1px;margin-right:4px}
 .brand b{font-size:15px;font-weight:600;letter-spacing:-.01em}
 .brand span{font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}

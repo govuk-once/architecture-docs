@@ -1,0 +1,49 @@
+/*
+ * Colour, type and the page reset — everything both the explorer and the index page over
+ * the projects need to look like one site.
+ *
+ * Split out of styles.css so there is one definition of every colour rather than two that
+ * drift. The build inlines this file first on every page it writes; styles.css and
+ * index.css each add only their own layout on top.
+ */
+:root{
+  --bg:#f4f6f8; --surface:#ffffff; --surface-2:#eef1f5; --ink:#0f1720; --ink-2:#3d4b5a; --muted:#66768a;
+  --line:#dbe1e8; --line-2:#c3ccd6; --line-strong:#93a1b0; --accent:#12539f; --accent-soft:#e3ecf8;
+  --focus:#12539f;
+  /* A palette, not a mapping. Nothing here knows what a kind is called: each kind in a
+     project's config picks one of these by name, and the build checks it resolves. That
+     is what keeps this file the same for every project the site documents. */
+  --legend-purple:#5f3f9e; --legend-blue:#12539f; --legend-teal:#0b6b7d;
+  --legend-amber:#8a5a1a; --legend-green:#2f6b3a; --legend-rose:#9c2f52;
+  --zone-fill:#e2e8ef; --zone-line:#c8d2dd; --canvas:#eff3f7; --grid:#e0e7ee;
+  --shadow:0 1px 2px rgba(15,23,32,.06),0 8px 24px -12px rgba(15,23,32,.18);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#0b1119; --surface:#121b26; --surface-2:#182432; --ink:#e8eef5; --ink-2:#b9c6d4; --muted:#8394a6;
+    --line:#25333f; --line-2:#33465a; --line-strong:#6b8199; --accent:#63a4f5; --accent-soft:#152a44;
+    --focus:#63a4f5;
+    --legend-purple:#a98ce8; --legend-blue:#63a4f5; --legend-teal:#4fc0d4;
+    --legend-amber:#e0a44a; --legend-green:#7fc98d; --legend-rose:#ef8fa8;
+    --zone-fill:#101a25; --zone-line:#25333f; --canvas:#0d151e; --grid:#16212d;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 28px -14px rgba(0,0,0,.7);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0b1119; --surface:#121b26; --surface-2:#182432; --ink:#e8eef5; --ink-2:#b9c6d4; --muted:#8394a6;
+  --line:#25333f; --line-2:#33465a; --line-strong:#6b8199; --accent:#63a4f5; --accent-soft:#152a44;
+  --focus:#63a4f5;
+  --legend-purple:#a98ce8; --legend-blue:#63a4f5; --legend-teal:#4fc0d4;
+  --legend-amber:#e0a44a; --legend-green:#7fc98d; --legend-rose:#ef8fa8;
+  --zone-fill:#101a25; --zone-line:#25333f; --canvas:#0d151e; --grid:#16212d;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 28px -14px rgba(0,0,0,.7);
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;background:var(--bg);color:var(--ink);
+  font-family:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+  font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased;
+}
+.mono{font-family:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace}
+

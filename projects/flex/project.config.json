@@ -1,12 +1,13 @@
 {
+  "name": "FLEX",
   "title": "FLEX Architecture Explorer",
   "tagline": "Federated Logic and Events eXchange",
-  "docsTitle": "FLEX documentation",
+  "blurb": "The GOV.UK App’s API layer: one public API for the app, one private API for everything internal, and the service gateways that broker every call out to a sibling system or a third party.",
   "repo": "https://github.com/govuk-once/flex/blob/main/",
-  "slug": "flex",
   "inventoryView": "resources",
   "iconLabel": "AWS icons",
   "filterHint": "Filter — try isolated, KMS, 365 days, alarm",
+  "softBudget": 12,
   "kinds": [
     {
       "id": "person",
@@ -54,13 +55,14 @@
   "source": {
     "repo": "git@github.com:govuk-once/flex.git",
     "ref": "main",
-    "root": ".sources/flex",
-    "domainConfigs": "domains/*/domain.config.ts",
-    "gatewayConfigs": "platform/domains/*/gateway.config.ts",
-    "alarmConstructs": "platform/infra/flex/src/constructs/alarms"
+    "root": ".sources/flex"
   },
-  "site": {
-    "root": "site",
-    "page": "index.html"
+  "derive": {
+    "module": "flex",
+    "inputs": {
+      "domainConfigs": "domains/*/domain.config.ts",
+      "gatewayConfigs": "platform/domains/*/gateway.config.ts",
+      "alarmConstructs": "platform/infra/flex/src/constructs/alarms"
+    }
   }
 }

@@ -1,0 +1,26 @@
+{
+  "title": "GOV.UK Once architecture",
+  "tagline": "How the platforms fit together",
+  "blurb": "Each architecture below is documented from its own source code rather than from prior design documents, and rebuilt against that code on every merge. Pick one to explore.",
+  "site": {
+    "root": "site",
+    "page": "index.html"
+  },
+  "projects": ["flex"],
+  "planned": [
+    {
+      "id": "udp",
+      "name": "UDP",
+      "tagline": "GOV.UK Once · user data",
+      "blurb": "System of record for identity links, user records, notification preferences and group subscriptions. Described here only as FLEX sees it; nothing has been read from UDP’s own repository yet.",
+      "seenFrom": "flex"
+    },
+    {
+      "id": "uns",
+      "name": "UNS",
+      "tagline": "GOV.UK Once · notify",
+      "blurb": "System of record for notification records and group subscriptions. Described here only as FLEX sees it; nothing has been read from UNS’s own repository yet.",
+      "seenFrom": "flex"
+    }
+  ]
+}

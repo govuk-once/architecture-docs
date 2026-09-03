@@ -1,9 +1,9 @@
 /**
- * Serves docs/ over HTTP so the architecture explorer can be read locally instead of
- * from a hosted link. No dependencies — Node's http and fs only.
+ * Serves the built site over HTTP so the architectures can be read locally instead of
+ * from the published link. No dependencies — Node's http and fs only.
  *
- *   pnpm architecture:serve          builds first, then serves on http://localhost:4321
- *   pnpm architecture:serve -- 8080  a different port
+ *   pnpm serve         builds first, then serves on http://localhost:4321
+ *   pnpm serve 8080    a different port
  */
 import { readFile, stat } from "node:fs/promises";
 import {
@@ -14,6 +14,7 @@ import {
 import path from "node:path";
 
 import { SITE_ROOT } from "./lib/paths.js";
+import { loadProjects } from "./lib/projects.js";
 
 const DOCS = SITE_ROOT;
 const PORT = Number(process.argv[2] ?? process.env.PORT ?? 4321);
@@ -35,7 +36,9 @@ async function handle(
 ): Promise<void> {
   try {
     const url = new URL(req.url ?? "/", "http://localhost");
-    if (url.pathname === "/") url.pathname = "/index.html";
+    // A directory URL serves that directory's index, the way GitHub Pages does — so
+    // /flex/ resolves locally exactly as it will once published.
+    if (url.pathname.endsWith("/")) url.pathname += "index.html";
     // Resolve inside docs/ only — a request must not escape the served root.
     const target = path.join(DOCS, decodeURIComponent(url.pathname));
     if (!target.startsWith(DOCS + path.sep)) {
@@ -63,8 +66,12 @@ async function handle(
 createServer((req, res) => {
   void handle(req, res);
 }).listen(PORT, () => {
-  console.log(`\n  FLEX docs      http://localhost:${String(PORT)}`);
-  console.log(
-    `  Explorer       http://localhost:${String(PORT)}/architecture/explorer.html\n`,
-  );
+  // The index over the projects is the site root, and every project page is one level
+  // down at /<id>/. Printing the front door and the way in beats printing every project.
+  console.log(`\n  Architectures   http://localhost:${String(PORT)}/`);
+  for (const project of loadProjects())
+    console.log(
+      `  ${project.id.padEnd(14)}  http://localhost:${String(PORT)}/${project.href}`,
+    );
+  console.log("");
 });
