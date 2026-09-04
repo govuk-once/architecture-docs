@@ -5,6 +5,7 @@
   "blurb": "The GOV.UK App’s API layer: one public API for the app, one private API for everything internal, and the service gateways that broker every call out to a sibling system or a third party.",
   "repo": "https://github.com/govuk-once/flex/blob/main/",
   "inventoryView": "resources",
+  "inventoryLabel": "AWS resources",
   "iconLabel": "AWS icons",
   "filterHint": "Filter — try isolated, KMS, 365 days, alarm",
   "softBudget": 12,
@@ -34,22 +35,26 @@
     {
       "id": "dev",
       "label": "Development",
-      "facts": "development"
+      "facts": "development",
+      "synth": "development"
     },
     {
       "id": "stg",
       "label": "Staging",
-      "facts": "staging"
+      "facts": "staging",
+      "synth": "staging"
     },
     {
       "id": "prod",
       "label": "Production",
-      "facts": "production"
+      "facts": "production",
+      "synth": "production"
     },
     {
       "id": "eph",
       "label": "Ephemeral PR",
-      "facts": "ephemeral"
+      "facts": "ephemeral",
+      "synth": "pr-0"
     }
   ],
   "source": {
@@ -58,11 +63,65 @@
     "root": ".sources/flex"
   },
   "derive": {
-    "module": "flex",
+    "module": "cloudformation",
     "inputs": {
-      "domainConfigs": "domains/*/domain.config.ts",
-      "gatewayConfigs": "platform/domains/*/gateway.config.ts",
-      "alarmConstructs": "platform/infra/flex/src/constructs/alarms"
+      "templates": "cdk.out/{id}/*.template.json"
+    },
+    "counts": {
+      "domainFunctions": {
+        "type": "AWS::Lambda::Function",
+        "perTemplate": "^{stage}-(?<name>(?!Flex)[a-z-]+)$"
+      },
+      "publicRoutes": {
+        "type": "AWS::ApiGateway::Method",
+        "template": "^{stage}-(?!Flex)",
+        "logicalId": "^PublicRoot"
+      },
+      "privateRoutes": {
+        "type": "AWS::ApiGateway::Method",
+        "template": "^{stage}-(?!Flex)",
+        "logicalId": "^PrivateRoot"
+      },
+      "domainsWithAuthorizer": {
+        "type": "AWS::ApiGateway::Authorizer",
+        "template": "^{stage}-(?!Flex)",
+        "templatesContaining": true
+      },
+      "alarms": {
+        "type": "AWS::CloudWatch::Alarm",
+        "distinctBy": "construct",
+        "scopeAliases": {
+          "^(Private)?GatewayAlarms$": "API Gateway",
+          "^Alarms$": "CloudFront",
+          "^CffAlarms": "CloudFront Function",
+          "^ShieldAlarms$": "Shield",
+          "Waf": "WAF",
+          "FlexSmokeTest$": "Smoke test",
+          "Alarm$": "Lambda"
+        },
+        "capture": [
+          "Threshold",
+          "EvaluationPeriods",
+          "DatapointsToAlarm",
+          "ComparisonOperator",
+          "TreatMissingData",
+          "MetricName",
+          "Statistic",
+          "ExtendedStatistic",
+          "AlarmActions"
+        ]
+      }
     }
+  },
+  "synth": {
+    "cwd": "platform/infra/flex",
+    "command": ["pnpm", "exec", "tsx", "src/app.ts"],
+    "env": {
+      "STAGE": "{stage}",
+      "CDK_DEFAULT_ACCOUNT": "000000000000",
+      "CDK_DEFAULT_REGION": "eu-west-2",
+      "AWS_REGION": "eu-west-2"
+    },
+    "output": "cdk.out/{id}"
   }
 }

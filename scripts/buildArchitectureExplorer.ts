@@ -53,43 +53,18 @@ const ICONS = path.join(SRC, "icons.svg");
 
 const asset = (name: string) => readFileSync(path.join(SRC, name), "utf8");
 /**
- * CloudFormation namespace to icon, so every `AWS::X::Y` in a `type` field picks up the
- * right service icon without anything being tagged by hand. Defined here rather than in
- * the renderer so the unused-symbol check below sees the same mapping the page does.
- *
- * A few full types override the namespace where AWS draws the thing distinctly.
+ * Which icon a CloudFormation type implies — `service` by the `AWS::X::` namespace, `type`
+ * for the few full types AWS draws distinctly. Read from explorer/icons.json, beside the
+ * sprite it names into, so a vendor's mapping is data next to that vendor's artwork rather
+ * than a table in the build. Read here rather than only in the renderer so the
+ * unused-symbol check sees the same mapping the page does.
  */
-const SERVICE_ICON: Record<string, string> = {
-  Lambda: "lambda",
-  ApiGateway: "apigateway",
-  CloudFront: "cloudfront",
-  S3: "s3",
-  DynamoDB: "dynamodb",
-  Cognito: "cognito",
-  EC2: "vpc",
-  Route53: "route53",
-  CloudWatch: "cloudwatch",
-  Logs: "cloudwatch",
-  SSM: "ssm",
-  Chatbot: "chatbot",
-  IAM: "iam",
-  KMS: "kms",
-  // A service-name-to-icon mapping, not a credential; the keyword scanner cannot tell.
-  SecretsManager: "secretsmanager", // pragma: allowlist secret
-  Shield: "shield",
-  WAFv2: "waf",
-  CertificateManager: "acm",
-  Macie: "macie",
-  SNS: "sns",
-  Events: "eventbridge",
+const ICON_MAP = JSON.parse(asset("icons.json")) as {
+  service: Record<string, string>;
+  type: Record<string, string>;
 };
-const TYPE_ICON: Record<string, string> = {
-  "AWS::CloudFront::Function": "cloudfront-functions",
-  "AWS::EC2::NatGateway": "vpc-nat",
-  "AWS::EC2::InternetGateway": "vpc-igw",
-  "AWS::EC2::VPCEndpoint": "vpc-endpoint",
-  "AWS::EC2::FlowLog": "vpc-flowlogs",
-};
+const SERVICE_ICON = ICON_MAP.service;
+const TYPE_ICON = ICON_MAP.type;
 
 /** The icon a `type` string implies, if any. */
 function iconForType(type: string | undefined): string | undefined {
@@ -199,7 +174,10 @@ function resolvePath(
   for (const key of dotted.split(".")) {
     if (typeof node !== "object" || node === null) return undefined;
     node = Array.isArray(node)
-      ? node.find((d) => (d as { name?: string }).name === key)
+      ? node.find((d) => {
+          const o = d as { name?: string; id?: string };
+          return o.name === key || o.id === key;
+        })
       : (node as Record<string, unknown>)[key];
   }
   return node as StageCounts | undefined;
@@ -363,8 +341,14 @@ function checkGeometry(views: View[], kindIds: Set<string>) {
         problems.push(
           `${v.id}/${n.id}: width ${String(n.w)} is below the 176 minimum`,
         );
-      if (!kindIds.has(n.kind))
-        problems.push(`${v.id}/${n.id}: unknown kind "${n.kind}"`);
+      if (!n.kind)
+        problems.push(
+          `${v.id}/${n.id}: no ownership — set metadata ownership to one of ${[...kindIds].join(", ")}`,
+        );
+      else if (!kindIds.has(n.kind))
+        problems.push(
+          `${v.id}/${n.id}: unknown kind "${n.kind}" — this project declares ${[...kindIds].join(", ")}`,
+        );
       if (!["request", "control"].includes(n.plane))
         problems.push(`${v.id}/${n.id}: unknown plane "${n.plane}"`);
       if (n.sub && n.sub.trim() === n.label.trim())
@@ -515,7 +499,7 @@ function checkDerivedTables(project: Project, views: View[]): string[] {
 
   for (const { v, t, d } of bound) {
     const { from, key, col } = d;
-    const truth = facts[from];
+    const truth = resolvePath(facts, from);
     if (!Array.isArray(truth)) {
       problems.push(
         `${v.id}/"${t.name}": architecture-facts.json has no ${from}`,
@@ -574,8 +558,16 @@ async function checkFormatting(project: Project): Promise<string[]> {
   return problems;
 }
 
-/** A node may name an icon; it must exist, and every icon must be used. */
-function checkIcons(views: View[], ids: Set<string>): string[] {
+/**
+ * A node may name an icon, and it must exist. Whether every symbol in the sprite is used
+ * is a question about the whole site, not one project — the sprite is shared, and a
+ * project that draws no AWS at all must not fail for the icons another project needs — so
+ * this only reports what it used and main() judges the union.
+ */
+function checkIcons(
+  views: View[],
+  ids: Set<string>,
+): { problems: string[]; used: Set<string> } {
   const problems: string[] = [];
   const used = new Set<string>();
   for (const v of views) {
@@ -599,10 +591,7 @@ function checkIcons(views: View[], ids: Set<string>): string[] {
       if (ic) used.add(ic);
     }
   }
-  for (const id of ids)
-    if (!used.has(id))
-      problems.push(`icons.svg: <symbol id="i-${id}"> is not used by any node`);
-  return problems;
+  return { problems, used };
 }
 
 function checkPlacement(project: Project, views: View[]) {
@@ -647,6 +636,8 @@ interface Built {
   views: View[];
   problems: string[];
   body: string;
+  /** Sprite symbols this project draws, for the site-wide unused check. */
+  iconsUsed: Set<string>;
 }
 
 async function buildProject(project: Project): Promise<Built> {
@@ -655,9 +646,10 @@ async function buildProject(project: Project): Promise<Built> {
   const icons = loadIcons();
 
   checkAngleBrackets(views);
+  const iconCheck = checkIcons(views, icons.ids);
   const problems = [
     ...(await checkFormatting(project)),
-    ...checkIcons(views, icons.ids),
+    ...iconCheck.problems,
     ...(views.some((v) => v.id === project.config.inventoryView)
       ? []
       : [
@@ -695,7 +687,7 @@ async function buildProject(project: Project): Promise<Built> {
     `<script>\n${data}\n${asset("app.js")}\n</script>`,
   ].join("\n");
 
-  return { project, views, problems, body };
+  return { project, views, problems, body, iconsUsed: iconCheck.used };
 }
 
 /* ------------------------------------------------------------------------------------ *
@@ -764,10 +756,7 @@ function buildIndex(built: Built[]): string {
     (SITE_CONFIG.planned.length
       ? `, ${String(SITE_CONFIG.planned.length)} planned`
       : "");
-  const footer =
-    `<p>Each architecture here is derived from its own source repository and rebuilt ` +
-    `against it on every merge. The models are the only part written by hand, and every ` +
-    `claim in one names the code that proves it.</p>`;
+  const footer = `<p>${esc(SITE_CONFIG.footer)}</p>`;
 
   const body = asset("index.html")
     .replace(
@@ -846,6 +835,17 @@ async function main() {
     asked.length === loadProjects().length
       ? built
       : await Promise.all(loadProjects().map((p) => buildProject(p)));
+
+  // The sprite is shared, so a symbol is unused only if no project draws it.
+  const drawn = new Set(shown.flatMap((b) => [...b.iconsUsed]));
+  const unused = [...loadIcons().ids].filter((id) => !drawn.has(id));
+  if (unused.length) {
+    console.error(
+      `icons.svg: ${String(unused.length)} symbol(s) no project uses: ` +
+        unused.map((id) => "i-" + id).join(", "),
+    );
+    if (strict) process.exit(1);
+  }
   mkdirSync(SITE_ROOT, { recursive: true });
   writeFileSync(SITE_INDEX, buildIndex(shown));
   console.log(

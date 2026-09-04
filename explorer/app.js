@@ -2,7 +2,8 @@
 const REPO=CONFIG.repo;
 const STAGES=CONFIG.stages;
 /* Named deployStage, not stage: `stage` is already the diagram canvas element. */
-let deployStage="dev";
+/* The first configured stage: a project need not have one called "dev". */
+let deployStage=STAGES[0].id;
 const stageLabel=()=>STAGES.find(s=>s.id===deployStage).label;
 
 /* RES is built once from the Resources view, so the inventory is the single
@@ -172,7 +173,7 @@ const PLANE_ORDER=["request","control"];
 /* Not "control plane": that term means the management API layer, and this flag also
    covers source files, runbooks, observability and people. What it encodes is only
    whether a thing serves live traffic, so the labels say only that. */
-const PLANE_LABEL={request:"on the request path",control:"off the request path"};
+const PLANE_LABEL=CONFIG.planes;
 
 /* ============================ RENDER ============================ */
 const SVGNS="http://www.w3.org/2000/svg";
@@ -486,7 +487,7 @@ function renderIdle(){
         <div class="eyebrow" style="margin-bottom:9px">How to read it</div>
         <ul class="facts">
           <li>Pick any row to open its full configuration here.</li>
-          <li>Filter matches names, counts, scope tags and every fact — so <code>isolated</code>, <code>us-east-1</code> or <code>365 days</code> all work.</li>
+          <li>Filter matches names, counts, scope tags and every fact. ${esc(CONFIG.filterHint)}.</li>
           <li>Tables are the reference data itself and need no clicking.</li>
         </ul>
       </div>
@@ -563,7 +564,7 @@ function resourcesHere(nodeId){
   return `<hr>
     <div class="sect">
       <div class="eyebrow">Resources in this box · ${esc(stageLabel())}</div>
-      <div class="total"><b>${sum}${varies?"+":""}</b><span>AWS resources across ${ids.length} entr${ids.length===1?"y":"ies"}${varies?", plus some that vary per stack":""}</span></div>
+      <div class="total"><b>${sum}${varies?"+":""}</b><span>${esc(CONFIG.inventoryLabel)} across ${ids.length} entr${ids.length===1?"y":"ies"}${varies?", plus some that vary per stack":""}</span></div>
       <div class="reslist">${rows}</div>
       <button class="btn wide" data-pin="${nodeId}" type="button">Open these in the Resources tab</button>
     </div>`;

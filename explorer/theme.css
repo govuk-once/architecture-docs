@@ -15,6 +15,7 @@
      is what keeps this file the same for every project the site documents. */
   --legend-purple:#5f3f9e; --legend-blue:#12539f; --legend-teal:#0b6b7d;
   --legend-amber:#8a5a1a; --legend-green:#2f6b3a; --legend-rose:#9c2f52;
+  --legend-slate:#3f4f63; --legend-indigo:#3b47a8; --legend-olive:#5b6b1f; --legend-coral:#b0452b;
   --zone-fill:#e2e8ef; --zone-line:#c8d2dd; --canvas:#eff3f7; --grid:#e0e7ee;
   --shadow:0 1px 2px rgba(15,23,32,.06),0 8px 24px -12px rgba(15,23,32,.18);
 }
@@ -25,6 +26,7 @@
     --focus:#63a4f5;
     --legend-purple:#a98ce8; --legend-blue:#63a4f5; --legend-teal:#4fc0d4;
     --legend-amber:#e0a44a; --legend-green:#7fc98d; --legend-rose:#ef8fa8;
+    --legend-slate:#9fb0c4; --legend-indigo:#8f9bf0; --legend-olive:#b8c86a; --legend-coral:#f29a80;
     --zone-fill:#101a25; --zone-line:#25333f; --canvas:#0d151e; --grid:#16212d;
     --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 28px -14px rgba(0,0,0,.7);
   }
@@ -35,6 +37,7 @@
   --focus:#63a4f5;
   --legend-purple:#a98ce8; --legend-blue:#63a4f5; --legend-teal:#4fc0d4;
   --legend-amber:#e0a44a; --legend-green:#7fc98d; --legend-rose:#ef8fa8;
+    --legend-slate:#9fb0c4; --legend-indigo:#8f9bf0; --legend-olive:#b8c86a; --legend-coral:#f29a80;
   --zone-fill:#101a25; --zone-line:#25333f; --canvas:#0d151e; --grid:#16212d;
   --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 28px -14px rgba(0,0,0,.7);
 }

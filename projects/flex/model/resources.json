@@ -367,7 +367,7 @@
             "prod": 8,
             "eph": 8
           },
-          "from": "domains.dvla.perStage",
+          "from": "counts.domainFunctions.dvla",
           "meta": ["egress tier", "FlexDomainStack"],
           "d": {
             "type": "AWS::Lambda::Function",
@@ -391,7 +391,7 @@
             "prod": 8,
             "eph": 8
           },
-          "from": "domains.udp.perStage",
+          "from": "counts.domainFunctions.udp",
           "meta": ["isolated tier", "FlexDomainStack"],
           "d": {
             "type": "AWS::Lambda::Function",
@@ -414,7 +414,7 @@
             "prod": 4,
             "eph": 4
           },
-          "from": "domains.uns.perStage",
+          "from": "counts.domainFunctions.uns",
           "meta": ["isolated tier", "FlexDomainStack"],
           "d": {
             "type": "AWS::Lambda::Function",
@@ -437,7 +437,7 @@
             "prod": 0,
             "eph": 2
           },
-          "from": "domains.groups.perStage",
+          "from": "counts.domainFunctions.groups",
           "meta": ["isolated tier", "FlexDomainStack"],
           "d": {
             "type": "AWS::Lambda::Function",
@@ -463,7 +463,7 @@
             "prod": 0,
             "eph": 2
           },
-          "from": "domains.local-council.perStage",
+          "from": "counts.domainFunctions.local-council",
           "meta": ["isolated tier", "FlexDomainStack"],
           "d": {
             "type": "AWS::Lambda::Function",
@@ -490,7 +490,7 @@
             "prod": 0,
             "eph": 13
           },
-          "from": "domains.example.perStage",
+          "from": "counts.domainFunctions.example",
           "meta": ["isolated tier", "FlexDomainStack"],
           "d": {
             "type": "AWS::Lambda::Function",
@@ -517,7 +517,7 @@
             "prod": 0,
             "eph": 2
           },
-          "from": "domains.travel.perStage",
+          "from": "counts.domainFunctions.travel",
           "meta": ["isolated tier", "FlexDomainStack"],
           "d": {
             "type": "AWS::Lambda::Function",
@@ -903,7 +903,7 @@
             "prod": 3,
             "eph": 6
           },
-          "from": "totals.domainsWithPublicRoutes",
+          "from": "counts.domainsWithAuthorizer",
           "meta": ["eu-west-2", "FlexDomainStack"],
           "d": {
             "type": "AWS::ApiGateway::Authorizer",
@@ -928,7 +928,7 @@
             "prod": 17,
             "eph": 32
           },
-          "from": "totals.routeMethods.public",
+          "from": "counts.publicRoutes",
           "meta": ["eu-west-2", "FlexDomainStack"],
           "d": {
             "type": "AWS::ApiGateway::Method",
@@ -953,7 +953,7 @@
             "prod": 3,
             "eph": 7
           },
-          "from": "totals.routeMethods.private",
+          "from": "counts.privateRoutes",
           "meta": ["eu-west-2", "FlexDomainStack"],
           "d": {
             "type": "AWS::ApiGateway::Method",

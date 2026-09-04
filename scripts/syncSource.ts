@@ -90,7 +90,13 @@ function syncProject(project: Project) {
     // Hard reset rather than pull: this checkout is disposable and must never carry local
     // edits, or the docs would be built from something nobody else can reproduce.
     run("git", ["reset", "--hard", `origin/${source.ref}`], sourceRoot);
-    run("git", ["clean", "-fdx", "-e", "node_modules"], sourceRoot);
+    // node_modules survives an install decision; cdk.out survives so a sync that finds
+    // the app untouched does not force a re-synth. `pnpm synth` always rewrites it.
+    run(
+      "git",
+      ["clean", "-fdx", "-e", "node_modules", "-e", "cdk.out"],
+      sourceRoot,
+    );
   } else {
     console.log(`  cloning ${source.repo} (${source.ref}) into ${source.root}`);
     run(

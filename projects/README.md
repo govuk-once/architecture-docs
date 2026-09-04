@@ -67,16 +67,14 @@ pnpm build
 
 That runs two steps:
 
-1. **`pnpm facts`** runs each project's declared derivation and writes that project's
-   `architecture-facts.json`. FLEX's — [`scripts/derive/flex.ts`](../scripts/derive/flex.ts)
-   — loads the domain and gateway configs, the same files the CDK app reads, for route
-   counts per domain, per stage, per access tier, service gateway routes and resources, and
-   the domain dependency graph. It also parses the alarm constructs for every CloudWatch
-   alarm, its threshold, its evaluation windows and the topic it reaches. Alarms have no
-   config to import, so they are read from the TypeScript AST — see
-   [`scripts/lib/extractAlarms.ts`](../scripts/lib/extractAlarms.ts). Which files it reads
-   are declared in the project's `derive.inputs`, not spelled out in the scripts. A project
-   with no `derive` block simply has no generated facts.
+1. **`pnpm facts`** counts what `pnpm synth` wrote. Every project here is an AWS CDK app,
+   and `pnpm synth` runs each one per stage into CloudFormation templates under
+   `cdk.out/<stage>/` in its checkout; the one derivation,
+   [`scripts/derive/cloudformation.ts`](../scripts/derive/cloudformation.ts), then counts
+   resources in them as the project's `derive.counts` declares — per stage, per template,
+   by type, by logical id, or one entry per distinct construct for a table. No TypeScript
+   per project: the counts are JSON, and the templates are the deployed truth rather than a
+   reading of the code. A project with no `derive` block simply has no generated facts.
 2. **`scripts/buildArchitectureExplorer.ts`** validates each project's view files and
    assembles them with the styles, markup and renderer into `site/<id>/index.html`, then
    writes the index over them.
@@ -556,13 +554,15 @@ project. Adding one is these things and nothing else:
    of it is deterministic.
 3. **A `--legend-<colour>` token in `theme.css`** for any colour your kinds name that is
    not already there, in all three theme blocks. The build tells you if you miss one.
-4. **A derivation, or none.** `scripts/derive/flex.ts` cannot be reused as-is: it reads
-   `domains/*/domain.config.ts` with FLEX's exact schema, which is the point — counts are
-   trustworthy because they come from the same files the CDK app reads. `extractAlarms.ts`
-   is closer to portable, parsing CDK constructs from the AST with no install needed, but
-   still knows what a CloudWatch alarm looks like. Write your own module beside it against
-   your own configs, or declare no `derive` block at all, leave `from` off every resource
-   and `derived` off every table, and maintain those numbers by hand.
+4. **A `synth` block and `derive.counts`, or neither.** `synth` says how to run the CDK
+   app — its directory, the command as an argv array, the environment with `{stage}`
+   filled per stage, and where the templates land. `counts` says what to count in them,
+   in a closed vocabulary: `type`, `template` and `logicalId` regexes, `perTemplate` for
+   one record per matching stack, `templatesContaining` to count stacks rather than
+   resources, and `distinctBy: "construct"` with `scopeAliases` and `capture` for a table
+   of kinds. FLEX's config is the worked example. Or declare no `derive` block, leave
+   `from` off every resource and `derived` off every table, and maintain those numbers by
+   hand.
 5. **A checkout step in `.github/workflows/build.yml`**, because a workflow cannot loop
    `actions/checkout` and a private repository needs its own token.
 6. **A line in `../explorer.config.json`** — the `projects` array, which is also the order

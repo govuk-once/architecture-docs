@@ -155,6 +155,18 @@ describe("builtFrom", () => {
     expect(builtFrom(project())).toBe("src/*.config.ts");
   });
 
+  /* A changed count definition must re-derive: it is as much an input as the glob. */
+  it("changes when the counts change", () => {
+    const p = project();
+    const before = builtFrom(p);
+    p.derive = {
+      module: "cloudformation",
+      inputs: { configs: "src/*.config.ts" },
+      counts: { fns: { type: "AWS::Lambda::Function" } },
+    };
+    expect(builtFrom(p)).not.toBe(before);
+  });
+
   it("says plainly that a project with no derivation derives nothing", () => {
     expect(builtFrom({ ...project(), derive: null })).toMatch(
       /nothing derived/,

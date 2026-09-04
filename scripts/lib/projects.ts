@@ -28,16 +28,54 @@ export interface SourceContract {
 }
 
 /**
+ * One number the build vouches for, read out of CloudFormation templates. The vocabulary
+ * is closed on purpose: a count that needs more than this is a claim for prose, cited to
+ * the code, not a number the build should pretend to know.
+ */
+export interface CountSpec {
+  /** The CloudFormation type to count, e.g. `AWS::Lambda::Function`. */
+  type: string;
+  /** Regex over the template name (file name minus `.template.json`); `{stage}`/`{id}` fill. */
+  template?: string;
+  /** Regex over the logical id. */
+  logicalId?: string;
+  /** Regex with a `name` group: one per-stage record per matching template, keyed by it. */
+  perTemplate?: string;
+  /** Count templates that contain a match, rather than the matches. */
+  templatesContaining?: boolean;
+  /** Emit one entry per distinct construct rather than a number — for tables. */
+  distinctBy?: "construct";
+  /** Regex → name: fold the construct's parent into a source name a table can show. */
+  scopeAliases?: Record<string, string>;
+  /** Properties to copy out of a `distinctBy` entry, as strings. */
+  capture?: string[];
+}
+
+/**
  * How this project's facts are derived, if they are at all.
  *
- * `module` names a file in `scripts/derive/`, and `inputs` is that module's own contract
- * — FLEX's deriver wants three globs, another project's will want something else. A
- * project with no `derive` block simply has no generated facts: every check that reads
- * them skips, and its counts are maintained by hand like any other prose.
+ * `module` names a file in `scripts/derive/`; `cloudformation` is the one that ships,
+ * and `counts` is what it reads. A project with no `derive` block simply has no
+ * generated facts: every check that reads them skips, and its counts are maintained by
+ * hand like any other prose.
  */
 export interface DeriveContract {
   module: string;
   inputs: Record<string, string>;
+  counts?: Record<string, CountSpec>;
+}
+
+/**
+ * How to turn the checkout into templates — see scripts/synthSource.ts. `command` is an
+ * argv array, never a shell string. `{stage}` in `env` values and `output` is the value a
+ * stage's `synth` field takes; `{id}` is the stage's id here.
+ */
+export interface SynthContract {
+  /** Relative to the checkout: where the CDK app lives. */
+  cwd: string;
+  command: string[];
+  env: Record<string, string>;
+  output: string;
 }
 
 /** Everything true of one architecture rather than of the site or of the renderer. */
@@ -52,8 +90,15 @@ export interface ProjectConfig {
   /** Base URL every `code` citation links against. */
   repo: string;
   inventoryView: string;
+  /** What the inventory counts, e.g. "AWS resources" — shown wherever a box totals them. */
+  inventoryLabel: string;
   iconLabel: string;
   filterHint: string;
+  /**
+   * The two planes a node sits on, as the legend words them. Defaults to the request-path
+   * framing, which is what the `#request-path` / `#off-request-path` tags mean.
+   */
+  planes?: { request: string; control: string };
   /**
    * How much soft geometry — edge crossings, labels touching — this project's diagrams
    * are allowed. A ratchet the render check holds them to: it may fall, never rise. Zero
@@ -62,9 +107,11 @@ export interface ProjectConfig {
    */
   softBudget?: number;
   kinds: { id: string; label: string; colour: string }[];
-  stages: { id: string; label: string; facts: string }[];
+  /** `synth` is the value the source's stage variable takes; a stage without one is not synthesised. */
+  stages: { id: string; label: string; facts: string; synth?: string }[];
   source: SourceContract;
   derive?: DeriveContract;
+  synth?: SynthContract;
 }
 
 /** A loaded project, and every path that belongs to it. */
@@ -94,9 +141,15 @@ const STRINGS = [
   "blurb",
   "repo",
   "inventoryView",
+  "inventoryLabel",
   "iconLabel",
   "filterHint",
 ] as const;
+
+const DEFAULT_PLANES = {
+  request: "on the request path",
+  control: "off the request path",
+};
 
 function readConfig(id: string, file: string): ProjectConfig {
   let cfg: Partial<ProjectConfig>;
@@ -146,7 +199,28 @@ function readConfig(id: string, file: string): ProjectConfig {
     throw new Error(
       `projects/${id}: "derive" needs a module in scripts/derive/ and an inputs object`,
     );
-  return cfg as ProjectConfig;
+  for (const [name, spec] of Object.entries(derive?.counts ?? {})) {
+    if (!/^[a-zA-Z][a-zA-Z0-9]*$/.test(name))
+      throw new Error(`projects/${id}: count "${name}" must be an identifier`);
+    if (!spec.type)
+      throw new Error(`projects/${id}: count "${name}" needs a type`);
+    for (const k of ["template", "logicalId", "perTemplate"] as const)
+      if (spec[k] !== undefined) new RegExp(spec[k]);
+    for (const re of Object.keys(spec.scopeAliases ?? {})) new RegExp(re);
+  }
+  const synth = cfg.synth;
+  if (synth) {
+    if (!synth.command.length)
+      throw new Error(`projects/${id}: synth.command must be an argv array`);
+    if (!synth.cwd || !synth.output)
+      throw new Error(`projects/${id}: synth needs cwd and output`);
+    for (const st of cfg.stages)
+      if (st.synth !== undefined && !st.synth)
+        throw new Error(
+          `projects/${id}: stage "${st.id}" has an empty synth value`,
+        );
+  }
+  return { ...(cfg as ProjectConfig), planes: cfg.planes ?? DEFAULT_PLANES };
 }
 
 function toProject(id: string): Project {
@@ -205,7 +279,16 @@ export function selectProjects(argv: string[]): Project[] {
  */
 export const builtFrom = (project: Project) =>
   project.derive
-    ? Object.values(project.derive.inputs).join(", ")
+    ? [
+        Object.values(project.derive.inputs).join(", "),
+        // The counts and the synth recipe are inputs too: change either, re-derive.
+        ...(project.derive.counts
+          ? [`counts=${JSON.stringify(project.derive.counts)}`]
+          : []),
+        ...(project.config.synth
+          ? [`synth=${JSON.stringify(project.config.synth)}`]
+          : []),
+      ].join(" ")
     : "nothing derived — this project's counts are prose";
 
 /** Resolve a repo-relative path — a citation, a glob root — inside a project's checkout. */

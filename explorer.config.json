@@ -2,6 +2,7 @@
   "title": "GOV.UK Once architecture",
   "tagline": "How the platforms fit together",
   "blurb": "Each architecture below is documented from its own source code rather than from prior design documents, and rebuilt against that code on every merge. Pick one to explore.",
+  "footer": "Each architecture here is derived from its own source repository and rebuilt against it on every merge. The models are the only part written by hand, and every claim in one names the code that proves it.",
   "site": {
     "root": "site",
     "page": "index.html"

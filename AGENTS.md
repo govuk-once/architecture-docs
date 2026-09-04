@@ -19,8 +19,18 @@ Clone this repository, then:
 ```bash
 pnpm install
 pnpm sync      # clone or fetch each source into .sources/, and install what needs it
+pnpm synth     # run each CDK app per stage: the CloudFormation the counts are read from
 pnpm build     # derive the facts, validate the models, assemble every page and the index
 ```
+
+`pnpm synth` is the one command here that executes a documented repository. `sync` and
+`build` never do. It runs exactly the `synth.command` in each project's config — the CDK
+app itself, per stage, with no credentials: a context lookup the machine cannot make
+becomes a dummy value, which is right for counting resources by type. Read what it writes.
+The templates under `cdk.out/<stage>/` in the checkout are the deployed truth, fully
+expanded, with nothing to reason through — a construct instantiated in a loop is one line
+of source and many resources in a template. When you author or re-read a model, read the
+template for the stack, not only the stack.
 
 Both steps do only the work the source has actually made stale. Every build records the
 commit it read in `architecture-source.json`, and the next run measures against it: `sync`
@@ -35,12 +45,10 @@ hard-reset on every sync so it can never carry local edits, and removed by `pnpm
 Where each comes from is declared in the `source` block of its `project.config.json`,
 nowhere else.
 
-The install inside a checkout is not optional the first time, for a project whose derivation
-imports it. FLEX's domain and gateway configs are **imported as modules** — the same files
-the CDK app reads, which is why the counts can be trusted — so their dependencies have to
-resolve. Its alarm constructs are read as text and parsed, and need nothing. After that the
-install is repeated only when a manifest moved in the range; `pnpm sync --install` forces it
-if a checkout ever looks wrong.
+The install inside a checkout is not optional the first time: `pnpm synth` runs the CDK app,
+so its dependencies have to resolve. After that the install is repeated only when a manifest
+moved in the range; `pnpm sync --install` forces it if a checkout ever looks wrong. A sync
+keeps `cdk.out` so the templates survive it; `pnpm synth` always rewrites them.
 
 ## Checking for drift
 
@@ -125,11 +133,10 @@ pnpm test
 Run all five before proposing a change. The JSON is linted like anything else — eslint checks
 it with `prettier/prettier` — so run `pnpm exec eslint --fix` on a file you hand-edit.
 
-If you changed anything a derivation is built from — the files a module in
-`scripts/derive/` lists in its `files` — run `pnpm facts --force` as well. Those files are
-hashed into `architecture-source.json`, so a change to one re-derives on the next run
-regardless; run it now so any diff it produces is in front of you rather than in front of the
-reviewer.
+If you changed `scripts/derive/cloudformation.ts`, or a project's `derive.counts` or `synth`
+block, run `pnpm facts --force` as well. All three are hashed into `architecture-source.json`,
+so a change re-derives on the next run regardless; run it now so any diff it produces is in
+front of you rather than in front of the reviewer.
 
 ## Cleaning up
 
@@ -174,8 +181,9 @@ all read config, so none of them changes:
    judgement rather than transformation.
 3. A `--legend-<colour>` token in `explorer/theme.css` for any colour its kinds name that is
    not already there. The build says so if you miss one.
-4. `scripts/derive/<module>.ts` if its counts are derivable, or no `derive` block at all if
-   they are not — then leave `from` off every resource and `derived` off every table, and
+4. A `synth` block saying how to run its CDK app, and `derive.counts` saying what to count
+   in the templates — both JSON, no TypeScript. Or no `derive` block at all, if nothing is
+   worth gating: then leave `from` off every resource and `derived` off every table, and
    maintain those numbers by hand like any other prose.
 5. A checkout step in `.github/workflows/build.yml`. A workflow cannot loop
    `actions/checkout`, and a private repository needs its own token.

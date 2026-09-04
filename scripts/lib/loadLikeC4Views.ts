@@ -109,7 +109,8 @@ export async function loadLikeC4Views(modelDir: string) {
           ...base,
           label: el.title,
           sub: el.description.text ?? "",
-          kind: str(md.ownership) ?? "flex",
+          // No default: a box whose owner is unstated is exactly the box a reader gets wrong.
+          kind: str(md.ownership) ?? "",
           plane: el.tags.includes("off-request-path") ? "control" : "request",
           ...(str(md.awsIcon) ? { icon: md.awsIcon } : {}),
         });

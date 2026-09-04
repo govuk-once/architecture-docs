@@ -1,12 +1,11 @@
 /**
  * How a project turns its source into the facts the build holds its diagrams to.
  *
- * This is the one part of the pipeline that cannot be shared. FLEX's counts are
- * trustworthy because they come from importing the same `domain.config.ts` files the CDK
- * app reads; that is a fact about FLEX, not about architecture documentation, and UDP or
- * UNS will have their own shape or none at all. So the schema knowledge lives in a module
- * per project under `scripts/derive/`, named by that project's `derive.module`, and
- * everything upstream and downstream of it is generic.
+ * One derivation ships — `cloudformation`, which counts what `pnpm synth` wrote — and it
+ * is driven entirely by a project's config, so a new architecture writes none of this.
+ * Modules are still loaded by name so a project with a genuinely different source of
+ * truth could add its own beside it; nothing does today, and the bar for doing so is that
+ * the templates cannot say it.
  *
  * A project with no `derive` block has no generated facts. That is a supported state, not
  * a broken one: every check that reads them skips, and its numbers are prose maintained

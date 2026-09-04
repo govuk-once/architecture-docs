@@ -57,10 +57,15 @@ when you switch stage.
 ## Build it
 
 ```bash
-pnpm facts     # run each project's declared derivation over its source
+pnpm synth     # run each CDK app per stage into CloudFormation — the counts' source
+pnpm facts     # count what synth wrote, as each project's config declares
 pnpm build     # facts + validate every view + assemble every page and the index
 pnpm check     # render in headless Chromium and check the geometry
 ```
+
+`synth` is the one command that executes a documented repository, and the only way to
+count what actually deploys: a construct instantiated in a loop is one line of source and
+many resources in a template. It runs each app directly, per stage, with no credentials.
 
 `build` runs the facts step first, so it is the only one you normally need. It writes
 `site/`, which is generated and gitignored — CI builds it and publishes from there. Each
@@ -73,7 +78,7 @@ the route counts shows up here as a reviewable diff.
 explorer/              the renderer, and the index page. Knows about no project
 projects/flex/         one architecture: its config, model, facts and source commit
 explorer.config.json   the site: which projects it publishes, and which are planned
-scripts/derive/flex.ts how FLEX's counts are derived — the one unshareable part
+scripts/derive/         one derivation, config-driven: counts read from CloudFormation
 ```
 
 Adding an architecture is a directory under `projects/`, a line in `explorer.config.json`
@@ -102,7 +107,7 @@ That commit is what the next run measures against, and it buys two things:
 
 - **`pnpm facts` re-reads nothing when nothing moved.** The skip needs the commit, the
   scripts that do the deriving, _and_ the facts file itself to all be unchanged — so
-  editing `extractAlarms.ts`, or hand-editing a number into the output, re-derives rather
+  editing the deriver or a count definition, or hand-editing the output, re-derives rather
   than going quietly stale. `pnpm facts --force` derives regardless, and CI always does.
 - **`pnpm sync` reinstalls a checkout only when that source's dependencies moved.** The
   install is the slow part of a sync and most commits touch no manifest; when one in the

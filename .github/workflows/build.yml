@@ -87,6 +87,14 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # The one step that executes a documented repository: each project's CDK app is run
+      # per stage to produce the CloudFormation the counts are read from. No credentials —
+      # a context lookup this runner cannot make becomes a dummy value, which is right for
+      # counting resources by type. What runs is exactly `synth.command` in each project's
+      # config; see scripts/synthSource.ts.
+      - name: Synthesise the CloudFormation the counts are read from
+        run: pnpm synth
+
       # Before the build, because the build advances each recorded commit as soon as it
       # re-derives — run afterwards this would compare every checkout against itself and
       # always report that nothing had moved.

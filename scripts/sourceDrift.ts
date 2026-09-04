@@ -98,8 +98,12 @@ async function driftProject(project: Project, asked: string | null) {
       : []),
   ]);
 
-  // A project with no derivation has no inputs, so nothing here moves a generated count.
-  const derivedFrom = Object.values(project.derive?.inputs ?? {}).map(globToRe);
+  // What moves a generated count: the declared inputs, and — when the counts come from
+  // synthesised templates — anything under the CDK app, since all of it is synthesised.
+  const derivedFrom = [
+    ...Object.values(project.derive?.inputs ?? {}),
+    ...(project.config.synth ? [project.config.synth.cwd] : []),
+  ].map(globToRe);
   const derived = files.filter((f) => derivedFrom.some((re) => re.test(f)));
   if (derived.length)
     list(

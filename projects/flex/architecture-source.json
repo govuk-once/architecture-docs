@@ -1,10 +1,10 @@
 {
   "repo": "git@github.com:govuk-once/flex.git",
   "ref": "main",
-  "sha": "e52ee3e541a65c9368ccd36bdd18ebd5c53f2f3b",
-  "subject": "FLEX-483 docs: rewrite gateways and test fixtures (#502)",
-  "committed": "2026-09-02T09:59:18+01:00",
-  "builtFrom": "domains/*/domain.config.ts, platform/domains/*/gateway.config.ts, platform/infra/flex/src/constructs/alarms",
-  "derivation": "7c4f19fa22bf7a2a",
-  "facts": "78ae7c1e09529b84"
+  "sha": "e83a47e2dc01e3cfca6abce8043a4462a2108ae1",
+  "subject": "chore(deps): bump the dependencies group across 1 directory with 2 updates (#515)",
+  "committed": "2026-09-03T09:41:26+01:00",
+  "builtFrom": "cdk.out/{id}/*.template.json counts={\"domainFunctions\":{\"type\":\"AWS::Lambda::Function\",\"perTemplate\":\"^{stage}-(?<name>(?!Flex)[a-z-]+)$\"},\"publicRoutes\":{\"type\":\"AWS::ApiGateway::Method\",\"template\":\"^{stage}-(?!Flex)\",\"logicalId\":\"^PublicRoot\"},\"privateRoutes\":{\"type\":\"AWS::ApiGateway::Method\",\"template\":\"^{stage}-(?!Flex)\",\"logicalId\":\"^PrivateRoot\"},\"domainsWithAuthorizer\":{\"type\":\"AWS::ApiGateway::Authorizer\",\"template\":\"^{stage}-(?!Flex)\",\"templatesContaining\":true},\"alarms\":{\"type\":\"AWS::CloudWatch::Alarm\",\"distinctBy\":\"construct\",\"scopeAliases\":{\"^(Private)?GatewayAlarms$\":\"API Gateway\",\"^Alarms$\":\"CloudFront\",\"^CffAlarms\":\"CloudFront Function\",\"^ShieldAlarms$\":\"Shield\",\"Waf\":\"WAF\",\"FlexSmokeTest$\":\"Smoke test\",\"Alarm$\":\"Lambda\"},\"capture\":[\"Threshold\",\"EvaluationPeriods\",\"DatapointsToAlarm\",\"ComparisonOperator\",\"TreatMissingData\",\"MetricName\",\"Statistic\",\"ExtendedStatistic\",\"AlarmActions\"]}} synth={\"cwd\":\"platform/infra/flex\",\"command\":[\"pnpm\",\"exec\",\"tsx\",\"src/app.ts\"],\"env\":{\"STAGE\":\"{stage}\",\"CDK_DEFAULT_ACCOUNT\":\"000000000000\",\"CDK_DEFAULT_REGION\":\"eu-west-2\",\"AWS_REGION\":\"eu-west-2\"},\"output\":\"cdk.out/{id}\"}",
+  "derivation": "2636bad5041bfd53",
+  "facts": "7f2c31a613a5d66b"
 }

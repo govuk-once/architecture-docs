@@ -50,6 +50,8 @@ export interface SiteConfig {
   title: string;
   tagline: string;
   blurb: string;
+  /** The line under the grid: what every page here has in common. */
+  footer: string;
   site: SiteContract;
   /** Directory names under projects/, in the order they appear on the index. */
   projects: string[];
@@ -67,7 +69,7 @@ function readSiteConfig(): SiteConfig {
       cause: err,
     });
   }
-  const missing = (["title", "tagline", "blurb"] as const).filter(
+  const missing = (["title", "tagline", "blurb", "footer"] as const).filter(
     (k) => typeof parsed[k] !== "string" || !parsed[k],
   );
   if (missing.length)

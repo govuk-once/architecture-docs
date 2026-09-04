@@ -818,7 +818,7 @@
     "tables": [
       {
         "name": "Every alarm, its threshold, and which topic it reaches",
-        "note": "18 alarms from six constructs in <code>constructs/alarms/</code>. Every one sets <code>treatMissingData: NOT_BREACHING</code>, so silence never fires an alarm. Critical and Warning are two separate SNS topics, wired in <code>constructs/alarms/actions.ts</code>. The CloudFront, CloudFront Function and Shield rows are measured in us-east-1, because that is the only region those metrics are emitted to — they reach the eu-west-2 topics through the cross-region relay.",
+        "note": "19 alarm kinds: 18 from six constructs in <code>constructs/alarms/</code>, plus the smoke-test alarm in <code>stacks/smoke-test.ts</code>, which sets no action and so reaches nobody. Every one sets <code>treatMissingData: NOT_BREACHING</code>, so silence never fires an alarm. Critical and Warning are two separate SNS topics, wired in <code>constructs/alarms/actions.ts</code>. The CloudFront, CloudFront Function and Shield rows are measured in us-east-1, because that is the only region those metrics are emitted to — they reach the eu-west-2 topics through the cross-region relay.",
         "code": [
           [
             "api-gateway.ts",
@@ -835,10 +835,14 @@
           ],
           ["shield.ts", "platform/infra/flex/src/constructs/alarms/shield.ts"],
           ["waf.ts", "platform/infra/flex/src/constructs/alarms/waf.ts"],
-          ["actions.ts", "platform/infra/flex/src/constructs/alarms/actions.ts"]
+          [
+            "actions.ts",
+            "platform/infra/flex/src/constructs/alarms/actions.ts"
+          ],
+          ["smoke-test.ts", "platform/infra/flex/src/stacks/smoke-test.ts"]
         ],
         "derived": {
-          "from": "alarms",
+          "from": "counts.alarms",
           "key": "id",
           "col": "Alarm"
         },
@@ -987,6 +991,14 @@
             "outside the band",
             "3 × 5 min, 2 must breach",
             "Warning"
+          ],
+          [
+            "Smoke test",
+            "<code>SmokeTestAlarm</code>",
+            "<code>SmokeTestSuccess</code> sum",
+            "below 1",
+            "1 × 15 min",
+            "— no action wired"
           ]
         ]
       }
