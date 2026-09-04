@@ -2,7 +2,7 @@ name: Build and publish
 
 # Every architecture here is derived from its own source repository, so every run checks
 # those out beside this one and rebuilds from them. That is also the drift check: each
-# project's architecture-facts.json is committed, so if a rebuild changes one, something
+# project's derived/architecture-facts.json is committed, so if a rebuild changes one, something
 # moved over there and these docs have not caught up yet.
 #
 # Adding a project means adding its checkout step below, next to the others. That is the
@@ -76,10 +76,8 @@ jobs:
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
 
-      # FLEX's domain and gateway configs are imported as modules rather than parsed, so
-      # its checkout needs its own dependencies resolvable. The alarm constructs are read
-      # as text and need nothing. A project whose derivation only reads text needs no step
-      # here at all.
+      # `pnpm synth` runs each project's CDK app inside its checkout, so the checkout needs
+      # its own dependencies resolvable. A project with no `synth` block needs no step here.
       - name: Install FLEX dependencies
         working-directory: .sources/flex
         run: pnpm install --frozen-lockfile --ignore-scripts
@@ -117,14 +115,14 @@ jobs:
       # here. If this fails on a scheduled run, a source moved; if it fails on a pull
       # request, someone changed a model without rebuilding.
       #
-      # architecture-source.json is deliberately not part of this gate, and the build has
+      # derived/architecture-source.json is deliberately not part of this gate, and the build has
       # just rewritten it with this run's commit. It records which source commit the facts
       # came from, and it changes on every commit over there — including the great
       # majority that change nothing here. Gating on it would fail this job constantly,
       # which is the same as it never failing at all.
       - name: Check the committed facts are up to date
         run: |
-          if ! git diff --exit-code --stat -- 'projects/*/architecture-facts.json'; then
+          if ! git diff --exit-code --stat -- 'projects/*/derived/architecture-facts.json'; then
             echo "::error::Derived facts are out of date. Run 'pnpm build' and commit the result."
             exit 1
           fi

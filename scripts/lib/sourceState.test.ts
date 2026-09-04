@@ -10,8 +10,11 @@ import {
   type Commit,
   derivationHash,
   hashFile,
+  markRead,
+  readState,
   type SourceState,
   staleness,
+  writeState,
 } from "./sourceState";
 
 const HEAD: Commit = {
@@ -59,12 +62,15 @@ function current(p: Project, facts = '{"domains":[]}'): SourceState {
   return {
     repo: p.source.repo,
     ref: p.source.ref,
-    sha: HEAD.sha,
-    subject: HEAD.subject,
-    committed: HEAD.committed,
-    builtFrom: builtFrom(p),
-    derivation: derivationHash(p, derivation),
-    facts: hashFile(p.factsPath),
+    derived: {
+      sha: HEAD.sha,
+      subject: HEAD.subject,
+      committed: HEAD.committed,
+      builtFrom: builtFrom(p),
+      derivation: derivationHash(p, derivation),
+      facts: hashFile(p.factsPath),
+    },
+    read: null,
   };
 }
 
@@ -81,7 +87,8 @@ describe("staleness", () => {
 
   it("re-derives when the source commit moved", () => {
     const p = project();
-    const state = { ...current(p), sha: "b".repeat(40) };
+    const c = current(p);
+    const state = { ...c, derived: { ...c.derived, sha: "b".repeat(40) } };
     expect(staleness(p, derivation, state, HEAD)).toMatch(/the source moved/);
   });
 
@@ -93,7 +100,11 @@ describe("staleness", () => {
 
   it("re-derives when the inputs it reads changed", () => {
     const p = project();
-    const state = { ...current(p), builtFrom: "src/other.config.ts" };
+    const c = current(p);
+    const state = {
+      ...c,
+      derived: { ...c.derived, builtFrom: "src/other.config.ts" },
+    };
     expect(staleness(p, derivation, state, HEAD)).toMatch(/inputs/);
   });
 
@@ -101,7 +112,11 @@ describe("staleness", () => {
      the commit has not moved, so every other check passes. */
   it("re-derives when the code that derives the facts changed", () => {
     const p = project();
-    const state = { ...current(p), derivation: "0000000000000000" };
+    const c = current(p);
+    const state = {
+      ...c,
+      derived: { ...c.derived, derivation: "0000000000000000" },
+    };
     expect(staleness(p, derivation, state, HEAD)).toMatch(/code that derives/);
   });
 
@@ -128,12 +143,15 @@ describe("staleness", () => {
     const state: SourceState = {
       repo: p.source.repo,
       ref: p.source.ref,
-      sha: HEAD.sha,
-      subject: HEAD.subject,
-      committed: HEAD.committed,
-      builtFrom: builtFrom(p),
-      derivation: derivationHash(p, null),
-      facts: "",
+      derived: {
+        sha: HEAD.sha,
+        subject: HEAD.subject,
+        committed: HEAD.committed,
+        builtFrom: builtFrom(p),
+        derivation: derivationHash(p, null),
+        facts: "",
+      },
+      read: null,
     };
     expect(staleness(p, null, state, HEAD)).toBeNull();
   });
@@ -147,6 +165,37 @@ describe("staleness", () => {
     const state = current(a);
     expect(staleness(a, derivation, state, HEAD)).toBeNull();
     expect(staleness(b, derivation, state, HEAD)).toMatch(/now pointed at/);
+  });
+});
+
+describe("the two commits", () => {
+  it("reads a state file of the old one-commit shape as no record at all", () => {
+    const p = project();
+    writeFileSync(
+      p.statePath,
+      JSON.stringify({ repo: p.source.repo, ref: "main", sha: HEAD.sha }),
+    );
+    expect(readState(p)).toBeNull();
+  });
+
+  /* Deriving is not reading: a re-derivation must leave `read` exactly where it was. */
+  it("markRead advances read and leaves derived alone", async () => {
+    const p = project();
+    await writeState(p, current(p));
+    const later: Commit = {
+      sha: "c".repeat(40),
+      subject: "later",
+      committed: "2026-09-04T00:00:00Z",
+    };
+    const next = await markRead(p, later);
+    expect(next.read).toEqual(later);
+    expect(next.derived.sha).toBe(HEAD.sha);
+    expect(readState(p)?.read?.sha).toBe(later.sha);
+  });
+
+  it("refuses to mark anything read before anything has been derived", async () => {
+    const p = project();
+    await expect(markRead(p, HEAD)).rejects.toThrow(/pnpm facts/);
   });
 });
 

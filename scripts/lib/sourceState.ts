@@ -4,7 +4,7 @@
  * `pnpm sync` pulls a checkout and `pnpm facts` derives from it, and both need an answer
  * to the same question: has this project's source actually moved since the last run? With
  * nothing recorded the only honest answer is "assume so", so every run reinstalls the
- * checkout's dependencies and re-imports every config to produce a byte-identical file.
+ * checkout's dependencies and re-reads every template to produce a byte-identical file.
  *
  * So the commit is recorded, in `architecture-source.json` beside that project's facts
  * and committed with them. It is kept *out* of `architecture-facts.json` deliberately:
@@ -23,7 +23,8 @@
  */
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import path from "node:path";
 
 import { format } from "prettier";
 
@@ -33,27 +34,38 @@ import { builtFrom, type Project } from "./projects.js";
 
 export const STATE_FILE = "architecture-source.json";
 
-/** What was built, from where, by what. Every field is part of the skip decision. */
-export interface SourceState {
-  /** Which repository and ref — pointing this at another checkout invalidates it. */
-  repo: string;
-  ref: string;
-  /** The commit, with enough of it to read in a diff without a checkout to hand. */
-  sha: string;
-  subject: string;
-  committed: string;
-  /** The inputs read at that commit — the `derive.inputs` of project.config.json. */
-  builtFrom: string;
-  /** Hash of the code that did the deriving, so changing it re-derives. */
-  derivation: string;
-  /** Hash of the architecture-facts.json it produced, so a hand-edit re-derives. */
-  facts: string;
-}
-
 export interface Commit {
   sha: string;
   subject: string;
   committed: string;
+}
+
+/**
+ * Two commits, deliberately, because they answer two different questions.
+ *
+ * `derived` is the commit the facts were computed from. A machine writes it, every time
+ * `pnpm facts` re-derives, and every field of it is part of the skip decision. It advances
+ * freely and means nothing about whether anyone has read anything.
+ *
+ * `read` is the commit up to which the model's cited files have actually been re-read. Only
+ * `pnpm drift --mark-read` advances it, and only somebody who has done the reading should
+ * run that. `pnpm drift` measures from here, so a build cannot erase the reading list by
+ * being run first — which is what happened when the two were one field.
+ */
+export interface SourceState {
+  /** Which repository and ref — pointing this at another checkout invalidates it. */
+  repo: string;
+  ref: string;
+  derived: Commit & {
+    /** The inputs read at that commit — the `derive.inputs` of project.config.json. */
+    builtFrom: string;
+    /** Hash of the code that did the deriving, so changing it re-derives. */
+    derivation: string;
+    /** Hash of the architecture-facts.json it produced, so a hand-edit re-derives. */
+    facts: string;
+  };
+  /** Null until somebody has read up to a commit and said so. */
+  read: Commit | null;
 }
 
 export const short = (sha: string) => sha.slice(0, 8);
@@ -189,7 +201,12 @@ export function derivationHash(
 export function readState(project: Project): SourceState | null {
   if (!existsSync(project.statePath)) return null;
   try {
-    return JSON.parse(readFileSync(project.statePath, "utf8")) as SourceState;
+    const parsed = JSON.parse(
+      readFileSync(project.statePath, "utf8"),
+    ) as Partial<SourceState>;
+    // A file of another shape is treated as no record at all, never as a partial one.
+    if (!parsed.derived?.sha || !parsed.repo) return null;
+    return { ...parsed, read: parsed.read ?? null } as SourceState;
   } catch {
     return null;
   }
@@ -200,10 +217,31 @@ export async function writeState(
   project: Project,
   state: SourceState,
 ): Promise<void> {
+  mkdirSync(path.dirname(project.statePath), { recursive: true });
   writeFileSync(
     project.statePath,
     await format(JSON.stringify(state), { parser: "json" }),
   );
+}
+
+/**
+ * Records that the model's cited files have been read up to the checkout's HEAD. Nothing
+ * else moves `read`: not a build, not a derivation, not a sync. It needs a `derived`
+ * record to sit beside, because a state file is one thing, not two, and the facts must
+ * exist before anyone can claim to have read against them.
+ */
+export async function markRead(
+  project: Project,
+  head: Commit,
+): Promise<SourceState> {
+  const state = readState(project);
+  if (!state)
+    throw new Error(
+      `projects/${project.id}: nothing derived yet — run \`pnpm facts ${project.id}\` before marking anything read`,
+    );
+  const next = { ...state, read: head };
+  await writeState(project, next);
+  return next;
 }
 
 /**
@@ -223,17 +261,18 @@ export function staleness(
     return `no ${STATE_FILE} — nothing records what the facts came from`;
   if (state.repo !== src.repo || state.ref !== src.ref)
     return `built from ${state.repo} (${state.ref}), now pointed at ${src.repo} (${src.ref})`;
-  if (state.sha !== head.sha)
-    return `the source moved — built at ${short(state.sha)}, the checkout is at ${short(head.sha)}`;
-  if (state.builtFrom !== builtFrom(project))
+  const d = state.derived;
+  if (d.sha !== head.sha)
+    return `the source moved — derived at ${short(d.sha)}, the checkout is at ${short(head.sha)}`;
+  if (d.builtFrom !== builtFrom(project))
     return "the inputs named in project.config.json changed";
-  if (state.derivation !== derivationHash(project, derivation))
+  if (d.derivation !== derivationHash(project, derivation))
     return "the code that derives the facts changed";
   // A project with no derivation has no facts file, and correctly stops here.
   if (!derivation) return null;
   if (!existsSync(project.factsPath))
     return "architecture-facts.json is missing";
-  if (state.facts !== hashFile(project.factsPath))
+  if (d.facts !== hashFile(project.factsPath))
     return "architecture-facts.json no longer matches what was derived";
   return null;
 }

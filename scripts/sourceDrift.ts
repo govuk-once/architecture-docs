@@ -2,9 +2,10 @@
  * What has moved in each project's source since these docs were built from it, and which
  * of it these docs actually make a claim about.
  *
- *   pnpm drift               every project
- *   pnpm drift flex          one of them
+ *   pnpm drift                     every project
+ *   pnpm drift flex                one of them
  *   pnpm drift flex --since 3a1c4861
+ *   pnpm drift flex --mark-read    the reading is done, up to the checkout's HEAD
  *
  * `pnpm build` re-derives the counts a project declares a derivation for, and fails when
  * a diagram disagrees with them. Everything else in an explorer is prose written by
@@ -15,10 +16,10 @@
  *
  * That is what this prints. It never fails — it is a reading list, not a gate.
  *
- * Run it *before* `pnpm build`, which advances the recorded commit as soon as it
- * re-derives. If one has already run, the range is still askable — `--since <sha>` takes
- * any commit, and `git log -p projects/<id>/architecture-source.json` has every one this
- * repository has ever recorded.
+ * It measures from the commit the model was last *read* up to — `read` in
+ * architecture-source.json — not from the one the facts were derived at, so a build run
+ * first cannot erase the reading list. Only `--mark-read` advances `read`, and only
+ * somebody who has done the reading should run it.
  */
 import { loadLikeC4Views } from "./lib/loadLikeC4Views.js";
 import {
@@ -32,6 +33,7 @@ import {
   commitsBetween,
   ensureRange,
   headCommit,
+  markRead,
   readState,
   short,
   STATE_FILE,
@@ -64,16 +66,23 @@ async function driftProject(project: Project, asked: string | null) {
     console.log("  run `pnpm build` to derive them and record this commit.");
     return;
   }
-  const since = asked ?? state?.sha ?? "";
-  console.log(
-    asked
-      ? `  since   ${short(since)}  (asked for with --since)`
-      : `  docs    ${short(since)}  ${state?.subject ?? ""}  (${state?.committed.slice(0, 10) ?? ""})`,
-  );
+  // The reading list starts where the reading stopped, not where the last build ran.
+  // With nothing ever marked read, the derived commit is the only honest starting point.
+  const from = state?.read ?? state?.derived ?? null;
+  const since = asked ?? from?.sha ?? "";
+  if (state)
+    console.log(
+      `  derived ${short(state.derived.sha)}  ${state.derived.subject}  (${state.derived.committed.slice(0, 10)})`,
+    );
+  let fromLine = `  read    nothing recorded — measuring from the derived commit`;
+  if (asked) fromLine = `  since   ${short(since)}  (asked for with --since)`;
+  else if (state?.read)
+    fromLine = `  read    ${short(since)}  ${state.read.subject}  (${state.read.committed.slice(0, 10)})`;
+  console.log(fromLine);
 
   if (since === head.sha) {
     console.log(
-      "  the same commit — nothing has moved since these docs were built.",
+      "  the same commit — nothing has moved since the model was read.",
     );
     return;
   }
@@ -129,17 +138,37 @@ async function driftProject(project: Project, asked: string | null) {
         `this range.`,
     );
   console.log(
-    `\n  Once you have read them, \`pnpm build ${project.id}\` records ${short(head.sha)}.`,
+    `\n  Once you have read them: \`pnpm drift ${project.id} --mark-read\` records ${short(head.sha)} as read.`,
   );
 }
 
+/** The other half of drift: say that the reading has been done, up to the checkout's HEAD. */
+async function markProjectRead(project: Project) {
+  assertSourceRoot(project);
+  const head = headCommit(project);
+  const state = await markRead(project, head);
+  console.log(`\n${project.id}:`);
+  console.log(`  read up to ${short(head.sha)} — ${head.subject}`);
+  if (state.derived.sha !== head.sha)
+    console.log(
+      `  note: the facts were derived at ${short(state.derived.sha)} — run \`pnpm build ${project.id}\` to re-derive at this commit`,
+    );
+}
+
 const asked = sinceArg();
+const marking = process.argv.includes("--mark-read");
 const projects = selectProjects(
   // --since takes a value, which must not be read as a project id.
   process.argv.slice(2).filter((a) => a !== asked),
 );
-if (asked && projects.length > 1)
+if (asked && marking)
   throw new Error(
-    "--since applies to one project's history — name the project: pnpm drift <id> --since <sha>",
+    "--since and --mark-read do not combine: reading is recorded at HEAD only",
   );
-for (const project of projects) await driftProject(project, asked);
+if ((asked || marking) && projects.length > 1)
+  throw new Error(
+    "--since and --mark-read apply to one project — name it: pnpm drift <id> --since <sha> | --mark-read",
+  );
+for (const project of projects)
+  if (marking) await markProjectRead(project);
+  else await driftProject(project, asked);

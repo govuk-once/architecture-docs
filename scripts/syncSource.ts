@@ -64,10 +64,11 @@ function installReason(project: Project, head: Commit): string | null {
   const state = readState(project);
   if (!state)
     return `no ${STATE_FILE}, so what has already been installed is unknown`;
-  if (state.sha === head.sha) return null;
-  if (!ensureRange(project, state.sha))
-    return `the range since ${short(state.sha)} cannot be listed, so what changed is unknown`;
-  const touched = changedFiles(project, state.sha, head.sha).filter((f) =>
+  const base = state.derived.sha;
+  if (base === head.sha) return null;
+  if (!ensureRange(project, base))
+    return `the range since ${short(base)} cannot be listed, so what changed is unknown`;
+  const touched = changedFiles(project, base, head.sha).filter((f) =>
     MANIFEST.test(f),
   );
   return touched.length
@@ -118,7 +119,8 @@ function syncProject(project: Project) {
   const reason = skipInstall ? null : installReason(project, head);
   if (reason) {
     console.log(`  installing its dependencies — ${reason}`);
-    // --ignore-scripts: nothing in the checkout is executed, only imported.
+    // --ignore-scripts: no lifecycle script runs. `pnpm synth` is the only command that
+    // executes the checkout, and it is opt-in.
     run(
       "pnpm",
       ["install", "--frozen-lockfile", "--ignore-scripts"],
@@ -135,19 +137,24 @@ function syncProject(project: Project) {
   // What to read next. A commit count is the difference between "something moved over
   // there" and a list of commits somebody can actually go and read.
   const state = readState(project);
+  const read = state?.read?.sha;
   if (!state) {
     console.log("  nothing built from it yet — run `pnpm build`");
-  } else if (state.sha === head.sha) {
-    console.log("  which is the commit the committed facts were built from");
-  } else if (ensureRange(project, state.sha)) {
-    const n = commitsBetween(project, state.sha, head.sha).length;
+  } else if (read === head.sha) {
+    console.log("  and the model has been read up to exactly this commit");
+  } else if (!read) {
     console.log(
-      `  ${String(n)} commit(s) since ${short(state.sha)}, which the committed facts were ` +
-        `built from — run \`pnpm drift ${project.id}\` for the cited files among them`,
+      `  nothing records how far the model has been read — run \`pnpm drift ${project.id}\``,
+    );
+  } else if (ensureRange(project, read)) {
+    const n = commitsBetween(project, read, head.sha).length;
+    console.log(
+      `  ${String(n)} commit(s) since ${short(read)}, the last one read — run ` +
+        `\`pnpm drift ${project.id}\` for the cited files among them`,
     );
   } else {
     console.log(
-      `  the facts were built from ${short(state.sha)}; the range from it cannot be listed here`,
+      `  the model was read up to ${short(read)}; the range from it cannot be listed here`,
     );
   }
 }

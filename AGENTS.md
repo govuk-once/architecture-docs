@@ -32,12 +32,13 @@ expanded, with nothing to reason through — a construct instantiated in a loop 
 of source and many resources in a template. When you author or re-read a model, read the
 template for the stack, not only the stack.
 
-Both steps do only the work the source has actually made stale. Every build records the
-commit it read in `architecture-source.json`, and the next run measures against it: `sync`
-reinstalls the checkout only when a dependency manifest moved in the range, and `build`
-re-derives only when the commit, the deriving scripts or the facts file itself changed.
-`pnpm facts --force` and `pnpm sync --install` override that; CI ignores the recorded state
-entirely, because re-deriving and diffing is the whole point of the run.
+Both steps do only the work the source has actually made stale. Every derivation records
+the commit it read in `projects/<id>/derived/architecture-source.json` as `derived`, and the
+next run measures against it: `sync` reinstalls the checkout only when a dependency manifest
+moved in the range, and `build` re-derives only when the commit, the deriving code, the
+count definitions or the facts file itself changed. `pnpm facts --force` and
+`pnpm sync --install` override that; CI ignores the recorded state entirely, because
+re-deriving and diffing is the whole point of the run.
 
 `pnpm sync` is what makes this repository self-contained: it pulls the sources it documents
 rather than assuming checkouts are already beside it. Each is disposable — gitignored,
@@ -50,13 +51,55 @@ so its dependencies have to resolve. After that the install is repeated only whe
 moved in the range; `pnpm sync --install` forces it if a checkout ever looks wrong. A sync
 keeps `cdk.out` so the templates survive it; `pnpm synth` always rewrites them.
 
+## Authoring the model
+
+The diagrams and the data beside them — `projects/<id>/model/*.c4`, `views.json`,
+`resources.json` — are written by reading the source, and today that reading is done by a
+coding agent run **on a local machine, in this repository, with this file as its brief**.
+Not in CI: authoring needs the checkout under `.sources/`, the templates `pnpm synth` writes
+into it, and the current model, and it produces a diff a person then reviews. CI only ever
+checks and publishes what was committed.
+
+The loop, whether the reader is a person or an agent:
+
+1. **Get the evidence.** `pnpm sync <id>` for the source, `pnpm synth <id>` for the
+   CloudFormation, `pnpm drift <id>` for the list of commits since the last build and
+   which of the files the model cites are among them. That list is the reading; start there.
+2. **Read the template before the stack.** `cdk.out/<stage>/<stack>.template.json` is what
+   deploys — loops unrolled, L2 constructs expanded, every alarm threshold resolved. Read the
+   stack source for _why_, the template for _what_. Read every file `drift` names, in full.
+3. **Edit the model, and cite as you go.** A changed or new claim carries a `link` to the
+   file that proves it; a table carries `code`; a countable number carries `from` or
+   `derived` so the build gates it rather than you. Keep each fact on one tab — see
+   [`projects/README.md`](projects/README.md) for the scope rules and the metadata contract.
+4. **Let the build argue back.** `pnpm build`, `pnpm check`, `pnpm lint`, `pnpm tsc`,
+   `pnpm test`. A count the model states that the templates contradict fails here, naming
+   the row, the stage and both numbers. Fix the model, or — if the template is right and the
+   claim was wrong — say so in the commit.
+5. **Hand over a diff, not a page.** The model files and the regenerated
+   `derived/` files are what gets reviewed. The
+   reviewer's question for every changed line is the one this repository is built on: which
+   file proves it, and does it still?
+
+6. **Say the reading is done.** `pnpm drift <id> --mark-read` records the checkout's commit
+   as `read` in `derived/architecture-source.json`. That is the only thing that advances it
+   — a build advances `derived`, never `read` — so the next `drift` starts from where the
+   reading stopped, whatever has been built in between. Run it only when every file `drift`
+   listed has actually been read.
+
+What an agent must not do: restate an existing claim because it reads well, describe a
+resource from the stack source when the template disagrees, or mark a commit read whose
+cited files it has not read. The verification pass that found 80 wrong claims in 1,091 found
+them in prose that was fluent and plausible; plausibility is what an agent produces by
+default, and it is not evidence.
+
 ## Checking for drift
 
-Each project's `architecture-facts.json` is committed. That is the automated half of the
-drift mechanism:
+Each project's `derived/architecture-facts.json` is committed. That is the automated half
+of the drift mechanism:
 
 ```bash
-pnpm sync && pnpm build && git diff --stat -- 'projects/*/architecture-facts.json'
+pnpm sync && pnpm build && git diff --stat -- 'projects/*/derived/architecture-facts.json'
 ```
 
 A non-empty diff means a number the source declares has changed. What the diff says
@@ -65,11 +108,11 @@ determines the work:
 | The diff shows            | What changed over there             | What to do here                          |
 | ------------------------- | ----------------------------------- | ---------------------------------------- |
 | Route or domain counts    | A route, domain or gateway          | Update the resource rows the build names |
-| An alarm added or removed | `constructs/alarms/`                | Update the Delivery alarm table          |
+| An alarm added or removed | Any alarm construct in the CDK app  | Update the Delivery alarm table          |
 | Nothing                   | Nothing that these docs derive from | Still read on — see below                |
 
 An empty diff is **not** proof the docs are current. Only ten resource counts and the
-eighteen alarms are derived; everything else is prose written by reading the code. A rewrite
+nineteen alarm kinds are derived; everything else is prose written by reading the code. A rewrite
 of a CDK stack changes no number here and can still make a paragraph false.
 
 So there is a second half, and it is the one that finds those:
@@ -78,17 +121,18 @@ So there is a second half, and it is the one that finds those:
 pnpm drift
 ```
 
-It reads the commit each project's facts were built from out of its
-`architecture-source.json` and lists what has landed in that source since — which of those commits touch a config the counts come
-from, and which touch a file the explorer **cites**, naming every claim that rests on it.
-That list is the reading, and there is no substitute for doing it. `drift` never fails a
-build; a reading list that could fail CI would get suppressed rather than read.
+It reads the commit each project's model was last **read** up to — `read` in
+`derived/architecture-source.json` — and lists what has landed in that source since: which
+of those commits touch the CDK app the counts come from, and which touch a file the explorer
+**cites**, naming every claim that rests on it. That list is the reading, and there is no
+substitute for doing it. `drift` never fails a build; a reading list that could fail CI
+would get suppressed rather than read.
 
-Run it **before** `pnpm build`. The build advances each recorded commit the moment it
-re-derives, so the natural order is `pnpm sync`, which prints how far each source has moved,
-then `pnpm drift`, then the build. After the fact, `pnpm drift <id> --since <sha>` asks about
-any range, and `git log -p projects/<id>/architecture-source.json` holds every commit that
-project has been built from.
+The state file records two commits because they answer two different questions. `derived`
+is where the facts were computed from; a build advances it freely. `read` is how far the
+cited files have been re-read; only `pnpm drift <id> --mark-read` advances it. So the order
+of `build` and `drift` no longer matters, and `pnpm drift <id> --since <sha>` still asks
+about any range if you need one.
 
 ## Never carry a claim forward on trust
 
@@ -111,7 +155,7 @@ build already.
 ## What the build refuses to produce
 
 `pnpm build` exits non-zero — it does not warn — on a count that disagrees with the derived
-facts, an alarm table that no longer matches the constructs, a reference table with no
+facts, an alarm table that no longer matches the synthesised templates, a reference table with no
 citation, a citation pointing at a file that no longer exists, text that will not fit its box,
 overlapping boxes, a box straddling a zone edge, an edge to a node that does not exist, a view
 with no stated audience, a raw `<` that would swallow a label, or JSON that is not
@@ -134,9 +178,9 @@ Run all five before proposing a change. The JSON is linted like anything else �
 it with `prettier/prettier` — so run `pnpm exec eslint --fix` on a file you hand-edit.
 
 If you changed `scripts/derive/cloudformation.ts`, or a project's `derive.counts` or `synth`
-block, run `pnpm facts --force` as well. All three are hashed into `architecture-source.json`,
-so a change re-derives on the next run regardless; run it now so any diff it produces is in
-front of you rather than in front of the reviewer.
+block, run `pnpm facts --force` as well. All three are hashed into
+`derived/architecture-source.json`, so a change re-derives on the next run regardless; run
+it now so any diff it produces is in front of you rather than in front of the reviewer.
 
 ## Cleaning up
 
@@ -162,12 +206,39 @@ about no project.
 - **Commit messages** are `TICKET-000 type: description`, matching the source repository's
   convention — e.g. `FLEX-464 docs: correct the alarm thresholds`.
 - **Do not commit generated files.** `site/` and `.sources/` are gitignored. Each project's
-  `architecture-facts.json` and `architecture-source.json` are the exceptions: both are
-  generated _and_ committed, because that is what makes drift a reviewable diff and what
-  gives the next run a commit to measure against.
+  `derived/` directory is the exception: generated _and_ committed, because that is what
+  makes drift a reviewable diff and what gives the next run a commit to measure against.
+  Nothing under `derived/` is edited by hand.
 - **New packages are quarantined for seven days** by `minimumReleaseAge` in
   `pnpm-workspace.yaml`. If an install fails for a fresh release, that is why — pick an older
   version rather than lowering the setting.
+
+## CI
+
+[`.github/workflows/build.yml`](.github/workflows/build.yml) runs on every pull request, on
+every push to `main`, on a weekday schedule, and by hand. Every run checks each documented
+source out beside this repository, installs it, synthesises it, rebuilds — never from the
+recorded state, always from the templates — and fails if any committed
+`derived/architecture-facts.json` no longer matches. On a pull request that means someone
+changed a model without rebuilding; on the scheduled run it means a source moved and the
+docs have not caught up. It then prints the `pnpm drift` reading list without failing on it,
+runs the render check, lint, typecheck and tests, and publishes `site/` to Pages from
+`main`.
+
+Things that are the workflow's, not the scripts':
+
+- **One checkout step per project**, written out rather than generated — a workflow cannot
+  loop `actions/checkout`, and a private source needs a token with `Contents: read` on it;
+  the default `GITHUB_TOKEN` cannot read another repository. FLEX is public and needs none.
+- **Pages must use the GitHub Actions source**, not a branch: `site/` is gitignored, so a
+  branch-based build would publish nothing.
+- **The `github-pages` environment only lets the default branch deploy** by default. A
+  manual publish from any other branch — `workflow_dispatch` with `deploy: true` — is
+  refused before its first step until that branch is added to the environment's allowed
+  list. The job then has no log, which is the tell.
+- **Synth needs no credentials** as long as every context lookup the app makes degrades to a
+  dummy, which counting by resource type tolerates. An app that hard-fails on a lookup
+  needs a stub `cdk.context.json` written into the checkout before synth.
 
 ## Adding an architecture
 
@@ -175,10 +246,11 @@ Six things, and nothing else. The build, the renderer, the checks, the export an
 all read config, so none of them changes:
 
 1. `projects/<id>/project.config.json` — copy FLEX's and rewrite it. `source` names the
-   repository; `derive` is optional and says which module in `scripts/derive/` turns that
-   source into facts.
+   repository to document and where its checkout lands.
 2. `projects/<id>/model/` — the LikeC4 model. This is the work, and the only part that is
-   judgement rather than transformation.
+   judgement rather than transformation. Start from `projects/_template/`, the smallest
+   model that builds; [`projects/README.md`](projects/README.md) sets out what it requires
+   and the order to grow it in.
 3. A `--legend-<colour>` token in `explorer/theme.css` for any colour its kinds name that is
    not already there. The build says so if you miss one.
 4. A `synth` block saying how to run its CDK app, and `derive.counts` saying what to count

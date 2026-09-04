@@ -11,8 +11,8 @@
  * A `source` glob from explorer.config.json, as a regex over repository-relative paths.
  *
  * Matched against the paths in a diff rather than walked on disk, because a file deleted
- * in the range still has to be recognised as one these docs read. `alarmConstructs` names
- * a directory, so a bare glob matches the directory and everything under it.
+ * in the range still has to be recognised as one these docs read. An input may name a
+ * directory rather than a glob; a bare path then matches it and everything under it.
  */
 export function globToRe(glob: string): RegExp {
   const escaped = glob.replace(/[.+^${}()|[\]\\]/g, String.raw`\$&`);

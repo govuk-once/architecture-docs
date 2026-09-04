@@ -1,0 +1,22 @@
+{
+  "groups": [
+    {
+      "name": "Compute",
+      "note": null,
+      "table": null,
+      "items": [
+        {
+          "id": "one",
+          "name": "A thing",
+          "n": { "dev": 1 },
+          "meta": [],
+          "d": {
+            "type": "AWS::Lambda::Function",
+            "facts": ["Replace with a claim the cited file proves."],
+            "code": [["README.md", "README.md"]]
+          }
+        }
+      ]
+    }
+  ]
+}

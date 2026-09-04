@@ -1,0 +1,21 @@
+{
+  "context": {
+    "name": "Context",
+    "order": 1,
+    "group": "Architecture",
+    "audience": "Anyone new to the system",
+    "blurb": "The big picture.",
+    "note": "",
+    "w": 600,
+    "h": 200
+  },
+  "resources": {
+    "name": "Resources",
+    "order": 2,
+    "group": "Reference",
+    "audience": "Cost, audit and incident scoping",
+    "blurb": "The inventory: every resource, with a count per stage.",
+    "note": "",
+    "inventory": "resources.json"
+  }
+}

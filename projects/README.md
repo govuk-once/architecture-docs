@@ -8,40 +8,90 @@ before changing a view** — whether you are a person or an agent working on som
 ```
 projects/
   flex/
-    project.config.json        what this architecture is called, and where its source is
-    model/*.c4                 the diagrams, as a LikeC4 model — the source
-    model/views.json           tab order, audience, reference tables
-    model/resources.json       the inventory
-    architecture-facts.json    derived from the source, committed
-    architecture-source.json   the source commit those were derived from, committed
+    project.config.json        declared: what this is called, where its source is, what to count
+    model/*.c4                 authored: the diagrams, as a LikeC4 model — the source
+    model/views.json           authored: tab order, audience, reference tables
+    model/resources.json       authored: the inventory
+    derived/                   the build owns this; never edit
+      architecture-facts.json    the counts, read from the synthesised templates
+      architecture-source.json   two commits: `derived` (facts computed from) and
+                                 `read` (cited files re-read up to)
 ```
+
+Three kinds of file, told apart by how each gets to be right. Config is **declared** —
+somebody decides. The model is **authored** — somebody reads the source and makes cited
+claims, and a person reviews the diff. `derived/` is **computed** — a tool writes it from
+the templates, and a hand edit is undone by the next build. Who typed a file is not a
+property of it; git history holds that.
 
 Each builds to `site/<id>/index.html`, with an index over them at `site/index.html`. The
 built pages are gitignored, because a 410KB generated blob makes for meaningless diffs. CI
 builds them and publishes `site/` to GitHub Pages on every merge to `main`; locally,
 `pnpm serve` builds them for you.
 
-`architecture-facts.json` **is** committed, at 24KB for FLEX, for two reasons: a config
-change that moves the route counts becomes a reviewable diff, and the build validates the
-diagram's own counts against it — 9 route/domain counts, 36 assertions across the four
-stages. Add a route and forget the diagram, and the build tells you the row, the stage and
-both numbers. The other 73 counts come from CDK code rather than domain config and are
-still verified by hand.
+`derived/architecture-facts.json` **is** committed, for two reasons: a change in the source
+that moves a count becomes a reviewable diff, and the build validates the diagram's own
+counts against it — 10 bound rows, 40 assertions across the four stages, plus the
+19-row alarm table. Add a route and forget the diagram, and the build tells you the row,
+the stage and both numbers. The other 74 inventory rows are prose: read from the
+synthesised templates and the stacks, cited, and verified by hand.
 
 ## Adding a project
 
-1. `projects/<id>/` with a `project.config.json` — copy FLEX's and rewrite it. `source`
-   names the repository to document; `derive` is optional, and says which module in
-   [`../scripts/derive/`](../scripts/derive/) turns that source into facts.
-2. `projects/<id>/model/` with a `specification.c4`, a `.c4` per tab, `views.json` and
-   whatever the inventory view reads.
-3. Add `<id>` to `projects` in [`../explorer.config.json`](../explorer.config.json), and
-   remove it from `planned` if it was there.
-4. Add a checkout step for its repository to
-   [`../.github/workflows/build.yml`](../.github/workflows/build.yml).
+Six things, and no TypeScript. The build, the renderer, the checks, the export and the
+index all read config, so none of them changes:
 
-Nothing else changes. The build, the renderer, the checks, the export and the index all
-read the config.
+1. `projects/<id>/project.config.json` — copy FLEX's and rewrite it. `source` names the
+   repository to document and where its checkout lands.
+2. `projects/<id>/model/` with a `specification.c4`, a `.c4` per tab, `views.json` and
+   whatever the inventory view reads. This is the work, and the only part that is judgement
+   rather than transformation.
+3. A `--legend-<colour>` token in [`../explorer/theme.css`](../explorer/theme.css) for any
+   colour its kinds name that is not already there. The build says so if you miss one.
+4. A `synth` block saying how to run its CDK app, and `derive.counts` saying what to count
+   in the templates it writes — both JSON, in the vocabulary set out under
+   [_What a second architecture actually costs_](#what-a-second-architecture-actually-costs).
+   Or no `derive` block at all, if nothing is worth gating: then leave `from` off every
+   resource and `derived` off every table, and maintain those numbers by hand.
+5. A checkout step for its repository in
+   [`../.github/workflows/build.yml`](../.github/workflows/build.yml) — a workflow cannot
+   loop `actions/checkout`, and a private repository needs its own token.
+6. `<id>` in the `projects` array of [`../explorer.config.json`](../explorer.config.json),
+   which is also the order the index lists them in. Remove it from `planned` if it was there.
+
+Then `pnpm sync <id>`, `pnpm synth <id>`, `pnpm build`, `pnpm check`.
+
+## Starting a model from nothing
+
+[`_template/`](_template/) is the smallest project that builds: five files, about 115
+lines — a `specification.c4`, one diagram view, the inventory view, and the `views.json`
+that orders them. Copied under a new id and listed in `explorer.config.json`, it passes
+every gate and the render check as it stands. It is inert where it is, because only listed
+projects are built. Nothing in it is true of any system; every string is a placeholder to
+replace.
+
+That is the point of starting from it: a blank project is not blocked by machinery, and the
+first thing the build says is about your claims, not your files. What it requires of even
+the smallest model, and will refuse without:
+
+- Every view in `views.json` has a `group` and an `audience` — one line naming a role.
+- One view is the inventory, named by `inventoryView` in the config, and every inventory row
+  is placed on some box's `resources` list; a row no diagram reaches is an error.
+- Every node has `ownership` from the config's `kinds`, a `link` to the file that proves
+  it, and `facts`. A node whose owner is unstated is exactly the box a reader gets wrong.
+- Boxes are at least 176 wide, do not overlap, and do not straddle a zone edge.
+- Every `code` citation points at a file that exists in the checkout.
+
+Then grow it tab by tab, in the order a reader must already know things — Context first,
+then the request path, then containers, then the cross-cutting views — for the reason given
+under [_Tab order and grouping_](#tab-order-and-grouping). Write each tab by reading, per
+[`AGENTS.md`](../AGENTS.md): the synthesised templates for what deploys, the stacks for
+why, and cite as you go. Add `synth` and `derive.counts` to the config as soon as there is
+a number worth gating; until then the counts are prose.
+
+The one thing no template gives you is the model itself. FLEX's is 9,002 lines across
+eight tabs, and it took a verification pass that found 80 wrong claims in 1,091 to get
+right. Expect the reading, not the writing, to be the work.
 
 ---
 
@@ -80,7 +130,7 @@ That runs two steps:
    writes the index over them.
 
 Step 1 is skipped when nothing it reads has moved: the FLEX commit, a hash of the deriving
-scripts and a hash of the output are recorded in `../architecture-source.json`, and all three
+scripts and a hash of the output are recorded in `derived/architecture-source.json`, and all three
 have to still match. `pnpm facts --force` derives regardless, and CI always does. `pnpm drift`
 turns the same recorded commit into the list of cited files that have changed since — the
 claims worth re-reading.
@@ -91,22 +141,23 @@ If a count in a view disagrees with `architecture-facts.json`, **the view is wro
 generated file looks wrong, the config is the bug — not the diagram.
 
 A resource row says where its own count comes from, with a `from` field beside the `n` it
-governs — `"from": "totals.routeMethods.public"`, a dotted path into the generated facts.
+governs — `"from": "counts.publicRoutes"`, a dotted path into the generated facts.
 The build resolves it and fails when the two disagree. Keeping the claim and its source in
 the same object means a renamed or deleted row takes its mapping with it.
 
-The same applies to the alarm table, which binds a column to the alarms parsed out of the CDK
-constructs — see [_A table can be bound to the code_](#a-table-can-be-bound-to-the-code-not-just-cited).
+The same applies to the alarm table, which binds a column to the alarm kinds read out of the
+synthesised templates — see [_A table can be bound to the code_](#a-table-can-be-bound-to-the-code-not-just-cited).
 Counts still read from CDK code by hand — keys, subnets, log groups — are not gated, so verify
 those against the stack that creates them.
 
 ### The pipeline is deterministic
 
-Authoring the model is a judgement step: it means reading the CDK stacks and configs to work
-out what is true. Everything downstream — deriving facts, validating, assembling, rendering,
-publishing — is ordinary TypeScript that runs the same way on any machine and in CI. Keep it
-that way. Whatever helps you author the model, its output is a committed diff that gets
-reviewed like any other.
+Authoring the model is a judgement step: it means reading the synthesised templates and the
+CDK stacks to work out what is true. It happens locally — today by a coding agent, with
+[`AGENTS.md`](../AGENTS.md) as its brief and the loop set out there. Everything downstream —
+deriving facts, validating, assembling, rendering, publishing — is ordinary TypeScript that
+runs the same way on any machine and in CI. Keep it that way. Whatever helps you author the
+model, its output is a committed diff that gets reviewed like any other.
 
 ---
 
@@ -164,6 +215,36 @@ of the renderer. The directory name is the id: it names the URL and prefixes exp
 Nothing about presentation is in here — colours live in `theme.css` — and nothing that
 duplicates a view: a resource's `from` sits on the resource. The build validates the file
 and refuses to assemble a page from a broken one.
+
+`source` is the same three fields for every project: `repo` and `ref` are what `pnpm sync`
+clones, `root` is where it lands. `synth` says how to run the CDK app, and `derive.counts`
+what to count in what it writes:
+
+```json
+"source": {
+  "repo": "git@github.com:govuk-once/flex.git",
+  "ref": "main",
+  "root": ".sources/flex"
+},
+"synth": {
+  "cwd": "platform/infra/flex",
+  "command": ["pnpm", "exec", "tsx", "src/app.ts"],
+  "env": { "STAGE": "{stage}", "CDK_DEFAULT_ACCOUNT": "000000000000" },
+  "output": "cdk.out/{id}"
+},
+"derive": {
+  "module": "cloudformation",
+  "inputs": { "templates": "cdk.out/{id}/*.template.json" },
+  "counts": {
+    "domainFunctions": { "type": "AWS::Lambda::Function", "perTemplate": "^{stage}-(?<name>(?!Flex)[a-z-]+)$" },
+    "publicRoutes":    { "type": "AWS::ApiGateway::Method", "template": "^{stage}-(?!Flex)", "logicalId": "^PublicRoot" }
+  }
+}
+```
+
+Nothing else knows those paths: every read resolves through
+[`../scripts/lib/projects.ts`](../scripts/lib/projects.ts). Build without syncing first and
+the error names the project and the fix rather than quietly producing an empty page.
 
 The site's own config, [`../explorer.config.json`](../explorer.config.json), holds only what
 is true of the whole site: its title and blurb, where the site is assembled, which projects
@@ -465,10 +546,11 @@ array in `architecture-facts.json`:
 "derived": { "from": "alarms", "key": "id", "col": "Alarm" }
 ```
 
-The build then compares the values in that column against `facts[from].map(x => x[key])` and
-fails when they disagree, naming what was added or removed. The alarm table uses this: the 18
-rows are held against the 18 alarms parsed out of the CDK constructs, so renaming an alarm in
-`constructs/alarms/` breaks the docs build until the table is updated. Bind a table this way
+The build then compares the values in that column against the array at `from` and fails
+when they disagree, naming what was added or removed. The alarm table uses this: its 19
+rows are held against the 19 distinct alarm constructs in the synthesised templates, so
+renaming an alarm construct anywhere in the CDK app breaks the docs build until the table is
+updated. Bind a table this way
 whenever the underlying list is machine-readable — prose columns stay hand-written and readable,
 while the identities stay honest.
 
@@ -519,6 +601,10 @@ pnpm exec playwright install chromium
 
 ## Changing a diagram
 
+0. Know what changed before you edit. `pnpm sync <id>` then `pnpm drift <id>` lists the
+   commits since the recorded build and which of the files the model cites are among them;
+   `pnpm synth <id>` writes the templates under `cdk.out/<stage>/` in the checkout, which
+   are the deployed truth — read the template for a stack, not only the stack.
 1. Edit the relevant `model/*.c4`. That is the source; everything else is machinery.
 2. `pnpm exec likec4 validate projects/<id>/model` —
    the parser is specific about what it rejects, and faster than a full build.
@@ -534,8 +620,8 @@ pnpm exec likec4 start projects/<id>/model
 # open the built page
 open site/flex/index.html
 
-# emit the same page without the html/head/body wrapper, for publishing as an artifact
-pnpm build --body /tmp/explorer-body.html
+# emit one page without the html/head/body wrapper, for publishing as an artifact
+pnpm build flex --body /tmp/explorer-body.html
 ```
 
 Tab order, audience and reference tables are in `model/views.json`, not the `.c4` — a

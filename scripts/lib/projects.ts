@@ -238,8 +238,9 @@ function toProject(id: string): Project {
     derive: config.derive ?? null,
     dir,
     modelDir: path.join(dir, "model"),
-    factsPath: path.join(dir, "architecture-facts.json"),
-    statePath: path.join(dir, "architecture-source.json"),
+    // The build owns everything under derived/; nothing there is edited by hand.
+    factsPath: path.join(dir, "derived", "architecture-facts.json"),
+    statePath: path.join(dir, "derived", "architecture-source.json"),
     sourceRoot: path.resolve(DOCS_ROOT, config.source.root),
     pagePath: path.join(SITE_ROOT, id, SITE.page),
     href: `${id}/`,

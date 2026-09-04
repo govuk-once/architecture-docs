@@ -1,0 +1,17 @@
+{
+  "repo": "git@github.com:govuk-once/flex.git",
+  "ref": "main",
+  "derived": {
+    "sha": "39e8901b8dcb2f88b55c92a0119605151d12b56d",
+    "subject": "FLEX-364 chore: added sql injection ruleset to our waf acls (#514)",
+    "committed": "2026-09-04T07:52:05+01:00",
+    "builtFrom": "cdk.out/{id}/*.template.json counts={\"domainFunctions\":{\"type\":\"AWS::Lambda::Function\",\"perTemplate\":\"^{stage}-(?<name>(?!Flex)[a-z-]+)$\"},\"publicRoutes\":{\"type\":\"AWS::ApiGateway::Method\",\"template\":\"^{stage}-(?!Flex)\",\"logicalId\":\"^PublicRoot\"},\"privateRoutes\":{\"type\":\"AWS::ApiGateway::Method\",\"template\":\"^{stage}-(?!Flex)\",\"logicalId\":\"^PrivateRoot\"},\"domainsWithAuthorizer\":{\"type\":\"AWS::ApiGateway::Authorizer\",\"template\":\"^{stage}-(?!Flex)\",\"templatesContaining\":true},\"alarms\":{\"type\":\"AWS::CloudWatch::Alarm\",\"distinctBy\":\"construct\",\"scopeAliases\":{\"^(Private)?GatewayAlarms$\":\"API Gateway\",\"^Alarms$\":\"CloudFront\",\"^CffAlarms\":\"CloudFront Function\",\"^ShieldAlarms$\":\"Shield\",\"Waf\":\"WAF\",\"FlexSmokeTest$\":\"Smoke test\",\"Alarm$\":\"Lambda\"},\"capture\":[\"Threshold\",\"EvaluationPeriods\",\"DatapointsToAlarm\",\"ComparisonOperator\",\"TreatMissingData\",\"MetricName\",\"Statistic\",\"ExtendedStatistic\",\"AlarmActions\"]}} synth={\"cwd\":\"platform/infra/flex\",\"command\":[\"pnpm\",\"exec\",\"tsx\",\"src/app.ts\"],\"env\":{\"STAGE\":\"{stage}\",\"CDK_DEFAULT_ACCOUNT\":\"000000000000\",\"CDK_DEFAULT_REGION\":\"eu-west-2\",\"AWS_REGION\":\"eu-west-2\"},\"output\":\"cdk.out/{id}\"}",
+    "derivation": "2636bad5041bfd53",
+    "facts": "7f2c31a613a5d66b"
+  },
+  "read": {
+    "sha": "e52ee3e541a65c9368ccd36bdd18ebd5c53f2f3b",
+    "subject": "FLEX-483 docs: rewrite gateways and test fixtures (#502)",
+    "committed": "2026-09-02T09:59:18+01:00"
+  }
+}

@@ -705,7 +705,10 @@ function projectCard(built: Built): string {
     `<span><b>${String(views.length)}</b> tabs</span>`,
     `<span>${esc(repoName(project.source.repo))}</span>`,
     state
-      ? `<span>built from <b>${esc(short(state.sha))}</b> · ${esc(state.committed.slice(0, 10))}</span>`
+      ? `<span>derived from <b>${esc(short(state.derived.sha))}</b> · ${esc(state.derived.committed.slice(0, 10))}</span>`
+      : "",
+    state?.read
+      ? `<span>read to <b>${esc(short(state.read.sha))}</b> · ${esc(state.read.committed.slice(0, 10))}</span>`
       : "",
   ].filter(Boolean);
   return (
