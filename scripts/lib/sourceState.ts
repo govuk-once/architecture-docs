@@ -149,6 +149,23 @@ export function changedFiles(
   return out ? out.split("\n").filter(Boolean) : [];
 }
 
+/**
+ * Only the files the range adds. A changed file that a claim cites is a claim to re-read;
+ * an added one that nothing cites is the opposite problem — something the model has never
+ * heard of, which no citation can lead you to.
+ */
+export function addedFiles(
+  project: Project,
+  from: string,
+  to = "HEAD",
+): string[] {
+  const out = tryGit(
+    ["diff", "--name-only", "--diff-filter=A", `${from}..${to}`],
+    project.sourceRoot,
+  );
+  return out ? out.split("\n").filter(Boolean) : [];
+}
+
 export function commitsBetween(
   project: Project,
   from: string,

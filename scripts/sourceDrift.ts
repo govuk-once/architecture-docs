@@ -16,11 +16,20 @@
  *
  * That is what this prints. It never fails — it is a reading list, not a gate.
  *
+ * It also prints what the citations cannot reach. A claim can only point at a file that
+ * existed when it was written, so a range that adds a new library, a new middleware or a
+ * whole new domain moves nothing cited and derives no different count: the model stays
+ * silent about it and every gate passes. Those additions are grouped under the nearest
+ * directory the model already cites from, which is what makes a new sibling of something
+ * documented stand out from noise.
+ *
  * It measures from the commit the model was last *read* up to — `read` in
  * architecture-source.json — not from the one the facts were derived at, so a build run
  * first cannot erase the reading list. Only `--mark-read` advances `read`, and only
  * somebody who has done the reading should run it.
  */
+import path from "node:path";
+
 import { loadLikeC4Views } from "./lib/loadLikeC4Views.js";
 import {
   assertSourceRoot,
@@ -29,6 +38,7 @@ import {
 } from "./lib/projects.js";
 import { collectCitations, globToRe } from "./lib/sourceCitations.js";
 import {
+  addedFiles,
   changedFiles,
   commitsBetween,
   ensureRange,
@@ -131,7 +141,63 @@ async function driftProject(project: Project, asked: string | null) {
       ]),
     );
 
-  if (!derived.length && !cited.length)
+  /*
+   * What no citation can reach. Tests, fixtures and anything under the CDK app are left
+   * out: the first two are not architecture, and the third is already reported above
+   * because all of it is synthesised.
+   */
+  const NOISE = [
+    ".test.",
+    ".spec.",
+    "__tests__",
+    "__snapshots__",
+    "/fixtures/",
+    ".snap",
+  ];
+  const added = addedFiles(project, since, head.sha).filter(
+    (f) =>
+      /\.(ts|tsx|js|mjs)$/.test(f) &&
+      !NOISE.some((n) => f.includes(n)) &&
+      !citations.has(f) &&
+      !derivedFrom.some((re) => re.test(f)),
+  );
+  if (added.length) {
+    // Every directory that holds a cited file, and every directory above it.
+    const known = new Set<string>();
+    for (const f of citations.keys()) {
+      let d = path.dirname(f);
+      while (d && d !== ".") {
+        known.add(d);
+        d = path.dirname(d);
+      }
+    }
+    const anchorOf = (f: string) => {
+      let d = path.dirname(f);
+      while (d && d !== "." && !known.has(d)) d = path.dirname(d);
+      return d && d !== "." ? d : "(nowhere the model cites)";
+    };
+    const groups = new Map<string, string[]>();
+    for (const f of added) {
+      const a = anchorOf(f);
+      groups.set(a, [...(groups.get(a) ?? []), f]);
+    }
+    const ranked = [...groups].sort((a, b) => b[1].length - a[1].length);
+    list(
+      `New and uncited (${String(added.length)}) — nothing here can go stale, because ` +
+        `nothing claims it yet. Grouped by the nearest place the model does cite from`,
+      ranked
+        .slice(0, 6)
+        .flatMap(([a, fs]) => [
+          `${a}/ — ${String(fs.length)} file(s)`,
+          ...fs.slice(0, 3).map((f) => `    ${f}`),
+          ...(fs.length > 3 ? [`    … and ${String(fs.length - 3)} more`] : []),
+        ]),
+    );
+    if (ranked.length > 6)
+      console.log(`    … and ${String(ranked.length - 6)} more place(s)`);
+  }
+
+  if (!derived.length && !cited.length && !added.length)
     console.log(
       `\n  Nothing derived from and none of the ${String(citations.size)} cited files moved. ` +
         `That is not proof the prose is still true — only that no claim names a file in ` +

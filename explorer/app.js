@@ -186,6 +186,9 @@ const PLANE_LABEL=CONFIG.planes;
 const SVGNS="http://www.w3.org/2000/svg";
 const svg=document.getElementById("svg"), root=document.getElementById("root");
 const stage=document.getElementById("stage"), insp=document.getElementById("insp");
+/* No pointer means no hover, so copy that offers hovering is describing a gesture
+   the reader does not have. Asked once, used by the hint and by the panel. */
+const COARSE=matchMedia("(pointer:coarse)").matches;
 const doc=document.getElementById("doc"), hint=document.getElementById("hint");
 let filter="";
 /* A set of resource ids carried over from a diagram box, so the Resources tab can show
@@ -563,9 +566,9 @@ function renderIdle(){
     <div class="card">
       <div class="eyebrow" style="margin-bottom:9px">How to read it</div>
       <ul class="facts">
-        <li>Click any box to see what it is and everything it connects to.</li>
-        <li>Click any line to see the protocol, the auth and what actually travels over it.</li>
-        <li>Hover to isolate one thing; press Escape to clear the selection.</li>
+        <li>${COARSE?"Tap":"Click"} any box to see what it is and everything it connects to.</li>
+        <li>${COARSE?"Tap":"Click"} any line to see the protocol, the auth and what actually travels over it.</li>
+        <li>${COARSE?"Tap the background to clear the selection.":"Hover to isolate one thing; press Escape to clear the selection."}</li>
       </ul>
     </div>
     <div class="sect">
@@ -1045,7 +1048,7 @@ else{
 }
 
 /* "scroll to zoom" is a lie on a phone, where the wheel event never fires. */
-if(matchMedia("(pointer:coarse)").matches){
+if(COARSE){
   const h=document.getElementById("hint");
   if(h)h.innerHTML='<span>drag to pan</span><span>pinch to zoom</span><span>tap a box or a line</span>';
 }

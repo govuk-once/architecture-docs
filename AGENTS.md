@@ -131,6 +131,18 @@ of those commits touch the CDK app the counts come from, and which touch a file 
 substitute for doing it. `drift` never fails a build; a reading list that could fail CI
 would get suppressed rather than read.
 
+It prints a third list, and that one is not a reading list. **New and uncited** is the
+source files the range adds that no claim names — grouped under the nearest directory the
+model does cite from, so a new sibling of something documented stands out from noise. These
+cannot have gone stale, because nothing claims them yet; the question they ask is the
+opposite one, and it is the only question the citations cannot pose:
+
+> Does this deserve a box, and which tab's story is now incomplete without it?
+
+Most of the time the answer is no — a helper, a config, a new test util. Occasionally it is
+a whole new domain, and nothing else in this repository will tell you. Answer it explicitly
+before `--mark-read`, and say in the commit which additions you looked at and left out.
+
 The state file records two commits because they answer two different questions. `derived`
 is where the facts were computed from; a build advances it freely. `read` is how far the
 cited files have been re-read; only `pnpm drift <id> --mark-read` advances it. So the order

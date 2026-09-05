@@ -107,10 +107,12 @@ Sonnet weekly and Opus for the quarterly sweep costs roughly $35 and is the bett
 the weekly run is mechanical and the gates check it, while the sweep is a judgement about
 whether a new concept deserves a box.
 
-The sweep is not optional. `pnpm drift` reports files the model already cites and anything
-under the CDK app — a new library concept is in neither, so nothing will tell you the
-Components tab has quietly gone incomplete. Over those twelve weeks, 68% of changed library
-source files were invisible to it.
+The sweep is what keeps the Components tab honest. A claim can only cite a file that
+existed when it was written, so a new library or a whole new domain moves nothing cited and
+derives no different count — 68% of changed library source over those twelve weeks was
+invisible to the citation net. `pnpm drift` names those additions now, grouped under the
+nearest place the model does cite from, which turns "you cannot know" into a short list;
+the sweep is where you decide which of them deserve a box.
 
 The mix of run types is an estimate. The commit rates, file counts and diff sizes are
 measured, and the script that measured them is a `git log` away from being run again.
