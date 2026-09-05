@@ -7,7 +7,7 @@ derived from that platform's own code rather than from prior design documents.
 
 | Architecture        | State                                                |
 | ------------------- | ---------------------------------------------------- |
-| **FLEX** — `/flex/` | Documented, eight tabs, rebuilt on every merge       |
+| **FLEX** — `/flex/` | Documented, nine tabs, rebuilt on every merge        |
 | **UDP**, **UNS**    | Planned. Listed on the index, nothing read from them |
 
 Each lives in a separate repository. This one holds the models, the pipeline that renders
@@ -16,7 +16,7 @@ them.
 
 ## FLEX
 
-Eight tabs, in three groups. Every box, line and zone is clickable; resource counts update
+Nine tabs, in three groups. Every box, line and zone is clickable; resource counts update
 when you switch stage.
 
 | Tab              | Group         | Who it is for                                                    |

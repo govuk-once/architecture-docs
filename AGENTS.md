@@ -72,6 +72,9 @@ The loop, whether the reader is a person or an agent:
    file that proves it; a table carries `code`; a countable number carries `from` or
    `derived` so the build gates it rather than you. Keep each fact on one tab — see
    [`projects/README.md`](projects/README.md) for the scope rules and the metadata contract.
+   Before placing a box, read [`projects/CANVAS.md`](projects/CANVAS.md): flow runs top to
+   bottom, connected boxes are adjacent, controls live in a side column, and the canvas
+   grows before a label shrinks.
 4. **Let the build argue back.** `pnpm build`, `pnpm check`, `pnpm lint`, `pnpm tsc`,
    `pnpm test`. A count the model states that the templates contradict fails here, naming
    the row, the stage and both numbers. Fix the model, or — if the template is right and the

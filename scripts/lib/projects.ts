@@ -39,6 +39,8 @@ export interface CountSpec {
   template?: string;
   /** Regex over the logical id. */
   logicalId?: string;
+  /** Count only resources that set this property, e.g. `PermissionsBoundary`. */
+  hasProperty?: string;
   /** Regex with a `name` group: one per-stage record per matching template, keyed by it. */
   perTemplate?: string;
   /** Count templates that contain a match, rather than the matches. */

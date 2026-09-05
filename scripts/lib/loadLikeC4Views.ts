@@ -21,6 +21,8 @@ interface Meta {
   audience: string;
   blurb: string;
   note?: string;
+  /** What a dashed edge means on this view — every view that draws one must say. */
+  dashMeans?: string;
   w?: number;
   h?: number;
   type?: string;

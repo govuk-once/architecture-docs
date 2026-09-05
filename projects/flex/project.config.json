@@ -8,7 +8,7 @@
   "inventoryLabel": "AWS resources",
   "iconLabel": "AWS icons",
   "filterHint": "Filter — try isolated, KMS, 365 days, alarm",
-  "softBudget": 12,
+  "softBudget": 7,
   "kinds": [
     {
       "id": "person",
@@ -110,6 +110,81 @@
           "ExtendedStatistic",
           "AlarmActions"
         ]
+      },
+      "securityGroups": {
+        "type": "AWS::EC2::SecurityGroup"
+      },
+      "vpcEndpoints": {
+        "type": "AWS::EC2::VPCEndpoint"
+      },
+      "natGateways": {
+        "type": "AWS::EC2::NatGateway"
+      },
+      "flowLogs": {
+        "type": "AWS::EC2::FlowLog"
+      },
+      "webAcls": {
+        "type": "AWS::WAFv2::WebACL"
+      },
+      "shieldProtections": {
+        "type": "AWS::Shield::Protection"
+      },
+      "kmsKeys": {
+        "type": "AWS::KMS::Key"
+      },
+      "secrets": {
+        "type": "AWS::SecretsManager::Secret"
+      },
+      "certificates": {
+        "type": "AWS::CertificateManager::Certificate"
+      },
+      "iamRoles": {
+        "type": "AWS::IAM::Role"
+      },
+      "iamRolesBounded": {
+        "type": "AWS::IAM::Role",
+        "hasProperty": "PermissionsBoundary"
+      },
+      "logGroups": {
+        "type": "AWS::Logs::LogGroup"
+      },
+      "authorizers": {
+        "type": "AWS::ApiGateway::Authorizer"
+      },
+      "wafCloudFront": {
+        "type": "AWS::WAFv2::WebACL",
+        "logicalId": "^CfWebAcl"
+      },
+      "wafRegional": {
+        "type": "AWS::WAFv2::WebACL",
+        "logicalId": "^ApiWebAcl"
+      },
+      "sgEgress": {
+        "type": "AWS::EC2::SecurityGroup",
+        "logicalId": "^PrivateEgress"
+      },
+      "sgIsolated": {
+        "type": "AWS::EC2::SecurityGroup",
+        "logicalId": "^PrivateIsolated"
+      },
+      "sgEndpoints": {
+        "type": "AWS::EC2::SecurityGroup",
+        "logicalId": "^Vpc.*SecurityGroup"
+      },
+      "kmsFlowLog": {
+        "type": "AWS::KMS::Key",
+        "logicalId": "^FlowLogKey"
+      },
+      "kmsAlerts": {
+        "type": "AWS::KMS::Key",
+        "logicalId": "^AlarmTopicKey"
+      },
+      "kmsRelay": {
+        "type": "AWS::KMS::Key",
+        "logicalId": "^AlarmTopicRelayKey"
+      },
+      "boundaryPolicies": {
+        "type": "AWS::IAM::ManagedPolicy"
       }
     }
   },

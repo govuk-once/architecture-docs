@@ -126,6 +126,34 @@ describe("cloudformation derivation", () => {
     });
   });
 
+  /* A control that is a property of a resource — a boundary on a role — is a count too. */
+  it("counts only resources that set a named property", async () => {
+    const root = checkout({
+      "cdk.out/dev/development-a.template.json": {
+        R1: res("AWS::IAM::Role", undefined, {
+          PermissionsBoundary: { Ref: "B" },
+        }),
+        R2: res("AWS::IAM::Role", undefined, {}),
+        R3: res("AWS::IAM::Role"),
+      },
+      "cdk.out/prod/production-a.template.json": {},
+    });
+    const facts = await derivation.derive(
+      project(root, {
+        roles: { type: "AWS::IAM::Role" },
+        bounded: { type: "AWS::IAM::Role", hasProperty: "PermissionsBoundary" },
+      }),
+    );
+    expect((facts.counts as Record<string, unknown>).roles).toEqual({
+      development: 3,
+      production: 0,
+    });
+    expect((facts.counts as Record<string, unknown>).bounded).toEqual({
+      development: 1,
+      production: 0,
+    });
+  });
+
   it("counts templates containing a match rather than the matches", async () => {
     const facts = await derivation.derive(
       project(fixture(), {

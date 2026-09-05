@@ -295,6 +295,8 @@ interface View {
   blurb: string;
   audience?: string;
   note: string;
+  /** What a dashed edge means here; required iff the view draws one. */
+  dashMeans?: string;
   /** Diagram views only. */
   w?: number;
   h?: number;
@@ -594,6 +596,26 @@ function checkIcons(
   return { problems, used };
 }
 
+/**
+ * A dashed edge means something different on every view that uses one — a build-time
+ * derivation on Components, a control on Security, a branch that gates nothing on
+ * Delivery. The legend can only say which if the view says, so a view that draws a dashed
+ * edge has to declare `dashMeans`, and one that declares it has to draw one.
+ */
+function checkDashLegend(views: View[]): string[] {
+  const problems: string[] = [];
+  for (const v of views) {
+    const dashed = (v.edges ?? []).some((e) => e.style === "dash");
+    if (dashed && !v.dashMeans?.trim())
+      problems.push(
+        `${v.id}: draws ${String((v.edges ?? []).filter((e) => e.style === "dash").length)} dashed edge(s) but declares no dashMeans, so the legend cannot say what dashed means here`,
+      );
+    if (!dashed && v.dashMeans)
+      problems.push(`${v.id}: declares dashMeans but draws no dashed edge`);
+  }
+  return problems;
+}
+
 function checkPlacement(project: Project, views: View[]) {
   const resources = views.find((v) => v.id === project.config.inventoryView);
   if (!resources)
@@ -658,6 +680,7 @@ async function buildProject(project: Project): Promise<Built> {
     ...checkKindStyles(project),
     ...checkGeometry(views, kindIds),
     ...checkPlacement(project, views),
+    ...checkDashLegend(views),
     ...checkDerivedCounts(project, views),
     ...checkTableCitations(project, views),
     ...checkDerivedTables(project, views),

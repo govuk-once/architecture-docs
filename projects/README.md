@@ -89,7 +89,7 @@ under [_Tab order and grouping_](#tab-order-and-grouping). Write each tab by rea
 why, and cite as you go. Add `synth` and `derive.counts` to the config as soon as there is
 a number worth gating; until then the counts are prose.
 
-The one thing no template gives you is the model itself. FLEX's is 9,002 lines across
+The one thing no template gives you is the model itself. FLEX's is 9,944 lines across
 eight tabs, and it took a verification pass that found 80 wrong claims in 1,091 to get
 right. Expect the reading, not the writing, to be the work.
 
@@ -171,6 +171,10 @@ In a project directory:
 | `model/views.json`     | Per-view presentation a LikeC4 view cannot hold: tab order, audience, reference tables |
 | `model/resources.json` | The AWS inventory: 84 rows with per-stage counts. Not a diagram                        |
 | `project.config.json`  | Everything specific to this architecture — see below                                   |
+
+Beside this file, [`CANVAS.md`](CANVAS.md) is the layout contract: the geometry the build
+refuses, the placement rules that keep a view free of crossings, and the loop for getting
+there. Read it before placing a box.
 
 In [`../explorer/`](../explorer/), shared by every project:
 
@@ -377,7 +381,7 @@ The order is by **what a reader must already know**, not by size:
 | Cross-cutting | Network, Security, Delivery                   | Each cuts across every container; all three assume you have read Containers                          |
 | Reference     | Resources                                     | Lookup, and the drill-down target for every badge                                                    |
 
-Size order would put Security third (16 boxes) ahead of Containers (21) — but Security
+Size order would put Security (29 boxes) ahead of Containers (24)
 describes controls layered on containers you have not met yet. Dependency beats complexity.
 
 ### Every tab says who it is for
@@ -588,8 +592,10 @@ It splits results in two:
 - **Hard** — text that does not fit, a target opening an empty panel, a tab that lost its
   audience, any console error. Always a defect, always fails.
 - **Soft** — a line clipping an unrelated box, a label on a box, two labels touching. A
-  handful are unavoidable on the dense views. `SOFT_BUDGET` in the script is a ratchet: it
-  may fall, never rise.
+  handful are unavoidable on the dense views. `softBudget` in the project's config is a
+  ratchet: it may fall, never rise. When the check reports fewer soft defects than the
+  budget, lower it to lock the improvement in; if a change genuinely needs more, raise it
+  deliberately and say why in the commit.
 
 The browser binary is not in the lockfile, so on a clean machine:
 
@@ -600,6 +606,8 @@ pnpm exec playwright install chromium
 ---
 
 ## Changing a diagram
+
+Layout has its own rules — [`CANVAS.md`](CANVAS.md). The steps below are about the claims.
 
 0. Know what changed before you edit. `pnpm sync <id>` then `pnpm drift <id>` lists the
    commits since the recorded build and which of the files the model cites are among them;
@@ -643,7 +651,8 @@ project. Adding one is these things and nothing else:
 4. **A `synth` block and `derive.counts`, or neither.** `synth` says how to run the CDK
    app — its directory, the command as an argv array, the environment with `{stage}`
    filled per stage, and where the templates land. `counts` says what to count in them,
-   in a closed vocabulary: `type`, `template` and `logicalId` regexes, `perTemplate` for
+   in a closed vocabulary: `type`, `template` and `logicalId` regexes, `hasProperty` for a
+   control that is a property of a resource, `perTemplate` for
    one record per matching stack, `templatesContaining` to count stacks rather than
    resources, and `distinctBy: "construct"` with `scopeAliases` and `capture` for a table
    of kinds. FLEX's config is the worked example. Or declare no `derive` block, leave

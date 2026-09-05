@@ -71,7 +71,7 @@ header{
 .cap-title{font:600 15px "IBM Plex Sans",sans-serif;fill:var(--ink)}
 .cap-sub{font:400 11.5px "IBM Plex Mono",monospace;fill:var(--muted)}
 .cap-lg{font:400 11.5px "IBM Plex Sans",sans-serif;fill:var(--ink-2)}
-.cap-pl{stroke:var(--line-strong);stroke-width:2}
+.cap-pl{stroke:var(--line-strong);stroke-width:1.5;fill:none}
 
 /* Icon-only controls. The glyph inherits the button's colour, so it tracks the theme
    and the pressed state without a second rule. */
@@ -94,13 +94,24 @@ header{
 .hint[hidden]{display:none}
 /* In the pinned header, not on the canvas: overlaying the drawing traded one problem
    for a worse one — on Security it covered a box outright. */
-.legend{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:11px;
+/* One row per channel — ownership, plane, edge style — because a `|` between groups
+   dangles at a row end as soon as the group above it wraps, which it does on any tab
+   with four kinds. A rule between rows says the same thing and cannot orphan. */
+.legend{display:flex;flex-direction:column;margin-top:11px;
   padding-top:10px;border-top:1px solid var(--line)}
+.lg-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:5px 0}
+.lg-row + .lg-row{border-top:1px solid var(--line);padding-top:9px}
 .lg-item{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--ink-2);white-space:nowrap}
 .lg-item i.sw{width:12px;height:12px;border-radius:3px;border:1.5px solid currentColor;flex:0 0 auto}
 .lg-item i.sw.pl-request{border-color:var(--ink-2);border-style:solid}
 .lg-item i.sw.pl-control{border-color:var(--ink-2);border-style:dashed}
-.lg-sep{width:1px;height:12px;background:var(--line-2)}
+/* A line glyph for a line property, so it is never read as a box border. */
+.lg-item i.ln{width:17px;height:0;border-top:1.5px dashed var(--ink-2);flex:0 0 auto}
+/* The kind and plane chips are two or three words and must not break mid-phrase, but
+   the edge key is a sentence: it wraps, with its glyph pinned to the first line. */
+.lg-row.dash{align-items:flex-start}
+.lg-item.dash{white-space:normal;align-items:flex-start}
+.lg-item.dash i.ln{margin-top:7px}
 .hint{
   position:absolute;left:14px;bottom:12px;display:flex;gap:14px;flex-wrap:wrap;
   font:400 11px/1.4 "IBM Plex Mono",monospace;color:var(--muted);

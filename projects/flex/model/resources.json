@@ -104,6 +104,7 @@
             "prod": 3,
             "eph": 0
           },
+          "from": "counts.natGateways",
           "meta": ["eu-west-2", "FlexCoreStack"],
           "d": {
             "type": "AWS::EC2::NatGateway",
@@ -238,6 +239,7 @@
             "prod": 1,
             "eph": 0
           },
+          "from": "counts.sgEgress",
           "meta": ["eu-west-2", "FlexCoreStack"],
           "d": {
             "type": "AWS::EC2::SecurityGroup",
@@ -256,6 +258,7 @@
             "prod": 1,
             "eph": 0
           },
+          "from": "counts.sgIsolated",
           "meta": ["eu-west-2", "FlexCoreStack"],
           "d": {
             "type": "AWS::EC2::SecurityGroup",
@@ -282,6 +285,7 @@
             "prod": 6,
             "eph": 0
           },
+          "from": "counts.sgEndpoints",
           "meta": ["eu-west-2", "FlexCoreStack"],
           "d": {
             "type": "AWS::EC2::SecurityGroup",
@@ -308,6 +312,7 @@
             "prod": 6,
             "eph": 0
           },
+          "from": "counts.vpcEndpoints",
           "meta": ["eu-west-2", "FlexCoreStack"],
           "d": {
             "type": "AWS::EC2::VPCEndpoint",
@@ -335,6 +340,7 @@
             "prod": 1,
             "eph": 0
           },
+          "from": "counts.flowLogs",
           "meta": ["eu-west-2", "FlexCoreStack"],
           "d": {
             "type": "AWS::EC2::FlowLog",
@@ -1107,6 +1113,7 @@
           "id": "acm-cert",
           "name": "ACM certificate",
           "n": 1,
+          "from": "counts.certificates",
           "meta": ["us-east-1", "FlexGlobalStack"],
           "d": {
             "type": "AWS::CertificateManager::Certificate",
@@ -1146,6 +1153,7 @@
           "id": "waf-cf",
           "name": "Web ACL · CLOUDFRONT scope",
           "n": 1,
+          "from": "counts.wafCloudFront",
           "meta": ["us-east-1", "FlexGlobalStack"],
           "d": {
             "type": "AWS::WAFv2::WebACL",
@@ -1163,8 +1171,9 @@
         },
         {
           "id": "waf-regional",
-          "name": "Web ACL · REGIONAL scope + association",
-          "n": 2,
+          "name": "Web ACL · REGIONAL scope",
+          "n": 1,
+          "from": "counts.wafRegional",
           "meta": ["eu-west-2", "FlexPlatformStack"],
           "d": {
             "type": "AWS::WAFv2::WebACL + WebACLAssociation",
@@ -1173,7 +1182,8 @@
             "facts": [
               "0 KnownBadInputs · 1 RequireOriginSecret, an exact byte match on <code>x-origin-verify</code>.",
               "Default block is what makes the raw execute-api URL unusable.",
-              "sampledRequestsEnabled is false on the origin-secret rule, so the value is never sampled into logs."
+              "sampledRequestsEnabled is false on the origin-secret rule, so the value is never sampled into logs.",
+              "Attached to the public API stage by one <code>AWS::WAFv2::WebACLAssociation</code>, counted with the stage rather than here."
             ],
             "code": [
               [
@@ -1192,6 +1202,7 @@
             "prod": 1,
             "eph": 0
           },
+          "from": "counts.shieldProtections",
           "meta": ["us-east-1", "FlexGlobalStack"],
           "d": {
             "type": "AWS::Shield::Protection",
@@ -1210,16 +1221,17 @@
           "id": "iam-boundary",
           "name": "Permissions boundary policies",
           "n": {
-            "dev": 7,
-            "stg": 6,
+            "dev": 8,
+            "stg": 7,
             "prod": 4,
-            "eph": 7
+            "eph": 8
           },
+          "from": "counts.boundaryPolicies",
           "meta": ["eu-west-2", "platform + domain stacks"],
           "d": {
             "type": "AWS::IAM::ManagedPolicy",
             "tech": "PermissionsBoundary.of(stack).apply()",
-            "role": "A hard ceiling on every role in the stack.",
+            "role": "One permissions-boundary managed policy per stack that runs Lambda: the platform stack, and every domain stack deployed in the stage.",
             "facts": [
               "One in the platform stack, plus one per deployed domain stack.",
               "Allow: logs, X-Ray, ENI lifecycle, Secrets Manager read, SSM parameter operations, <code>kms:Decrypt</code>, <code>sts:AssumeRole</code>.",
@@ -1238,14 +1250,20 @@
         {
           "id": "iam-roles",
           "name": "IAM roles",
-          "n": null,
+          "n": {
+            "dev": 57,
+            "stg": 42,
+            "prod": 35,
+            "eph": 53
+          },
+          "from": "counts.iamRoles",
           "meta": ["both regions", "several stacks", "varies"],
           "d": {
             "type": "AWS::IAM::Role",
             "tech": "Generated and hand-written",
             "role": "Execution identities.",
             "facts": [
-              "One generated execution role per Lambda, all under the permissions boundary.",
+              "One generated execution role per Flex Lambda construct, each under the permissions boundary — 24 of 35 roles in production. The 11 outside it are roles CDK generates for its own providers (custom resources, the deploy gap, the bucket deployment handler), the API Gateway CloudWatch role, the Slack channel configuration role, the two alarm relay functions, and the hand-written smoke-test role.",
               "Hand-written roles: the API Gateway CloudWatch role (auto-named — 'ApiGatewayCloudWatchRole' is only a construct id) and the smoke-test role, the only one with an explicit physical name <code>{env}-flex-smoke-test-role</code>.",
               "Also created by CDK: the Chatbot role, custom-resource roles and the BucketDeployment handler role.",
               "Per-route inline policies come from grantRouteResources and grantRoutePermissions."
@@ -1262,6 +1280,7 @@
           "id": "secrets",
           "name": "Secrets Manager secrets",
           "n": 2,
+          "from": "counts.secrets",
           "meta": ["both regions", "platform + global"],
           "d": {
             "type": "AWS::SecretsManager::Secret",
@@ -1290,6 +1309,7 @@
             "prod": 1,
             "eph": 0
           },
+          "from": "counts.kmsFlowLog",
           "meta": ["eu-west-2", "FlexCoreStack"],
           "d": {
             "type": "AWS::KMS::Key + Alias",
@@ -1316,6 +1336,7 @@
             "prod": 1,
             "eph": 0
           },
+          "from": "counts.kmsAlerts",
           "meta": ["eu-west-2", "FlexCoreStack"],
           "d": {
             "type": "AWS::KMS::Key + Alias",
@@ -1336,6 +1357,7 @@
           "id": "kms-relay",
           "name": "KMS key · relay topics",
           "n": 1,
+          "from": "counts.kmsRelay",
           "meta": ["us-east-1", "FlexGlobalStack"],
           "d": {
             "type": "AWS::KMS::Key + Alias",
@@ -1832,18 +1854,19 @@
           "id": "loggroups",
           "name": "Log groups",
           "n": {
-            "dev": 44,
-            "stg": 31,
-            "prod": 27,
-            "eph": 43
+            "dev": 55,
+            "stg": 41,
+            "prod": 36,
+            "eph": 54
           },
+          "from": "counts.logGroups",
           "meta": ["both regions", "several stacks"],
           "d": {
             "type": "AWS::Logs::LogGroup",
-            "tech": "RetentionDays.ONE_YEAR",
-            "role": "One per Flex Lambda construct, plus one per API stage.",
+            "tech": "365 days on Flex constructs · 731 on CDK-managed",
+            "role": "Every log group the stacks create: one per Lambda construct, one per API stage for access and execution logs, and the groups CDK manages for its own functions.",
             "facts": [
-              "Created explicitly rather than left to Lambda's implicit default, so retention is guaranteed. The count excludes the auto-created groups in the table above.",
+              "Flex constructs set <code>RetentionDays.ONE_YEAR</code> explicitly (29 groups in production). The 7 groups CDK creates for its own functions — the deploy gap, the alarm relays, the bucket deployment handler — take CDK's two-year default instead.",
               "Content is redacted at source by the <code>@flex/logging</code> sanitizer before it is ever written.",
               "<code>FlexLogger.setLogLevel</code> returns without doing anything when <code>FLEX_ENVIRONMENT</code> is production, so verbose logging cannot be turned on there at runtime."
             ],

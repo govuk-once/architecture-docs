@@ -1,5 +1,5 @@
 {
-  "generatedFrom": "cdk.out/{id}/*.template.json counts={\"domainFunctions\":{\"type\":\"AWS::Lambda::Function\",\"perTemplate\":\"^{stage}-(?<name>(?!Flex)[a-z-]+)$\"},\"publicRoutes\":{\"type\":\"AWS::ApiGateway::Method\",\"template\":\"^{stage}-(?!Flex)\",\"logicalId\":\"^PublicRoot\"},\"privateRoutes\":{\"type\":\"AWS::ApiGateway::Method\",\"template\":\"^{stage}-(?!Flex)\",\"logicalId\":\"^PrivateRoot\"},\"domainsWithAuthorizer\":{\"type\":\"AWS::ApiGateway::Authorizer\",\"template\":\"^{stage}-(?!Flex)\",\"templatesContaining\":true},\"alarms\":{\"type\":\"AWS::CloudWatch::Alarm\",\"distinctBy\":\"construct\",\"scopeAliases\":{\"^(Private)?GatewayAlarms$\":\"API Gateway\",\"^Alarms$\":\"CloudFront\",\"^CffAlarms\":\"CloudFront Function\",\"^ShieldAlarms$\":\"Shield\",\"Waf\":\"WAF\",\"FlexSmokeTest$\":\"Smoke test\",\"Alarm$\":\"Lambda\"},\"capture\":[\"Threshold\",\"EvaluationPeriods\",\"DatapointsToAlarm\",\"ComparisonOperator\",\"TreatMissingData\",\"MetricName\",\"Statistic\",\"ExtendedStatistic\",\"AlarmActions\"]}} synth={\"cwd\":\"platform/infra/flex\",\"command\":[\"pnpm\",\"exec\",\"tsx\",\"src/app.ts\"],\"env\":{\"STAGE\":\"{stage}\",\"CDK_DEFAULT_ACCOUNT\":\"000000000000\",\"CDK_DEFAULT_REGION\":\"eu-west-2\",\"AWS_REGION\":\"eu-west-2\"},\"output\":\"cdk.out/{id}\"}",
+  "generatedFrom": "cdk.out/{id}/*.template.json counts={\"domainFunctions\":{\"type\":\"AWS::Lambda::Function\",\"perTemplate\":\"^{stage}-(?<name>(?!Flex)[a-z-]+)$\"},\"publicRoutes\":{\"type\":\"AWS::ApiGateway::Method\",\"template\":\"^{stage}-(?!Flex)\",\"logicalId\":\"^PublicRoot\"},\"privateRoutes\":{\"type\":\"AWS::ApiGateway::Method\",\"template\":\"^{stage}-(?!Flex)\",\"logicalId\":\"^PrivateRoot\"},\"domainsWithAuthorizer\":{\"type\":\"AWS::ApiGateway::Authorizer\",\"template\":\"^{stage}-(?!Flex)\",\"templatesContaining\":true},\"alarms\":{\"type\":\"AWS::CloudWatch::Alarm\",\"distinctBy\":\"construct\",\"scopeAliases\":{\"^(Private)?GatewayAlarms$\":\"API Gateway\",\"^Alarms$\":\"CloudFront\",\"^CffAlarms\":\"CloudFront Function\",\"^ShieldAlarms$\":\"Shield\",\"Waf\":\"WAF\",\"FlexSmokeTest$\":\"Smoke test\",\"Alarm$\":\"Lambda\"},\"capture\":[\"Threshold\",\"EvaluationPeriods\",\"DatapointsToAlarm\",\"ComparisonOperator\",\"TreatMissingData\",\"MetricName\",\"Statistic\",\"ExtendedStatistic\",\"AlarmActions\"]},\"securityGroups\":{\"type\":\"AWS::EC2::SecurityGroup\"},\"vpcEndpoints\":{\"type\":\"AWS::EC2::VPCEndpoint\"},\"natGateways\":{\"type\":\"AWS::EC2::NatGateway\"},\"flowLogs\":{\"type\":\"AWS::EC2::FlowLog\"},\"webAcls\":{\"type\":\"AWS::WAFv2::WebACL\"},\"shieldProtections\":{\"type\":\"AWS::Shield::Protection\"},\"kmsKeys\":{\"type\":\"AWS::KMS::Key\"},\"secrets\":{\"type\":\"AWS::SecretsManager::Secret\"},\"certificates\":{\"type\":\"AWS::CertificateManager::Certificate\"},\"iamRoles\":{\"type\":\"AWS::IAM::Role\"},\"iamRolesBounded\":{\"type\":\"AWS::IAM::Role\",\"hasProperty\":\"PermissionsBoundary\"},\"logGroups\":{\"type\":\"AWS::Logs::LogGroup\"},\"authorizers\":{\"type\":\"AWS::ApiGateway::Authorizer\"},\"wafCloudFront\":{\"type\":\"AWS::WAFv2::WebACL\",\"logicalId\":\"^CfWebAcl\"},\"wafRegional\":{\"type\":\"AWS::WAFv2::WebACL\",\"logicalId\":\"^ApiWebAcl\"},\"sgEgress\":{\"type\":\"AWS::EC2::SecurityGroup\",\"logicalId\":\"^PrivateEgress\"},\"sgIsolated\":{\"type\":\"AWS::EC2::SecurityGroup\",\"logicalId\":\"^PrivateIsolated\"},\"sgEndpoints\":{\"type\":\"AWS::EC2::SecurityGroup\",\"logicalId\":\"^Vpc.*SecurityGroup\"},\"kmsFlowLog\":{\"type\":\"AWS::KMS::Key\",\"logicalId\":\"^FlowLogKey\"},\"kmsAlerts\":{\"type\":\"AWS::KMS::Key\",\"logicalId\":\"^AlarmTopicKey\"},\"kmsRelay\":{\"type\":\"AWS::KMS::Key\",\"logicalId\":\"^AlarmTopicRelayKey\"},\"boundaryPolicies\":{\"type\":\"AWS::IAM::ManagedPolicy\"}} synth={\"cwd\":\"platform/infra/flex\",\"command\":[\"pnpm\",\"exec\",\"tsx\",\"src/app.ts\"],\"env\":{\"STAGE\":\"{stage}\",\"CDK_DEFAULT_ACCOUNT\":\"000000000000\",\"CDK_DEFAULT_REGION\":\"eu-west-2\",\"AWS_REGION\":\"eu-west-2\"},\"output\":\"cdk.out/{id}\"}",
   "stages": ["development", "staging", "production", "ephemeral"],
   "counts": {
     "domainFunctions": {
@@ -326,6 +326,138 @@
         "ExtendedStatistic": "",
         "AlarmActions": "CriticalRelayTopic2C3B693C | SsmParameterValuedevelopmentflextopiccriticalalarmsC96584B6F00A464EAD1953AFF4B05118Parameter | SsmParameterValueproductionflextopiccriticalalarmsC96584B6F00A464EAD1953AFF4B05118Parameter | SsmParameterValuestagingflextopiccriticalalarmsC96584B6F00A464EAD1953AFF4B05118Parameter"
       }
-    ]
+    ],
+    "securityGroups": {
+      "development": 8,
+      "staging": 8,
+      "production": 8,
+      "ephemeral": 0
+    },
+    "vpcEndpoints": {
+      "development": 6,
+      "staging": 6,
+      "production": 6,
+      "ephemeral": 0
+    },
+    "natGateways": {
+      "development": 3,
+      "staging": 3,
+      "production": 3,
+      "ephemeral": 0
+    },
+    "flowLogs": {
+      "development": 1,
+      "staging": 1,
+      "production": 1,
+      "ephemeral": 0
+    },
+    "webAcls": {
+      "development": 2,
+      "staging": 2,
+      "production": 2,
+      "ephemeral": 2
+    },
+    "shieldProtections": {
+      "development": 0,
+      "staging": 1,
+      "production": 1,
+      "ephemeral": 0
+    },
+    "kmsKeys": {
+      "development": 3,
+      "staging": 3,
+      "production": 3,
+      "ephemeral": 1
+    },
+    "secrets": {
+      "development": 2,
+      "staging": 2,
+      "production": 2,
+      "ephemeral": 2
+    },
+    "certificates": {
+      "development": 1,
+      "staging": 1,
+      "production": 1,
+      "ephemeral": 1
+    },
+    "iamRoles": {
+      "development": 57,
+      "staging": 42,
+      "production": 35,
+      "ephemeral": 53
+    },
+    "iamRolesBounded": {
+      "development": 45,
+      "staging": 31,
+      "production": 24,
+      "ephemeral": 45
+    },
+    "logGroups": {
+      "development": 55,
+      "staging": 41,
+      "production": 36,
+      "ephemeral": 54
+    },
+    "authorizers": {
+      "development": 6,
+      "staging": 5,
+      "production": 3,
+      "ephemeral": 6
+    },
+    "wafCloudFront": {
+      "development": 1,
+      "staging": 1,
+      "production": 1,
+      "ephemeral": 1
+    },
+    "wafRegional": {
+      "development": 1,
+      "staging": 1,
+      "production": 1,
+      "ephemeral": 1
+    },
+    "sgEgress": {
+      "development": 1,
+      "staging": 1,
+      "production": 1,
+      "ephemeral": 0
+    },
+    "sgIsolated": {
+      "development": 1,
+      "staging": 1,
+      "production": 1,
+      "ephemeral": 0
+    },
+    "sgEndpoints": {
+      "development": 6,
+      "staging": 6,
+      "production": 6,
+      "ephemeral": 0
+    },
+    "kmsFlowLog": {
+      "development": 1,
+      "staging": 1,
+      "production": 1,
+      "ephemeral": 0
+    },
+    "kmsAlerts": {
+      "development": 1,
+      "staging": 1,
+      "production": 1,
+      "ephemeral": 0
+    },
+    "kmsRelay": {
+      "development": 1,
+      "staging": 1,
+      "production": 1,
+      "ephemeral": 1
+    },
+    "boundaryPolicies": {
+      "development": 8,
+      "staging": 7,
+      "production": 4,
+      "ephemeral": 8
+    }
   }
 }

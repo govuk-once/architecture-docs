@@ -103,7 +103,9 @@ function matches(spec: CountSpec, st: { id: string; synth?: string }) {
     template: (t: Template) =>
       (!template || template.test(t.name)) && (!per || per.test(t.name)),
     resource: (lid: string, r: Resource) =>
-      r.Type === spec.type && (!logicalId || logicalId.test(lid)),
+      r.Type === spec.type &&
+      (!logicalId || logicalId.test(lid)) &&
+      (!spec.hasProperty || r.Properties?.[spec.hasProperty] !== undefined),
     per,
   };
 }

@@ -64,14 +64,21 @@ function exportBands(w,h){
         +t(x+18,y,"cap-lg",KIND_LABEL[k]);
     x+=18+KIND_LABEL[k].length*6.6+24;
   }
-  if(planes.length>1){
+  /* Plane is a property of a box, so its glyph is a box — the exported legend used to
+     draw it as a line, which pointed the reader at the edges instead. */
+  if(planes.includes("control")){
     x+=6;
     for(const pl of planes){
-      out+=`<line x1="${x}" y1="${y-4}" x2="${x+16}" y2="${y-4}" class="cap-pl"`
-          +(pl==="control"?` stroke-dasharray="5 3"`:``)+`/>`
-          +t(x+23,y,"cap-lg",PLANE_LABEL[pl]);
-      x+=23+PLANE_LABEL[pl].length*6.6+24;
+      out+=`<rect x="${x}" y="${y-9}" width="11" height="11" rx="2.5" class="cap-pl"`
+          +(pl==="control"?` stroke-dasharray="3 2"`:``)+`/>`
+          +t(x+18,y,"cap-lg",PLANE_LABEL[pl]);
+      x+=18+PLANE_LABEL[pl].length*6.6+24;
     }
+  }
+  if((view.edges||[]).some(e=>e.style==="dash")&&view.dashMeans){
+    x+=6;
+    out+=`<line x1="${x}" y1="${y-4}" x2="${x+17}" y2="${y-4}" class="cap-pl" stroke-dasharray="4 3"/>`
+        +t(x+24,y,"cap-lg",view.dashMeans);
   }
   return out+`</g>`;
 }
@@ -661,14 +668,22 @@ function renderTables(){
 
 /* Colour carries ownership, border carries plane. They are two axes, so the legend
    shows them as two groups rather than one flat list of peers. */
+/* A key explains what is marked, not what is ordinary. Solid is the unmarked state for
+   both channels, so the plane entries appear whenever any box is dashed — including a tab
+   where every box is, which the old `planes.length>1` test hid — and the edge entry
+   whenever any line is. Box properties get a box glyph, line properties a line glyph, so
+   the two dashed idioms can never be read for one another. */
 function legendHtml(){
   if(view.type==="doc"||!view.nodes)return "";
   const kinds=KIND_ORDER.filter(k=>view.nodes.some(n=>n.kind===k));
   const planes=PLANE_ORDER.filter(p=>view.nodes.some(n=>(n.plane||"request")===p));
+  const dashed=(view.edges||[]).some(e=>e.style==="dash");
+  const row=(cls,html)=>html?`<div class="lg-row ${cls}">${html}</div>`:"";
   return `<div class="legend">`
-    +kinds.map(k=>`<span class="lg-item" style="color:${kindVar(k)}"><i class="sw"></i>${esc(KIND_LABEL[k])}</span>`).join("")
-    +(planes.length>1?`<span class="lg-sep"></span>`+planes.map(p=>
+    +row("",kinds.map(k=>`<span class="lg-item" style="color:${kindVar(k)}"><i class="sw"></i>${esc(KIND_LABEL[k])}</span>`).join(""))
+    +row("",planes.includes("control")?planes.map(p=>
        `<span class="lg-item"><i class="sw pl-${p}"></i>${esc(PLANE_LABEL[p])}</span>`).join(""):"")
+    +row("dash",dashed&&view.dashMeans?`<span class="lg-item dash"><i class="ln"></i>${esc(view.dashMeans)}</span>`:"")
     +`</div>`;
 }
 
