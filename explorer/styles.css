@@ -20,7 +20,7 @@ header{
 }
 .home svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
 .brand{display:flex;flex-direction:column;gap:1px;margin-right:4px}
-.brand b{font-size:15px;font-weight:600;letter-spacing:-.01em}
+.brand h1{font-size:15px;font-weight:600;letter-spacing:-.01em;margin:0}
 .brand span{font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
 .tabs{display:flex;gap:4px;align-items:center;overflow-x:auto;scrollbar-width:thin;padding-bottom:1px}
 .tabgroup{
@@ -34,6 +34,17 @@ header{
 }
 .tab[aria-selected="true"]{background:var(--accent-soft);color:var(--accent);border-color:var(--accent);font-weight:600}
 .spacer{flex:1}
+/* Announced, never seen. `display:none` and `visibility:hidden` are both silent, so this
+   is the clipped-rectangle idiom instead. */
+.sr-only{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;
+  clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;border:0}
+/* Out of the way until someone tabs to it, then a real control in the corner. Not
+   display:none, which would take it out of the tab order and defeat the point. */
+.skip{position:absolute;left:10px;top:-60px;z-index:100;padding:10px 14px;border-radius:8px;
+  background:var(--accent);color:var(--on-accent);font:600 13px/1 "IBM Plex Sans",sans-serif;
+  text-decoration:none;transition:top .12s ease}
+.skip:focus{top:10px}
+@media (prefers-reduced-motion:reduce){.skip{transition:none}}
 /* Phone-only chrome. Present in every page's markup, shown only under the
    narrow-screen block at the foot of this file. */
 .hbtns{display:none}
@@ -195,7 +206,7 @@ hr{border:0;border-top:1px solid var(--line);margin:2px 0}
 .doc[hidden]{display:none}
 .doc{position:absolute;inset:0;overflow-y:auto;padding:26px 34px 80px;background:var(--canvas)}
 .doc-head{max-width:1000px;margin:0 0 22px}
-.doc-head h1{font-size:26px;font-weight:600;letter-spacing:-.02em;margin:0 0 7px;text-wrap:balance}
+.doc-head h2{font-size:26px;font-weight:600;letter-spacing:-.02em;margin:0 0 7px;text-wrap:balance}
 .doc-head p{margin:0;color:var(--muted);font-size:14px;max-width:70ch}
 .doc-note{margin-top:14px;padding:11px 14px;border-left:2px solid var(--accent);background:var(--accent-soft);
   border-radius:0 7px 7px 0;font-size:13px;color:var(--ink-2);max-width:80ch}
@@ -216,7 +227,7 @@ hr{border:0;border-top:1px solid var(--line);margin:2px 0}
   background:var(--surface);border:1px solid var(--accent)}
 .btn.wide{width:100%;margin-top:9px;justify-content:center;padding:8px 10px;font-size:11.5px}
 .grp{margin:0 0 30px;max-width:1180px}
-.grp > h2{
+.grp > h3{
   font:600 11px/1 "IBM Plex Mono",monospace;letter-spacing:.13em;text-transform:uppercase;color:var(--accent);
   margin:0 0 4px;padding-bottom:9px;border-bottom:1px solid var(--line)}
 .grp .gnote{margin:10px 0 0;font-size:12.5px;color:var(--muted);max-width:78ch}
@@ -255,7 +266,7 @@ td code{font-size:11.5px}
   font:500 11.5px/1 "IBM Plex Sans",sans-serif;padding:8px 11px;border:0;border-right:1px solid var(--line-2);
   background:var(--surface);color:var(--ink-2);cursor:pointer;white-space:nowrap}
 .stagepick button:last-child{border-right:0}
-.stagepick button[aria-pressed="true"]{background:var(--accent);color:#fff;font-weight:600}
+.stagepick button[aria-pressed="true"]{background:var(--accent);color:var(--on-accent);font-weight:600}
 .node .badge{fill:var(--surface);stroke:var(--line-2);stroke-width:1}
 .badge.partial{stroke-dasharray:3 2}
 .node .badge-t{fill:var(--ink-2);font:600 10px/1 "IBM Plex Mono",monospace;text-anchor:middle}
@@ -341,7 +352,7 @@ td code{font-size:11.5px}
   .hrow{flex-wrap:wrap;gap:10px}
   .brand{min-width:0;flex:1 1 auto}
   /* Truncate rather than wrap: four lines of title is a third of the viewport. */
-  .brand b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
+  .brand h1{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
   .brand span{display:none}
   .spacer{display:none}
   .hbtns{display:flex;align-items:center;gap:8px;flex:0 0 auto}
@@ -481,7 +492,7 @@ td code{font-size:11.5px}
   header{padding:6px 12px 5px;gap:5px}
   .hrow{gap:12px}
   .brand{min-width:0;flex:1 1 auto}
-  .brand b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;font-size:14px}
+  .brand h1{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;font-size:14px}
   /* The strapline is the first thing to go: it names the project the title just named. */
   .brand span{display:none}
   .stagepick{gap:7px}

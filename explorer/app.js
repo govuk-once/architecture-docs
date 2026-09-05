@@ -276,6 +276,14 @@ function sheet(open,label){
   gripLabel.textContent=label||"Details";
 }
 const sheetTitle=()=>{const t=insp.querySelector(".insp-title");return t?t.textContent:"";};
+/* One line, not the whole panel. A screen reader user clicking through a diagram wants to
+   know what they landed on and that the details moved; they can read the panel when they
+   choose to, and having it recited in full every time makes that harder, not easier. */
+const statusEl=document.getElementById("status");
+function announce(what){
+  const t=sheetTitle();
+  statusEl.textContent=t?`${what}: ${t}. Details panel updated.`:"";
+}
 function menu(open){
   document.querySelector("header").classList.toggle("menu-open",open);
   menuBtn.setAttribute("aria-expanded",String(open));
@@ -484,6 +492,7 @@ function clearFocus(){
 }
 function clearSel(){
   sel=null; clearFocus(); sheet(false);
+  if(statusEl)statusEl.textContent="Selection cleared.";
   nodeEls.forEach(v=>v.g.classList.remove("sel"));
   zoneEls.forEach(v=>v.g.classList.remove("sel"));
   edgeEls.forEach(v=>{v.g.classList.remove("sel");v.lg&&v.lg.classList.remove("sel");});
@@ -505,6 +514,7 @@ function select(s){
   }
   insp.scrollTop=0;
   sheet(true,sheetTitle());
+  announce(s.t==="edge"?"Line selected":s.t==="zone"?"Boundary selected":"Box selected");
 }
 
 /* ============================ INSPECTOR ============================ */
@@ -525,7 +535,7 @@ function renderIdle(){
     insp.innerHTML=`
       <div>
         <div class="eyebrow">${esc(view.name)} view</div>
-        <h1 class="insp-title">${esc(view.name)}</h1>
+        <h2 class="insp-title">${esc(view.name)}</h2>
         <p class="insp-sub">${esc(view.blurb)}</p>
       </div>
       <div class="card">
@@ -547,7 +557,7 @@ function renderIdle(){
   insp.innerHTML=`
     <div>
       <div class="eyebrow">${esc(view.name)} view</div>
-      <h1 class="insp-title">${esc(view.name)}</h1>
+      <h2 class="insp-title">${esc(view.name)}</h2>
       <p class="insp-sub">${esc(view.blurb)}</p>
     </div>
     <div class="card">
@@ -570,7 +580,7 @@ function renderNode(n){
   insp.innerHTML=`
     <div>
       <span class="chip" style="color:${kindVar(n.kind)}"><i></i>${esc(KIND_LABEL[n.kind])}</span>
-      <h1 class="insp-title">${esc(n.label)}</h1>
+      <h2 class="insp-title">${esc(n.label)}</h2>
       ${n.sub?`<p class="insp-sub mono">${esc(n.sub)}</p>`:""}
     </div>
     <dl class="kv"><dt>Type</dt><dd>${esc(n.d.type)}</dd><dt>Technology</dt><dd>${iconTag(n.icon||iconForType(n.d.type))}${esc(n.d.tech)}</dd><dt>Plane</dt><dd>${esc(PLANE_LABEL[n.plane||"request"])}</dd></dl>
@@ -586,7 +596,7 @@ function renderZone(z){
   insp.innerHTML=`
     <div>
       <span class="chip" style="color:var(--accent)"><i></i>Boundary</span>
-      <h1 class="insp-title">${esc(z.label)}</h1>
+      <h2 class="insp-title">${esc(z.label)}</h2>
     </div>
     <dl class="kv"><dt>Type</dt><dd>${esc(z.d?.type||"Grouping")}</dd><dt>Technology</dt><dd>${esc(z.d?.tech||"—")}</dd></dl>
     ${z.d?.role?`<p style="margin:0;font-size:14px;color:var(--ink-2)">${esc(z.d.role)}</p>`:""}
@@ -642,7 +652,7 @@ function renderEdge(e){
   insp.innerHTML=`
     <div>
       <span class="chip" style="color:var(--accent)"><i></i>Relationship</span>
-      <h1 class="insp-title">${esc(e.label||`${a.label} → ${b.label}`)}</h1>
+      <h2 class="insp-title">${esc(e.label||`${a.label} → ${b.label}`)}</h2>
       <p class="insp-sub mono">${esc(a.label)} ${e.dir==="both"?"↔":"→"} ${esc(b.label)}</p>
     </div>
     <dl class="kv">
@@ -699,7 +709,7 @@ function renderTables(){
       <span class="tbl-hint">${tablesOpen?"hide":"show"}</span>
     </button>
     <div class="tbl-body" id="tbl-body">${
-      t.map(x=>`<section class="grp"><h2>${esc(x.name)}</h2>${x.note?`<p class="gnote">${rich(x.note)}</p>`:""}${tableHtml(x)}${codes(x.code)}</section>`).join("")
+      t.map(x=>`<section class="grp"><h3>${esc(x.name)}</h3>${x.note?`<p class="gnote">${rich(x.note)}</p>`:""}${tableHtml(x)}${codes(x.code)}</section>`).join("")
     }</div>`;
   box.querySelector("#tbl-toggle").addEventListener("click",()=>setTablesOpen(!tablesOpen));
 }
@@ -758,7 +768,7 @@ function buildDoc(){
         <span class="rmeta">${(it.meta||[]).map(m=>`<span class="tag">${esc(m)}</span>`).join("")}</span>
       </button>`;}).join("");
     return `<section class="grp">
-      <h2>${esc(g.name)}</h2>
+      <h3>${esc(g.name)}</h3>
       ${g.note?`<p class="gnote">${rich(g.note)}</p>`:""}
       ${g.table&&tableVisible?tableHtml(g.table):""}
       ${rows?`<div class="rows">${rows}</div>`:""}
@@ -766,7 +776,7 @@ function buildDoc(){
   }).join("");
   doc.innerHTML=`
     <div class="doc-head">
-      <h1>${esc(view.name)}</h1>
+      <h2>${esc(view.name)}</h2>
       <p>${esc(view.blurb)}</p>
       ${view.note?`<div class="doc-note">${rich(view.note)}</div>`:""}
     </div>
@@ -789,6 +799,7 @@ function buildDoc(){
     renderItem(view.groups[+b.dataset.g].items[+b.dataset.i],view.groups[+b.dataset.g].name);
     insp.scrollTop=0;
     sheet(true,sheetTitle());
+    announce("Row selected");
   }));
 }
 function tableHtml(t){
@@ -809,7 +820,7 @@ function renderItem(it,groupName,ctx){
     ${ctx&&ctx.node?`<button class="backlink" data-back="${ctx.node}">← back to ${esc((view.nodes.find(x=>x.id===ctx.node)||{}).label||"the box")}</button>`:""}
     <div>
       <span class="chip" style="color:var(--accent)"><i></i>${esc(groupName)}</span>
-      <h1 class="insp-title">${esc(it.name)}</h1>
+      <h2 class="insp-title">${esc(it.name)}</h2>
     </div>
     ${it.id?`<div class="total"><b>${c===null?"~":c}</b><span>${c===null?"varies — counted per stack, not summed":`in ${esc(stageLabel())}${c===0?" this resource is not created":""}`}</span></div>`:""}
     <dl class="kv"><dt>Resource</dt><dd class="mono" style="font-size:12px">${iconTag(it.d.icon||iconForType(it.d.type))}${esc(it.d.type)}</dd><dt>Config</dt><dd>${rich(it.d.tech)}</dd></dl>
@@ -930,13 +941,47 @@ VIEWS.forEach((v,i)=>{
   }
   const b=document.createElement("button");
   b.className="tab"; b.textContent=v.name; b.setAttribute("role","tab");
+  b.id="tab-"+v.id; b.setAttribute("aria-controls","stage");
   b.setAttribute("aria-selected",i===0?"true":"false");
-  b.onclick=()=>{
-    view=v; sel=null; filter=""; pin=null;
-    [...tabs.children].forEach(c=>c.setAttribute("aria-selected",c===b?"true":"false"));
-    build(); fit(); renderIdle();
-  };
+  /* Roving tabindex, per the tab pattern: the strip is one stop in the tab order and the
+     arrow keys move within it. Eight stops for eight tabs is eight things to pass through
+     before reaching the diagram they label. */
+  b.tabIndex=i===0?0:-1;
+  b.onclick=()=>selectTab(v,b);
   tabs.appendChild(b);
+});
+
+/** Every element that is actually a tab. The group dividers are spans in the same strip. */
+const tabButtons=()=>[...tabs.querySelectorAll(".tab")];
+
+function selectTab(v,b){
+  view=v; sel=null; filter=""; pin=null;
+  /* Only the tabs — the earlier version set aria-selected on the group dividers too. */
+  tabButtons().forEach(c=>{
+    const on=c===b;
+    c.setAttribute("aria-selected",on?"true":"false");
+    c.tabIndex=on?0:-1;
+  });
+  /* The panel says which tab it belongs to, so a screen reader landing in it knows. */
+  document.getElementById("stage").setAttribute("aria-labelledby",b.id);
+  build(); fit(); renderIdle();
+}
+
+/*
+ * Manual activation: the arrows move focus and Enter or Space chooses. The pattern allows
+ * either, and following focus would rebuild the whole diagram on every arrow press.
+ */
+tabs.addEventListener("keydown",ev=>{
+  const list=tabButtons(), at=list.indexOf(document.activeElement);
+  if(at<0)return;
+  const go=i=>{const t=list[(i+list.length)%list.length];t.focus();};
+  if(ev.key==="ArrowRight")go(at+1);
+  else if(ev.key==="ArrowLeft")go(at-1);
+  else if(ev.key==="Home")go(0);
+  else if(ev.key==="End")go(list.length-1);
+  else if(ev.key==="Enter"||ev.key===" ")list[at].click();
+  else return;
+  ev.preventDefault();
 });
 
 function stageTotal(){
@@ -1004,8 +1049,11 @@ if(matchMedia("(pointer:coarse)").matches){
   const h=document.getElementById("hint");
   if(h)h.innerHTML='<span>drag to pan</span><span>pinch to zoom</span><span>tap a box or a line</span>';
 }
+/* The page's one h1. Everything else steps down from it: the panel and a reference
+   view's own title are h2, and a reference view's sections h3. Before this the page had
+   a single heading and nothing to navigate by. */
 document.getElementById("brand").innerHTML=
-  `<b>${esc(CONFIG.title)}</b><span>${esc(CONFIG.tagline)}</span>`;
+  `<h1>${esc(CONFIG.title)}</h1><span>${esc(CONFIG.tagline)}</span>`;
 iconBtn.setAttribute("aria-label",CONFIG.iconLabel);
 svg.setAttribute("aria-label",`Interactive ${CONFIG.title} diagram`);
 document.getElementById("savepng").addEventListener("click",exportPng);
@@ -1025,4 +1073,12 @@ STAGES.forEach(st=>{
 });
 
 indexResources(); indexPlaces();
+document.getElementById("stage").setAttribute("aria-labelledby","tab-"+VIEWS[0].id);
+
+/* The skip link lands on the panel. On a phone the panel is closed, so a reader who asks
+   for it should get it rather than a handle. */
+document.querySelector(".skip").addEventListener("click",()=>{
+  sheet(true,gripLabel.textContent);
+});
+
 build(); fit(); renderIdle();

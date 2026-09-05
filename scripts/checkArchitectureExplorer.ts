@@ -14,6 +14,7 @@
  *   pnpm exec playwright install chromium
  */
 import { existsSync } from "node:fs";
+import { createRequire } from "node:module";
 import path from "node:path";
 
 import type { ConsoleMessage, Page } from "playwright";
@@ -342,6 +343,28 @@ async function main() {
       );
       tally.hard += audit.empty.length + audit.noAudience.length;
 
+      /* Both schemes, because contrast is the failure axe finds most of and it is a
+         property of the palette in use, not of the markup. */
+      const a11y: string[] = [];
+      /* The first and the last tab: between them a canvas view and a reference view,
+         which are the two ways the stage renders. */
+      const names: string[] = await page.locator(".tab").allTextContents();
+      for (const tab of [names[0], names[names.length - 1]]) {
+        if (!tab) continue;
+        await page.click(`.tab:has-text("${tab}")`);
+        await page.waitForTimeout(300);
+        for (const v of await axeViolations(page)) a11y.push(`${tab}: ${v}`);
+      }
+      const seen = [...new Set(a11y)];
+      console.log(
+        `[${colorScheme}] ` +
+          (seen.length
+            ? `WCAG 2.2 AA: ${String(seen.length)} violation type(s)`
+            : "WCAG 2.2 AA clean (axe-core)"),
+      );
+      for (const line of seen.slice(0, 5)) console.log(`  ${line}`);
+      tally.hard += seen.length;
+
       const unique = [...new Set(errors)];
       if (unique.length) {
         console.log(
@@ -522,6 +545,59 @@ const PHONES = [
   { label: "portrait 390", width: 390, height: 844 },
   { label: "landscape 844", width: 844, height: 390 },
 ] as const;
+
+const AXE = createRequire(import.meta.url).resolve("axe-core/axe.min.js");
+
+interface AxeNode {
+  target: string[];
+  html: string;
+}
+interface AxeViolation {
+  id: string;
+  impact: string;
+  help: string;
+  nodes: AxeNode[];
+}
+
+/**
+ * axe-core over the rendered page, on the tags that correspond to WCAG 2.2 AA.
+ *
+ * It cannot judge whether a label reads well, only that one exists, so it replaces no
+ * part of reading the page — but it does catch the mechanical failures reliably, and
+ * every one it found here was real: text at 4.09:1 against its own background, a diagram
+ * marked `role="img"` while holding forty focusable controls, and a page with no `main`.
+ *
+ * Run on the first canvas view and on a reference view, which between them cover both
+ * ways the stage renders, in whichever colour scheme the caller is testing.
+ */
+async function axeViolations(page: Page): Promise<string[]> {
+  await page.addScriptTag({ path: AXE });
+  const found = await page.evaluate(async () => {
+    const axe = (
+      globalThis as unknown as {
+        axe: {
+          run: (
+            c: unknown,
+            o: unknown,
+          ) => Promise<{ violations: AxeViolation[] }>;
+        };
+      }
+    ).axe;
+    const r = await axe.run(document, {
+      resultTypes: ["violations"],
+      runOnly: {
+        type: "tag",
+        values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"],
+      },
+    });
+    return r.violations;
+  });
+  return found.map(
+    (v) =>
+      `${v.id} (${v.impact}, ${String(v.nodes.length)}x) — ${v.help}: ` +
+      (v.nodes[0]?.target.join(" ") ?? ""),
+  );
+}
 
 async function panelChecks(page: Page): Promise<string[]> {
   const bad: string[] = [];

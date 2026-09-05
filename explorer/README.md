@@ -29,6 +29,24 @@ Two things are deliberately not per project:
   index or on one project's page holds on every other. The build injects that key, so the
   explorer and the index cannot disagree about it.
 
+## Reachable without a mouse or a screen
+
+Every box and every line is a `tabindex="0"` control with a role and a label, so the
+diagram is operable from a keyboard — and a skip link jumps past the forty stops that
+creates. The tab strip is one stop, with the arrows moving inside it and Enter choosing.
+
+`pnpm check` runs axe-core over both colour schemes and both kinds of view, on the WCAG
+2.2 AA rule set. It is a floor rather than a verdict: it can tell that a label exists, not
+that it reads well.
+
+Two things it cannot see, kept right by hand:
+
+- **Headings step down**: the project title is the page's one `h1`, the details panel and
+  a reference view's title are `h2`, its sections `h3`.
+- **The panel is not a live region.** It runs to 500-odd characters and announcing all of
+  it on every click is not help. A one-line `role="status"` says what was selected and
+  that the panel moved; the panel is there to read when the reader chooses.
+
 ## On a phone
 
 The same markup, restructured entirely in CSS at 760px, because two layouts would be two

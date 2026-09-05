@@ -7,8 +7,8 @@
  * index.css each add only their own layout on top.
  */
 :root{
-  --bg:#f4f6f8; --surface:#ffffff; --surface-2:#eef1f5; --ink:#0f1720; --ink-2:#3d4b5a; --muted:#66768a;
-  --line:#dbe1e8; --line-2:#c3ccd6; --line-strong:#93a1b0; --accent:#12539f; --accent-soft:#e3ecf8;
+  --bg:#f4f6f8; --surface:#ffffff; --surface-2:#eef1f5; --ink:#0f1720; --ink-2:#3d4b5a; --muted:#5f6e81;
+  --line:#dbe1e8; --line-2:#c3ccd6; --line-strong:#93a1b0; --accent:#12539f; --accent-soft:#e3ecf8; --on-accent:#ffffff;
   --focus:#12539f;
   /* A palette, not a mapping. Nothing here knows what a kind is called: each kind in a
      project's config picks one of these by name, and the build checks it resolves. That
@@ -22,7 +22,7 @@
 @media (prefers-color-scheme:dark){
   :root:not([data-theme="light"]){
     --bg:#0b1119; --surface:#121b26; --surface-2:#182432; --ink:#e8eef5; --ink-2:#b9c6d4; --muted:#8394a6;
-    --line:#25333f; --line-2:#33465a; --line-strong:#6b8199; --accent:#63a4f5; --accent-soft:#152a44;
+    --line:#25333f; --line-2:#33465a; --line-strong:#6b8199; --accent:#63a4f5; --accent-soft:#152a44; --on-accent:#0b1119;
     --focus:#63a4f5;
     --legend-purple:#a98ce8; --legend-blue:#63a4f5; --legend-teal:#4fc0d4;
     --legend-amber:#e0a44a; --legend-green:#7fc98d; --legend-rose:#ef8fa8;
@@ -33,7 +33,7 @@
 }
 :root[data-theme="dark"]{
   --bg:#0b1119; --surface:#121b26; --surface-2:#182432; --ink:#e8eef5; --ink-2:#b9c6d4; --muted:#8394a6;
-  --line:#25333f; --line-2:#33465a; --line-strong:#6b8199; --accent:#63a4f5; --accent-soft:#152a44;
+  --line:#25333f; --line-2:#33465a; --line-strong:#6b8199; --accent:#63a4f5; --accent-soft:#152a44; --on-accent:#0b1119;
   --focus:#63a4f5;
   --legend-purple:#a98ce8; --legend-blue:#63a4f5; --legend-teal:#4fc0d4;
   --legend-amber:#e0a44a; --legend-green:#7fc98d; --legend-rose:#ef8fa8;
