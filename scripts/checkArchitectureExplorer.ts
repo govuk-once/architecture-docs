@@ -416,7 +416,14 @@ function measure() {
     const b = (g.querySelector(".box") as SVGGraphicsElement).getBBox();
     g.querySelectorAll(".t,.s").forEach((t) => {
       const bb = (t as SVGGraphicsElement).getBBox();
-      if (bb.x + bb.width > b.x + b.width - 6)
+      /*
+       * 10px, not the margin that merely avoids a visible collision. The same text is a
+       * few pixels wider on another font stack, and a box that clears its edge by 6px
+       * here can overflow on CI's — which is exactly what one did, passing locally and
+       * failing the deploy. The margin has to absorb that difference or the check only
+       * describes this machine.
+       */
+      if (bb.x + bb.width > b.x + b.width - 10)
         over.push(`${g.getAttribute("aria-label") ?? ""} · ${t.textContent}`);
     });
   });
@@ -605,6 +612,17 @@ async function menuChecks(page: Page): Promise<string[]> {
     page.evaluate(() =>
       document.querySelector("header")?.classList.contains("menu-open"),
     );
+  /*
+   * Closed first. Checking only the open state is what let a cross sit on top of the bars
+   * in every state get published: both glyphs live in the button, and the rule hiding the
+   * wrong one has to outrank `.btn.ico svg`, which is easy to lose by a single element in
+   * the selector and impossible to see from the open state alone.
+   */
+  if (await page.isVisible(".menubtn .i-close"))
+    bad.push("the closed menu button already shows a close glyph");
+  if (!(await page.isVisible(".menubtn .i-menu")))
+    bad.push("the closed menu button does not show the menu glyph");
+
   try {
     await page.click("#menubtn", { timeout: 2000 });
     await page.waitForTimeout(250);
@@ -627,6 +645,51 @@ async function menuChecks(page: Page): Promise<string[]> {
   for (const id of ["#icontoggle", "#themetoggle", "#savepng"])
     if (!(await page.isVisible(id)))
       bad.push(`${id} is not reachable in the menu`);
+  /*
+   * A toggle has to say which way it is set, and say it the same way whether or not it
+   * was the last thing touched. A touch screen has no pointer to move away, so :hover
+   * stays on whatever was tapped — and these hover rules said what the pressed state
+   * says, which left the AWS icons button looking switched on immediately after being
+   * switched off. Two things are wrong in that picture and both are checked: the look
+   * must not depend on having just been tapped, and the two settings must differ.
+   */
+  const look = () =>
+    page.evaluate(() => {
+      const e = document.getElementById("icontoggle");
+      if (!e) return "";
+      const c = getComputedStyle(e);
+      return `${c.backgroundColor}|${c.color}|${c.borderColor}`;
+    });
+  const settle = async () => {
+    await page.evaluate(() =>
+      (document.activeElement as HTMLElement | null)?.blur(),
+    );
+    await page.mouse.move(6, 500);
+    await page.waitForTimeout(200);
+  };
+  await page.click("#icontoggle", { timeout: 2000 });
+  await page.waitForTimeout(200);
+  const onTapped = await look();
+  await settle();
+  const onSettled = await look();
+  if (onTapped !== onSettled)
+    bad.push("the icons toggle looks different for having just been tapped");
+  await page.click("#icontoggle", { timeout: 2000 });
+  await page.waitForTimeout(200);
+  const offTapped = await look();
+  await settle();
+  const offSettled = await look();
+  if (offTapped !== offSettled)
+    bad.push("the icons toggle looks different for having just been tapped");
+  if (onSettled === offSettled)
+    bad.push("the icons toggle looks identical switched on and off");
+  // Both readings said "on" because they shared two of the three; one is not enough.
+  if (
+    onSettled.split("|").filter((v, i) => v !== offSettled.split("|")[i])
+      .length < 2
+  )
+    bad.push("on and off differ in only one of fill, text and edge");
+
   // A menu that only closes by its own button is one people leave over the diagram.
   await page.click("#stage", { position: { x: 190, y: 90 }, timeout: 2000 });
   await page.waitForTimeout(250);

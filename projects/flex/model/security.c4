@@ -631,7 +631,7 @@ model {
       order '20'
       x '984'
       y '580'
-      w '176'
+      w '208'
       h '62'
       ownership 'flex'
       awsIcon 'lambda'
