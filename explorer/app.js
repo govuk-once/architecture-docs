@@ -279,6 +279,10 @@ const sheetTitle=()=>{const t=insp.querySelector(".insp-title");return t?t.textC
 function menu(open){
   document.querySelector("header").classList.toggle("menu-open",open);
   menuBtn.setAttribute("aria-expanded",String(open));
+  /* The glyph changes to a cross, so the name has to change with it — a button that
+     shows one thing and announces another is worse than either alone. */
+  const name=open?"Close the options":"Display and export options";
+  menuBtn.setAttribute("aria-label",name); menuBtn.setAttribute("title",name);
 }
 grip.addEventListener("click",()=>sheet(!document.body.classList.contains("sheet-open"),gripLabel.textContent));
 menuBtn.addEventListener("click",ev=>{
@@ -599,7 +603,7 @@ function resourcesHere(nodeId){
     const c=countOf(it);
     return `<button class="resrow" data-res="${id}" data-from="${nodeId}">
       <span class="num${c===0?" zero":""}">${c===null?"~":c}</span>
-        ${iconTag(iconForType(it.d.type),"sm")}
+        ${iconTag(it.d.icon||iconForType(it.d.type),"sm")}
       <span>${esc(it.name)}</span></button>`;
   }).join("");
   return `<hr>
@@ -749,7 +753,7 @@ function buildDoc(){
     const rows=keep.map(it=>{
       const gi2=gi, ii=items.indexOf(it), c=countOf(it), note=!it.id;
       return `<button class="row${!note&&c===0?" zero":""}" data-g="${gi2}" data-i="${ii}">
-        <span>${iconTag(iconForType(it.d.type),"sm")}<b>${esc(it.name)}</b></span>
+        <span>${iconTag(it.d.icon||iconForType(it.d.type),"sm")}<b>${esc(it.name)}</b></span>
         <span class="rcount">${note?"design note":c===null?"varies":c===0?`none in ${esc(stageLabel().toLowerCase())}`:`${c}\u00d7`}</span>
         <span class="rmeta">${(it.meta||[]).map(m=>`<span class="tag">${esc(m)}</span>`).join("")}</span>
       </button>`;}).join("");
@@ -808,7 +812,7 @@ function renderItem(it,groupName,ctx){
       <h1 class="insp-title">${esc(it.name)}</h1>
     </div>
     ${it.id?`<div class="total"><b>${c===null?"~":c}</b><span>${c===null?"varies — counted per stack, not summed":`in ${esc(stageLabel())}${c===0?" this resource is not created":""}`}</span></div>`:""}
-    <dl class="kv"><dt>Resource</dt><dd class="mono" style="font-size:12px">${iconTag(iconForType(it.d.type))}${esc(it.d.type)}</dd><dt>Config</dt><dd>${rich(it.d.tech)}</dd></dl>
+    <dl class="kv"><dt>Resource</dt><dd class="mono" style="font-size:12px">${iconTag(it.d.icon||iconForType(it.d.type))}${esc(it.d.type)}</dd><dt>Config</dt><dd>${rich(it.d.tech)}</dd></dl>
     <p style="margin:0;font-size:14px;color:var(--ink-2)">${esc(it.d.role)}</p>
     ${facts(it.d.facts)}
     ${(it.meta||[]).length?`<div class="sect"><div class="eyebrow">Scope</div><div class="rmeta" style="justify-content:flex-start">${it.meta.map(m=>`<span class="tag">${esc(m)}</span>`).join("")}</div></div>`:""}

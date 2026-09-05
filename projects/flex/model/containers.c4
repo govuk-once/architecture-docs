@@ -35,7 +35,7 @@ model {
         facts [
           'Default behaviour: the API origin with caching disabled and ALL_VIEWER_EXCEPT_HOST_HEADER, plus the x-origin-verify header the origin demands.',
           '/docs* behaviour: the spec bucket through Origin Access Control, caching optimised — the only cached behaviour on the distribution.',
-          '<b>Guarded by</b> a CLOUDFRONT-scope Web ACL — two managed rule groups, IP reputation, a 2000-per-IP rate limit and an end-to-end test bypass header — and by Shield Advanced, which is only created outside development.'
+          '<b>Guarded by</b> a CLOUDFRONT-scope Web ACL — three managed rule groups, IP reputation, a 2000-per-IP rate limit and an end-to-end test bypass header — and by Shield Advanced, which is only created outside development.'
         ]
         sourceId 'cfd'
         order '1'
@@ -169,7 +169,7 @@ model {
         role 'Hosts /health and the /app tree every domain attaches to.'
         facts [
           '<b>Origin-locked by</b> a REGIONAL Web ACL whose default action is block — only a request carrying the x-origin-verify secret is allowed through, which is what makes the raw execute-api URL unusable.',
-          'Custom 401 and 403 gateway responses surface the authorizer\'s errorMessage to the caller.'
+          'Custom 401 and 403 gateway responses return a constant <code>{"message": "Unauthorized", "type": "auth_error"}</code> — since FLEX-365 neither interpolates the authorizer, so a caller cannot tell why they were refused.'
         ]
         sourceId 'pubapi'
         order '5'
@@ -201,7 +201,7 @@ model {
         role 'TOKEN authorizer verifying the Cognito access token.'
         facts [
           'Returns a policy carrying pairwiseId in the authorizer context; on an allow the policy resource is <code>*</code>, not the invoked method ARN.',
-          'Emits one of six auth telemetry events on every decision. An expired token is the only denial that carries a message.'
+          'Emits one of six auth telemetry events on every decision. Every denial is identical to the caller: since FLEX-365 the authorizer attaches no message at all, and the reason survives only in telemetry.'
         ]
         sourceId 'authfn'
         order '6'

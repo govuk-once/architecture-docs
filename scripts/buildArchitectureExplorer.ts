@@ -214,6 +214,8 @@ interface Detail {
   facts: string[];
   code?: string[][];
   type?: string;
+  /** Names the sprite symbol outright, for a row whose `type` implies none. */
+  icon?: string;
   tech?: string;
   role?: string;
   protocol?: string;
@@ -589,8 +591,20 @@ function checkIcons(
       ...(v.groups ?? []).flatMap((g) => g.items),
     ];
     for (const o of typed) {
-      const ic = iconForType(o.d.type);
-      if (ic) used.add(ic);
+      /*
+       * An item may name its icon outright. Some rows stand for a service the templates
+       * reach through custom resources rather than a resource type — Macie's session and
+       * scan job have no CloudFormation resource at all — so there is no `AWS::X::Y` for
+       * the type to imply an icon from, and the alternative is wording the type
+       * inaccurately to make the artwork resolve.
+       */
+      const ic = o.d.icon ?? iconForType(o.d.type);
+      if (!ic) continue;
+      used.add(ic);
+      if (o.d.icon && ids.size && !ids.has(o.d.icon))
+        problems.push(
+          `${v.id}: icon "${o.d.icon}" has no <symbol id="i-${o.d.icon}"> in icons.svg`,
+        );
     }
   }
   return { problems, used };

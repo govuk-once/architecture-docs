@@ -185,6 +185,11 @@
       },
       "boundaryPolicies": {
         "type": "AWS::IAM::ManagedPolicy"
+      },
+      "macieStacks": {
+        "type": "AWS::IAM::Role",
+        "template": "FlexMacie",
+        "templatesContaining": true
       }
     }
   },

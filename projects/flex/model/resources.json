@@ -742,7 +742,7 @@
             "tech": "CDK-generated",
             "role": "Backing functions for custom resources. Deploy machinery, not request path.",
             "facts": [
-              "An <code>AwsCustomResource</code> singleton per stack, used for cross-region SSM reads and the two API deployments. The Macie stack would add three more, but its import and its instantiation are both commented out in <code>app.ts</code> — it is disabled in code, not merely undeployed.",
+              "An <code>AwsCustomResource</code> singleton per stack, used for cross-region SSM reads and the two API deployments. The Macie stack adds four more on persistent stages: the session, the automated-discovery opt-out, the results export and the scheduled scan job.",
               "<code>CfnPause</code> adds an inline timeout function plus a Provider framework function.",
               "<code>BucketDeployment</code> adds an asset-copying handler that also invalidates CloudFront."
             ],
@@ -809,7 +809,7 @@
             "facts": [
               "endpointAccessMode BASIC; securityPolicy SecurityPolicy_TLS13_1_2_2021_06.",
               "<code>GET /health</code> as a mock integration, plus the <code>/app</code> root every domain extends.",
-              "Gateway responses UNAUTHORIZED → 401 and ACCESS_DENIED → 403 render the authorizer errorMessage.",
+              "Gateway responses UNAUTHORIZED → 401 and ACCESS_DENIED → 403 return one constant body, <code>{\"message\": \"Unauthorized\", \"type\": \"auth_error\"}</code>.",
               "Caching disabled with a recorded CKV_AWS_120 suppression."
             ],
             "code": [
@@ -1160,7 +1160,7 @@
             "tech": "5 rules · default allow",
             "role": "Edge filtering.",
             "facts": [
-              "0 CommonRuleSet · 1 KnownBadInputs · 2 BypassForE2ETests (allow) · 3 AmazonIpReputationList · 4 RateLimit block at 2000 per IP.",
+              "0 CommonRuleSet · 1 KnownBadInputs · 2 SQLiRuleSet · 3 BypassForE2ETests (allow) · 4 AmazonIpReputationList · 5 RateLimit block at 2000 per IP.",
               "Data protection: SUBSTITUTION on the authorization header.",
               "The bypass is an allow rule, so it terminates evaluation and skips rules 3 and 4 — but not 0 and 1."
             ],
@@ -1180,7 +1180,7 @@
             "tech": "2 rules · default <b>BLOCK</b>",
             "role": "Origin lock on the public API stage.",
             "facts": [
-              "0 KnownBadInputs · 1 RequireOriginSecret, an exact byte match on <code>x-origin-verify</code>.",
+              "0 KnownBadInputs · 1 SQLiRuleSet · 2 RequireOriginSecret, an exact byte match on <code>x-origin-verify</code>.",
               "Default block is what makes the raw execute-api URL unusable.",
               "sampledRequestsEnabled is false on the origin-secret rule, so the value is never sampled into logs.",
               "Attached to the public API stage by one <code>AWS::WAFv2::WebACLAssociation</code>, counted with the stage rather than here."
@@ -1251,9 +1251,9 @@
           "id": "iam-roles",
           "name": "IAM roles",
           "n": {
-            "dev": 57,
-            "stg": 42,
-            "prod": 35,
+            "dev": 58,
+            "stg": 43,
+            "prod": 36,
             "eph": 53
           },
           "from": "counts.iamRoles",
@@ -1263,7 +1263,7 @@
             "tech": "Generated and hand-written",
             "role": "Execution identities.",
             "facts": [
-              "One generated execution role per Flex Lambda construct, each under the permissions boundary — 24 of 35 roles in production. The 11 outside it are roles CDK generates for its own providers (custom resources, the deploy gap, the bucket deployment handler), the API Gateway CloudWatch role, the Slack channel configuration role, the two alarm relay functions, and the hand-written smoke-test role.",
+              "One generated execution role per Flex Lambda construct, each under the permissions boundary — 24 of 36 roles in production. The 12 outside it are roles CDK generates for its own providers (custom resources, the deploy gap, the bucket deployment handler), the API Gateway CloudWatch role, the Slack channel configuration role, the two alarm relay functions, the hand-written smoke-test role, and the Macie custom-resource role added with the stack in FLEX-491.",
               "Hand-written roles: the API Gateway CloudWatch role (auto-named — 'ApiGatewayCloudWatchRole' is only a construct id) and the smoke-test role, the only one with an explicit physical name <code>{env}-flex-smoke-test-role</code>.",
               "Also created by CDK: the Chatbot role, custom-resource roles and the BucketDeployment handler role.",
               "Per-route inline policies come from grantRouteResources and grantRoutePermissions."
@@ -1391,6 +1391,38 @@
               ["utils/lambda.ts", "platform/infra/flex/src/utils/lambda.ts"]
             ]
           }
+        },
+        {
+          "id": "macie",
+          "name": "Amazon Macie stack",
+          "n": {
+            "dev": 1,
+            "stg": 1,
+            "prod": 1,
+            "eph": 0
+          },
+          "meta": ["us-east-1", "FlexMacieStack", "persistent stages"],
+          "d": {
+            "type": "Custom::AWS x4, plus an IAM role, a Lambda, a KMS key and an S3 bucket",
+            "tech": "AwsCustomResource — neither a Macie session nor a classification job has a CloudFormation resource",
+            "role": "Scheduled sensitive-data discovery over the CloudFront access-log bucket.",
+            "facts": [
+              "Deployed since <b>FLEX-491</b>, which re-enabled the stack with an explicit custom-resource role. It was previously commented out in <code>app.ts</code>; these docs said so, and said it for three commits after it stopped being true.",
+              "<code>if (persistent)</code> in <code>app.ts</code> gates it, so it reaches development, staging and production and never an ephemeral PR stage.",
+              "Its <code>MacieCustomResourceRole</code> carries no permissions boundary, and is one of the 12 roles outside the boundary in production.",
+              "The session is enabled through a <code>macie2:enableMacie</code> call with FIFTEEN_MINUTES finding publication; automated discovery explicitly disabled to avoid rolling scans of public specs and log buckets.",
+              "A weekly SCHEDULED job every Monday at 100% sampling with RECOMMENDED managed identifiers.",
+              "Results export to a KMS-encrypted RETAIN bucket under <code>macie-results/</code>.",
+              "<code>macieCoverage.customDataIdentifiers</code> is an empty list, so no <code>AWS::Macie::CustomDataIdentifier</code> is synthesised — the config carries five covered domains and no custom patterns.",
+              "<code>validate:macie-coverage</code> runs in the Hygiene job on every pull request and posts a Slack notice for uncovered domains."
+            ],
+            "code": [
+              ["stacks/macie.ts", "platform/infra/flex/src/stacks/macie.ts"],
+              ["app.ts", "platform/infra/flex/src/app.ts"]
+            ],
+            "icon": "macie"
+          },
+          "from": "counts.macieStacks"
         }
       ]
     },
@@ -1854,9 +1886,9 @@
           "id": "loggroups",
           "name": "Log groups",
           "n": {
-            "dev": 55,
-            "stg": 41,
-            "prod": 36,
+            "dev": 56,
+            "stg": 42,
+            "prod": 37,
             "eph": 54
           },
           "from": "counts.logGroups",
@@ -1866,7 +1898,7 @@
             "tech": "365 days on Flex constructs · 731 on CDK-managed",
             "role": "Every log group the stacks create: one per Lambda construct, one per API stage for access and execution logs, and the groups CDK manages for its own functions.",
             "facts": [
-              "Flex constructs set <code>RetentionDays.ONE_YEAR</code> explicitly (29 groups in production). The 7 groups CDK creates for its own functions — the deploy gap, the alarm relays, the bucket deployment handler — take CDK's two-year default instead.",
+              "Flex constructs set <code>RetentionDays.ONE_YEAR</code> explicitly (29 groups in production). The 8 groups CDK creates for its own functions — the deploy gap, the alarm relays, the bucket deployment handler, the Macie custom-resource function — take CDK's two-year default instead.",
               "Content is redacted at source by the <code>@flex/logging</code> sanitizer before it is ever written.",
               "<code>FlexLogger.setLogLevel</code> returns without doing anything when <code>FLEX_ENVIRONMENT</code> is production, so verbose logging cannot be turned on there at runtime."
             ],
@@ -1982,35 +2014,6 @@
                 "utils/resources.ts",
                 "platform/infra/flex/src/utils/resources.ts"
               ]
-            ]
-          }
-        }
-      ]
-    },
-    {
-      "name": "Disabled in code",
-      "note": null,
-      "table": null,
-      "items": [
-        {
-          "id": "macie",
-          "name": "Amazon Macie stack",
-          "n": 0,
-          "meta": ["us-east-1", "FlexMacieStack"],
-          "d": {
-            "type": "AWS::Macie::CustomDataIdentifier, plus custom resources",
-            "tech": "AwsCustomResource · CfnCustomDataIdentifier",
-            "role": "Scheduled sensitive-data discovery over the CloudFront access-log bucket.",
-            "facts": [
-              "Fully implemented, but its import and its instantiation are <b>commented out in <code>app.ts</code></b> — it is disabled in code, not merely undeployed. Uncommenting is not a one-line change: the commented block also references a <code>globalStack</code> variable that no longer exists.",
-              "The session is enabled through a <code>macie2:enableMacie</code> call with FIFTEEN_MINUTES finding publication; automated discovery explicitly disabled to avoid rolling scans of public specs and log buckets.",
-              "A weekly SCHEDULED job every Monday at 100% sampling with RECOMMENDED managed identifiers.",
-              "Results export to a KMS-encrypted RETAIN bucket under <code>macie-results/</code>.",
-              "The CI coverage check <b>is</b> live: <code>validate:macie-coverage</code> runs in the Hygiene job on every pull request and posts a Slack notice for uncovered domains — so coverage is reported against a stack that is not deployed."
-            ],
-            "code": [
-              ["stacks/macie.ts", "platform/infra/flex/src/stacks/macie.ts"],
-              ["app.ts", "platform/infra/flex/src/app.ts"]
             ]
           }
         }

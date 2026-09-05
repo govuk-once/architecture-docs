@@ -539,7 +539,7 @@ model {
         facts [
           'Every import() records an edge and willCreateCycle rejects a cycle at synth; synth() then converts each edge into an addDependency call.',
           'That ordering is what makes cdk deploy --all --concurrency 4 safe.',
-          'Stacks per stage: FlexCore and FlexSmokeTest (persistent stages only), FlexPlatform, FlexGlobal in us-east-1, one stack per deployable domain, and FlexApiDeployment last. FlexMacie is commented out in app.ts.'
+          'Stacks per stage: FlexCore and FlexSmokeTest (persistent stages only), FlexPlatform, FlexGlobal in us-east-1, one stack per deployable domain, FlexMacie in us-east-1 on persistent stages, and FlexApiDeployment last.'
         ]
         sourceId 'ssmapp'
         order '17'

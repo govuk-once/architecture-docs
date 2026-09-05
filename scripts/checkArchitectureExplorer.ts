@@ -613,6 +613,16 @@ async function menuChecks(page: Page): Promise<string[]> {
     return bad;
   }
   if (!(await menuOpen())) bad.push("the menu button did not open the menu");
+  // Open, the button that opened it is the way to shut it, and has to look like it.
+  if (!(await page.isVisible(".menubtn .i-close")))
+    bad.push("the open menu button does not show a close glyph");
+  if (await page.isVisible(".menubtn .i-menu"))
+    bad.push("the open menu button still shows the menu glyph");
+  if (
+    (await page.getAttribute("#menubtn", "aria-label")) ===
+    "Display and export options"
+  )
+    bad.push("the menu button shows a cross but is still named as the opener");
   // Every control in it has to be hittable, or the menu is decorative.
   for (const id of ["#icontoggle", "#themetoggle", "#savepng"])
     if (!(await page.isVisible(id)))

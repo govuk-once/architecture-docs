@@ -770,10 +770,10 @@
           ],
           [
             "Macie scan of the CloudFront access-log bucket",
-            "Not deployed — <code>FlexMacieStack</code> is commented out",
-            "—",
-            "—",
-            "Would be: weekly Monday scan, 100% sampling, recommended managed identifiers",
+            "<code>FlexMacieStack</code>, persistent stages only",
+            "us-east-1",
+            "Weekly",
+            "Monday, 100% sampling, recommended managed identifiers; findings published every 15 minutes, results to a KMS-encrypted bucket",
             "<code>app.ts</code> lines 11 and 93, <code>stacks/macie.ts</code>"
           ]
         ]
@@ -883,7 +883,7 @@
           [
             "Amazon Macie",
             "<code>FlexMacieStack</code>",
-            "Stack is written, but its instantiation is commented out in <code>app.ts</code> — temporarily, pending a Platform IAM guardrail fix. CI still runs <code>validate:macie-coverage</code> on every pull request and posts a Slack notice for uncovered domains, so the coverage gate reports against a stack that is not deployed."
+            "Deployed to persistent stages since FLEX-491, which re-enabled it with an explicit custom-resource role — the Platform IAM guardrail that held it back is resolved. <code>validate:macie-coverage</code> runs in Hygiene on every pull request and posts a Slack notice for uncovered domains; it now reports against a stack that is deployed."
           ],
           [
             "VPC flow logs",

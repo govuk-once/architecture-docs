@@ -392,12 +392,27 @@ td code{font-size:11.5px}
      reader already has, and Fit — the way back from a pinch gone wrong — is promoted out
      of the menu into the header instead. */
   .ctrls{
-    display:none;position:absolute;right:14px;top:calc(100% - 5px);z-index:40;
-    width:auto;flex-direction:column;align-items:stretch;gap:8px;padding:10px;
-    background:var(--surface);border:1px solid var(--line-2);border-radius:10px;
-    box-shadow:0 12px 32px rgba(0,0,0,.2)}
+    display:none;position:absolute;right:14px;top:calc(100% + 6px);z-index:40;
+    width:auto;flex-direction:column;align-items:center;gap:9px;
+    padding:0;background:none;border:0;box-shadow:none}
   header.menu-open .ctrls{display:flex}
+  /* The groups stop being boxes and let their buttons become direct children, so the
+     controls fall into one column under the button that opened them rather than sitting
+     in a card of segmented groups. `:not([hidden])` because that rule outranks the one
+     hiding a group on a view with no canvas, and a tie would be resolved the wrong way. */
+  .ctrls .seg:not([hidden]){display:contents}
   .ctrls .seg[aria-label="Zoom"]{display:none}
+  .ctrls .btn{
+    display:flex;align-items:center;justify-content:center;
+    width:38px;height:38px;min-width:0;padding:0;
+    border:1px solid var(--line-2);border-radius:9px;background:var(--surface);
+    box-shadow:0 6px 18px rgba(0,0,0,.14)}
+  .ctrls .btn svg{width:16px;height:16px}
+  /* Opened, the button that opened it becomes the way to shut it. */
+  .menubtn .i-close{display:none}
+  header.menu-open .menubtn .i-menu{display:none}
+  header.menu-open .menubtn .i-close{display:block}
+  header.menu-open .menubtn{border-color:var(--accent);color:var(--accent)}
 
   .tabs{gap:2px}
   .tab{padding:7px 10px;font-size:12.5px}

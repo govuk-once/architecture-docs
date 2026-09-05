@@ -409,7 +409,7 @@ model {
       tech 'Scope CLOUDFRONT'
       role 'First filter on every viewer request.'
       facts [
-        'Priority order: <b>0</b> AWSManagedRulesCommonRuleSet · <b>1</b> AWSManagedRulesKnownBadInputsRuleSet · <b>2</b> BypassForE2ETests (allow) · <b>3</b> AWSManagedRulesAmazonIpReputationList · <b>4</b> RateLimit, block above 2000 per IP.',
+        'Priority order: <b>0</b> AWSManagedRulesCommonRuleSet · <b>1</b> AWSManagedRulesKnownBadInputsRuleSet · <b>2</b> AWSManagedRulesSQLiRuleSet · <b>3</b> BypassForE2ETests (allow) · <b>4</b> AWSManagedRulesAmazonIpReputationList · <b>5</b> RateLimit, block above 2000 per IP.',
         'Rule 2 is an exact byte match on the <code>x-flex-e2e-bypass</code> header against a generated secret. Because it is an <b>allow</b> it terminates evaluation and skips rules 3 and 4 — but 0 and 1 have already run.',
         'Data protection substitutes the <code>authorization</code> header in WAF logs, sampled requests and rate-based details.',
         'No <code>LoggingConfiguration</code> is created for either Web ACL — see the detective-controls table below.'
@@ -498,8 +498,8 @@ model {
       tech 'Scope REGIONAL · on the API stage'
       role 'The origin lock.'
       facts [
-        'The default action is <b>block</b>, which is what makes the raw <code>execute-api</code> URL unusable: rule 1 is the only thing that lets a request through.',
-        'Rule 0 is KnownBadInputs; rule 1 RequireOriginSecret is an <code>EXACTLY</code> byte match on the <code>x-origin-verify</code> single header with no text transformation.',
+        'The default action is <b>block</b>, which is what makes the raw <code>execute-api</code> URL unusable: rule 2 is the only thing that lets a request through.',
+        'Rule 0 is KnownBadInputs and rule 1 the SQLi ruleset; rule 2 RequireOriginSecret is an <code>EXACTLY</code> byte match on the <code>x-origin-verify</code> single header with no text transformation.',
         '<code>sampledRequestsEnabled</code> is false on the origin-secret rule, so the header value is never captured into sampled requests.'
       ]
       sourceId 'wafreg'
@@ -527,7 +527,7 @@ model {
       role 'Every /app route, behind the authorizer.'
       facts [
         '<code>securityPolicy: SecurityPolicy_TLS13_1_2_2021_06</code>, set on the L1 resource rather than through the L2 props.',
-        'Two gateway responses are overridden: <b>401</b> UNAUTHORIZED and <b>403</b> ACCESS_DENIED, both rendering <code>$context.authorizer.errorMessage</code> as JSON.',
+        'Two gateway responses are overridden: <b>401</b> UNAUTHORIZED and <b>403</b> ACCESS_DENIED, both returning the same constant JSON body <code>{"message": "Unauthorized", "type": "auth_error"}</code>.',
         'Each domain stack attaches its own <code>TokenAuthorizer</code> over the shared authorizer function, and only if that domain has public routes.',
         'Access logs and execution logs at ERROR level, X-Ray tracing on, no data trace.'
       ]
@@ -563,7 +563,7 @@ model {
       facts [
         'Verifies issuer <code>https://cognito-idp.{region}.amazonaws.com/{USERPOOL_ID}</code>, <code>token_use: access</code> and the client id. <code>audience</code> is deliberately null, because Cognito access tokens carry none.',
         'The <b>only</b> thing it asserts downstream is <code>pairwiseId</code>, taken from the token\'s <code>username</code> claim and returned in the authorizer context. <code>principalId</code> is the constant string <code>anonymous</code>.',
-        'Deny is scoped to <code>event.methodArn</code>. Expired tokens carry the message <b>JWT expired</b>; every other failure denies with no message. The 401 fires only when API Gateway rejects before the authorizer runs.',
+        'Deny is scoped to <code>event.methodArn</code>. Since FLEX-365 no denial carries a message — an expired token and a forged one are indistinguishable to the caller, and the difference is kept in telemetry instead. The 401 fires only when API Gateway rejects before the authorizer runs.',
         '<b>Gap:</b> the allow policy is returned with <code>Resource: "*"</code> instead of the invoked method ARN, so a single successful verification authorizes every method on the API.',
         'The verifier is constructed inside the handler, so the three environment variables are Zod-parsed on every invocation.'
       ]
@@ -1110,7 +1110,7 @@ model {
     }
   }
 
-  security_wafreg -> security_pubapi 'allow only rule 1' {
+  security_wafreg -> security_pubapi 'allow only rule 2' {
     link https://github.com/govuk-once/flex/blob/main/platform/infra/flex/src/stacks/platform.ts 'stacks/platform.ts'
     metadata {
       protocol '—'

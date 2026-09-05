@@ -166,7 +166,7 @@ model {
         tech 'API Gateway REST · REGIONAL endpoint'
         role 'Matches the resource under /app/{domain}/{version}/… and triggers the token authorizer.'
         facts [
-          'Two gateway responses are re-templated: UNAUTHORIZED to 401 and ACCESS_DENIED to 403, both echoing <code>$context.authorizer.errorMessage</code>.'
+          'Two gateway responses are re-templated: UNAUTHORIZED to 401 and ACCESS_DENIED to 403, both returning the same constant body since FLEX-365.'
         ]
         sourceId 'pubapi'
         order '5'
