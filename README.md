@@ -88,6 +88,33 @@ The agent cannot take these off you:
   repository is private, and Pages set to the GitHub Actions source. Everything else is
   config the agent writes.
 
+## What it costs to keep up to date
+
+Measured against twelve weeks of FLEX: 10 commits a week, of which 22 files are ones the
+model cites or the CDK app synthesises. Those are the only ones re-read, which is what
+makes a weekly run cheap — `pnpm drift` turns 87 changed files into 22 worth reading.
+
+| Run                                             | × / yr |   Tokens |
+| ----------------------------------------------- | -----: | -------: |
+| Weekly — nothing documented moved               |     21 |      40k |
+| Weekly — a count drifts, and some prose with it |     23 |     110k |
+| Weekly — one change lands across several claims |      8 |     250k |
+| Quarterly — a sweep of `libs/` for new concepts |      4 |     200k |
+|                                                 | **56** | **6.2M** |
+
+At list prices with prompt caching, that is about **$20 a year on Sonnet and $95 on Opus**.
+Sonnet weekly and Opus for the quarterly sweep costs roughly $35 and is the better split:
+the weekly run is mechanical and the gates check it, while the sweep is a judgement about
+whether a new concept deserves a box.
+
+The sweep is not optional. `pnpm drift` reports files the model already cites and anything
+under the CDK app — a new library concept is in neither, so nothing will tell you the
+Components tab has quietly gone incomplete. Over those twelve weeks, 68% of changed library
+source files were invisible to it.
+
+The mix of run types is an estimate. The commit rates, file counts and diff sizes are
+measured, and the script that measured them is a `git log` away from being run again.
+
 ## Where the rest is
 
 - [`AGENTS.md`](AGENTS.md) — the loop, the commands, the rules, CI, and how to add an
