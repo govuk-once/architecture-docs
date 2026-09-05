@@ -16,7 +16,7 @@
 import { existsSync } from "node:fs";
 import path from "node:path";
 
-import type { ConsoleMessage } from "playwright";
+import type { ConsoleMessage, Page } from "playwright";
 
 import { DOCS_ROOT, SITE_INDEX } from "./lib/paths.js";
 import { type Project, selectProjects } from "./lib/projects.js";
@@ -135,6 +135,124 @@ async function main() {
     await page.close();
   }
 
+  /**
+   * The same page on a phone. Every gate above this one measures the SVG canvas, so none
+   * of them can see the HTML around it — which is how a legend entry once grew wider than
+   * the panel and pushed the whole inspector sideways with every check still passing.
+   *
+   * These are the defects that only exist at a narrow width: the page scrolling
+   * sideways, a control running past the viewport, a panel wider than its column, and a
+   * tab strip that wraps into rows instead of scrolling. All hard — none of them is ever
+   * acceptable, and none is a judgement call.
+   *
+   * It then works the phone chrome, which exists nowhere else: the details sheet and the
+   * controls menu are the only parts of this page that are reachable at 390px and
+   * unreachable at 1680px, so a check that only measured widths would let either of them
+   * stop opening without a word.
+   */
+  async function checkMobile(
+    project: Project,
+    shape: { label: string; width: number; height: number },
+  ): Promise<void> {
+    const tally = score(project.id);
+    const page = await browser.newPage({
+      viewport: { width: shape.width, height: shape.height },
+      isMobile: true,
+      hasTouch: true,
+      deviceScaleFactor: 2,
+    });
+    const errors: string[] = [];
+    page.on("pageerror", (e: Error) => errors.push(e.message));
+    page.on("console", (m: ConsoleMessage) => {
+      if (m.type() === "error") errors.push("console: " + m.text());
+    });
+    await page.goto("file://" + project.pagePath);
+    await page.evaluate(() => document.fonts.ready);
+    await page.waitForTimeout(500);
+
+    const tabs: string[] = await page.locator(".tab").allTextContents();
+    const bad: string[] = [];
+    for (const tab of tabs) {
+      await page.click(`.tab:has-text("${tab}")`);
+      await page.waitForTimeout(250);
+      /*
+       * Where the panel collapses to a rail, changing tabs closes it, and a closed rail
+       * clips its contents on purpose — measuring that reports a 145px header inside a
+       * 28px box as overflow, which is the feature working. What has to fit is the panel
+       * open, since that is the only state a reader sees it in.
+       */
+      if (
+        await page.evaluate(() => {
+          const a = document.querySelector("aside");
+          return !!a && a.getBoundingClientRect().width < 60;
+        })
+      )
+        await page.click("#sheetgrip").catch(() => undefined);
+      await page.waitForTimeout(250);
+      for (const problem of await page.evaluate(measureNarrow))
+        bad.push(`${tab}: ${problem}`);
+    }
+    console.log(
+      `  ${shape.label.padEnd(13)}${String(tabs.length).padStart(3)} tabs · ` +
+        (bad.length
+          ? `${String(bad.length)} defect(s)`
+          : "no overflow, tabs scroll"),
+    );
+    for (const line of bad.slice(0, 4)) console.log(`      ${line}`);
+    tally.hard += bad.length;
+
+    const nameless =
+      shape.width < 500 ? await page.evaluate(namelessIcons) : [];
+    if (nameless.length || shape.width < 500)
+      console.log(
+        `  ${"icon controls".padEnd(13)}    ` +
+          (nameless.length
+            ? `${String(nameless.length)} with no accessible name`
+            : "every icon-only control carries its name"),
+      );
+    for (const line of nameless) console.log(`      ${line}`);
+    tally.hard += nameless.length;
+
+    // The sheet and the menu exist only where the narrow layout does. In landscape the
+    // panel is a column and there is no menu to open, so working them there tests nothing.
+    // The panel exists in both shapes — a sheet in portrait, a rail in landscape — so it
+    // is checked in both. The menu exists only where the header cannot seat the controls.
+    const broken = await panelChecks(page);
+    console.log(
+      `  ${"details panel".padEnd(13)}    ` +
+        (broken.length
+          ? `${String(broken.length)} defect(s)`
+          : "closed on load, opens on tap, handle and escape close it"),
+    );
+    for (const line of broken) console.log(`      ${line}`);
+    tally.hard += broken.length;
+
+    const hasMenu = await page.evaluate(() => {
+      const h = document.querySelector(".hbtns");
+      return h ? getComputedStyle(h).display !== "none" : false;
+    });
+    if (hasMenu) {
+      const menu = await menuChecks(page);
+      console.log(
+        `  ${"controls menu".padEnd(13)}    ` +
+          (menu.length
+            ? `${String(menu.length)} defect(s)`
+            : "opens, holds every control, dismisses on a tap away"),
+      );
+      for (const line of menu) console.log(`      ${line}`);
+      tally.hard += menu.length;
+    }
+
+    const unique = [...new Set(errors)];
+    if (unique.length) {
+      console.log(
+        `  [mobile] ERRORS:\n    ${unique.slice(0, 3).join("\n    ")}`,
+      );
+      tally.hard += unique.length;
+    }
+    await page.close();
+  }
+
   async function checkExplorer(project: Project): Promise<void> {
     const PAGE = project.pagePath;
     const tally = score(project.id);
@@ -235,7 +353,13 @@ async function main() {
     }
   }
 
-  for (const project of projects) await checkExplorer(project);
+  for (const project of projects) {
+    await checkExplorer(project);
+    // Portrait and landscape are two layouts, not one layout at two sizes: the first is
+    // narrow with height to spare, the second is short with width to spare, and each was
+    // broken at a point the other could not have found.
+    for (const shape of PHONES) await checkMobile(project, shape);
+  }
   await checkIndex();
 
   await browser.close();
@@ -353,6 +477,216 @@ function measure() {
     onBox,
     clash,
   };
+}
+
+/**
+ * Runs inside the page at a phone width. Returns a problem per defect, empty when clean.
+ */
+/**
+ * Works the two controls that only exist on a phone, and says what did not respond.
+ *
+ * Written as a sequence of real interactions rather than a look at the stylesheet
+ * because what matters is whether a reader can get the panel open and shut again — a
+ * rule that is present but outranked reads as correct and behaves as broken.
+ *
+ * Runs on the first tab only. These are page chrome, identical on every view, so
+ * repeating it eight times would cost eight times as long to learn the same thing.
+ */
+/**
+ * Every control that shows only an icon has to carry its name somewhere a screen reader
+ * can reach. This is the exact thing that breaks silently: swapping a word for a glyph
+ * looks finished, and the button is simply unusable without sight of it.
+ */
+function namelessIcons(): string[] {
+  const out: string[] = [];
+  for (const b of document.querySelectorAll("button")) {
+    if (b.textContent.trim()) continue;
+    const name = b.getAttribute("aria-label") ?? b.getAttribute("title") ?? "";
+    if (!name.trim())
+      out.push(
+        `${b.id ? "#" + b.id : b.className} shows only an icon and has no name`,
+      );
+  }
+  return out;
+}
+
+/** The two shapes a phone actually presents. Widths chosen at the common device sizes. */
+const PHONES = [
+  { label: "portrait 390", width: 390, height: 844 },
+  { label: "landscape 844", width: 844, height: 390 },
+] as const;
+
+async function panelChecks(page: Page): Promise<string[]> {
+  const bad: string[] = [];
+  const open = () =>
+    page.evaluate(() => document.body.classList.contains("sheet-open"));
+  const asideWidth = () =>
+    page.evaluate(() => {
+      const a = document.querySelector("aside");
+      return a ? Math.round(a.getBoundingClientRect().width) : 0;
+    });
+  /*
+   * Clicking a control that is not there is exactly the defect this function exists to
+   * find, so it must not be the thing that stops it looking. Playwright's default is to
+   * retry for 30 seconds and then throw a stack trace, which aborts the run and every
+   * project after it; a missing control is reported and the rest of the sequence
+   * continues on whatever state it left behind.
+   */
+  const tap = async (sel: string, missing: string): Promise<boolean> => {
+    try {
+      await page.click(sel, { timeout: 2000 });
+      await page.waitForTimeout(300);
+      return true;
+    } catch {
+      bad.push(missing);
+      return false;
+    }
+  };
+
+  await tap(".tab >> nth=0", "the first tab does not respond to a tap");
+
+  // A panel that starts open is a panel covering the diagram nobody asked it about.
+  if (await open())
+    bad.push("the details panel starts open — it should be closed");
+  const shut = await asideWidth();
+  if (await tap(".node", "no box on the first view responds to a tap")) {
+    if (!(await open()))
+      bad.push("tapping a box did not open the details panel");
+    const label = await page.textContent("#griplabel").catch(() => null);
+    if (!label || label === "Details")
+      bad.push("the panel handle does not name what is open");
+  }
+  /*
+   * Where the panel is a column rather than an overlay, closing it has to hand the width
+   * back — a panel that collapses to a rail and leaves the gap behind gives the canvas
+   * and the reference tables nothing, which is the entire point of collapsing it.
+   */
+  const overlay = await page.evaluate(() => {
+    const a = document.querySelector("aside");
+    return a ? getComputedStyle(a).position === "fixed" : true;
+  });
+  if (!overlay && (await asideWidth()) <= shut)
+    bad.push(
+      `the panel is ${String(shut)}px closed and ${String(await asideWidth())}px open — ` +
+        `closing it returns no width to the canvas`,
+    );
+
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(300);
+  if (await open()) bad.push("escape did not close the details panel");
+  if (await tap("#sheetgrip", "the panel handle is not reachable")) {
+    if (!(await open())) bad.push("the panel handle does not open the panel");
+    await tap("#sheetgrip", "the panel handle stopped responding");
+    if (await open()) bad.push("the panel handle does not close the panel");
+  }
+
+  /*
+   * The handle says the panel can move; the close button says how to put it away, and it
+   * only earns its place if it is visible exactly when there is something to close.
+   */
+  if (await page.isVisible("#panelclose"))
+    bad.push("the close button shows while the panel is already closed");
+  await tap("#sheetgrip", "the panel handle stopped responding");
+  if (!(await page.isVisible("#panelclose")))
+    bad.push("the open panel offers no close button");
+  else {
+    await tap("#panelclose", "the close button is not reachable");
+    if (await open()) bad.push("the close button does not close the panel");
+  }
+  return bad;
+}
+
+/**
+ * The controls menu, which exists only where the header cannot seat the control row.
+ */
+async function menuChecks(page: Page): Promise<string[]> {
+  const bad: string[] = [];
+  const menuOpen = () =>
+    page.evaluate(() =>
+      document.querySelector("header")?.classList.contains("menu-open"),
+    );
+  try {
+    await page.click("#menubtn", { timeout: 2000 });
+    await page.waitForTimeout(250);
+  } catch {
+    bad.push("the menu button is not reachable");
+    return bad;
+  }
+  if (!(await menuOpen())) bad.push("the menu button did not open the menu");
+  // Every control in it has to be hittable, or the menu is decorative.
+  for (const id of ["#icontoggle", "#themetoggle", "#savepng"])
+    if (!(await page.isVisible(id)))
+      bad.push(`${id} is not reachable in the menu`);
+  // A menu that only closes by its own button is one people leave over the diagram.
+  await page.click("#stage", { position: { x: 190, y: 90 }, timeout: 2000 });
+  await page.waitForTimeout(250);
+  if (await menuOpen()) bad.push("tapping away did not dismiss the menu");
+  // Fit is the way back from a pinch gone wrong, so it stays out of the menu.
+  if (!(await page.isVisible("#fitm")))
+    bad.push("Fit is not in reach on the header row");
+  return bad;
+}
+
+function measureNarrow(): string[] {
+  const out: string[] = [];
+  const doc = document.documentElement;
+  if (doc.scrollWidth > window.innerWidth + 1)
+    out.push(
+      `page scrolls sideways — ${String(doc.scrollWidth)}px of content in ${String(window.innerWidth)}px`,
+    );
+  /* A panel whose content is wider than the panel drags the layout with it. */
+  for (const sel of ["#insp", "#viewhdr", ".legend", "header", ".doc"]) {
+    const el = document.querySelector(sel);
+    if (el && el.scrollWidth > el.clientWidth + 1)
+      out.push(
+        `${sel} overflows — ${String(el.scrollWidth)}px in ${String(el.clientWidth)}px`,
+      );
+  }
+  /* The tab strip is meant to scroll; if a tab wraps, the rows get taller instead. */
+  /*
+   * Anything anchored to the stage floor is anchored under the sheet handle unless it is
+   * lifted, and a control the handle covers takes the tap instead of it — which is how
+   * the reference tables strip came to be drawn off the bottom of every canvas view with
+   * no gate saying a word. Occlusion, not overflow, so it needs its own measurement.
+   */
+  const sheet = document.querySelector("aside");
+  if (sheet && getComputedStyle(sheet).position === "fixed") {
+    const top = sheet.getBoundingClientRect().top;
+    for (const sel of ["#tables", ".hint", ".tbl-head"]) {
+      const el: HTMLElement | null = document.querySelector(sel);
+      if (!el || el.hidden || !el.getClientRects().length) continue;
+      const box = el.getBoundingClientRect();
+      if (box.bottom > top + 1)
+        out.push(
+          `${sel} is ${String(Math.round(box.bottom - top))}px under the details sheet — ` +
+            `lift it clear of the handle`,
+        );
+    }
+  }
+
+  /*
+   * A landscape phone is short, not narrow, and every rule above it keys off width — so
+   * the wide layout was served into a 390px-tall viewport, where the title wrapped to
+   * seven lines and the header alone took 202px of it. Past half the viewport the page
+   * is more chrome than content, whatever the width says.
+   */
+  const head = document.querySelector("header");
+  if (head && head.getBoundingClientRect().height > window.innerHeight / 2)
+    out.push(
+      `the header takes ${String(Math.round(head.getBoundingClientRect().height))}px ` +
+        `of ${String(window.innerHeight)}px — more than half the viewport is chrome`,
+    );
+
+  const heights = new Set(
+    [...document.querySelectorAll(".tab")].map((t) =>
+      Math.round(t.getBoundingClientRect().height),
+    ),
+  );
+  if (heights.size > 1)
+    out.push(
+      `tabs wrap instead of scrolling — heights ${[...heights].join(", ")}`,
+    );
+  return out;
 }
 
 /** Clicks every target on every tab and checks the panel actually fills. */

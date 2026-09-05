@@ -186,7 +186,7 @@ const PLANE_LABEL=CONFIG.planes;
 const SVGNS="http://www.w3.org/2000/svg";
 const svg=document.getElementById("svg"), root=document.getElementById("root");
 const stage=document.getElementById("stage"), insp=document.getElementById("insp");
-const doc=document.getElementById("doc"), hint=document.getElementById("hint"), ctrls=document.querySelector(".ctrls");
+const doc=document.getElementById("doc"), hint=document.getElementById("hint");
 let filter="";
 /* A set of resource ids carried over from a diagram box, so the Resources tab can show
    just that box's inventory. Cleared by the chip, or by switching tab. */
@@ -262,12 +262,45 @@ function clipCount(d,obstacles,probe){
   return hits;
 }
 
+/* ============================ PHONE CHROME ============================
+   Both of these are no-ops on a wide screen: the classes they toggle mean nothing
+   outside the narrow-screen block, so there is one code path and the stylesheet
+   decides whether it shows. */
+const grip=document.getElementById("sheetgrip"), gripLabel=document.getElementById("griplabel"),
+      menuBtn=document.getElementById("menubtn");
+/* The label is what a reader sees above the fold, so it names what is inside rather
+   than saying "Details" over a panel already describing a specific box. */
+function sheet(open,label){
+  document.body.classList.toggle("sheet-open",open);
+  grip.setAttribute("aria-expanded",String(open));
+  gripLabel.textContent=label||"Details";
+}
+const sheetTitle=()=>{const t=insp.querySelector(".insp-title");return t?t.textContent:"";};
+function menu(open){
+  document.querySelector("header").classList.toggle("menu-open",open);
+  menuBtn.setAttribute("aria-expanded",String(open));
+}
+grip.addEventListener("click",()=>sheet(!document.body.classList.contains("sheet-open"),gripLabel.textContent));
+menuBtn.addEventListener("click",ev=>{
+  ev.stopPropagation();
+  menu(!document.querySelector("header").classList.contains("menu-open"));
+});
+/* A menu that only closes by its own button is a menu people leave open over the
+   diagram they were trying to read. */
+document.addEventListener("click",ev=>{
+  if(!ev.target.closest(".ctrls")&&!ev.target.closest(".menubtn"))menu(false);
+});
+document.getElementById("fitm").addEventListener("click",()=>fit());
+document.getElementById("panelclose").addEventListener("click",()=>sheet(false,gripLabel.textContent));
+
 function build(){
   const isDoc=view.type==="doc";
+  sheet(false); menu(false);
+  document.querySelector(".shell").classList.toggle("is-doc",isDoc);
   svg.hidden=isDoc; doc.hidden=!isDoc; hint.hidden=isDoc; /* Only zoom and export depend on a canvas. Icons show on the inventory rows too, and
      the theme is page-wide — hiding those left a reader able to see icons on the
      Resources tab with no way to turn them off. */
-  ctrls.querySelectorAll(".canvas-only").forEach(g=>{g.hidden=isDoc;});
+  document.querySelectorAll(".canvas-only").forEach(g=>{g.hidden=isDoc;});
   svg.style.display=isDoc?"none":"block";
   /* The stage selector only means something where per-stage counts are shown. */
   const staged=isDoc?view.id===CONFIG.inventoryView:Object.keys(PLACEMENT[view.id]||{}).length>0;
@@ -446,7 +479,7 @@ function clearFocus(){
   edgeEls.forEach(v=>{v.g.classList.remove("dim");v.lg&&v.lg.classList.remove("dim");});
 }
 function clearSel(){
-  sel=null; clearFocus();
+  sel=null; clearFocus(); sheet(false);
   nodeEls.forEach(v=>v.g.classList.remove("sel"));
   zoneEls.forEach(v=>v.g.classList.remove("sel"));
   edgeEls.forEach(v=>{v.g.classList.remove("sel");v.lg&&v.lg.classList.remove("sel");});
@@ -467,6 +500,7 @@ function select(s){
     focus(new Set([e.from,e.to]),new Set([s.id])); renderEdge(e);
   }
   insp.scrollTop=0;
+  sheet(true,sheetTitle());
 }
 
 /* ============================ INSPECTOR ============================ */
@@ -750,6 +784,7 @@ function buildDoc(){
     b.classList.add("sel");
     renderItem(view.groups[+b.dataset.g].items[+b.dataset.i],view.groups[+b.dataset.g].name);
     insp.scrollTop=0;
+    sheet(true,sheetTitle());
   }));
 }
 function tableHtml(t){
@@ -825,21 +860,43 @@ function zoomBy(f,cx,cy){
    that follows, so a drag never selects and a tap never pans. */
 const DRAG_SLOP=4;
 let drag=null; window.__panned=false;
+/* Every live pointer, so a second finger can turn a pan into a pinch mid-gesture. */
+const touches=new Map();
+let pinch=null;
+const span=()=>{const[a,b]=[...touches.values()];
+  return{d:Math.hypot(a.x-b.x,a.y-b.y),cx:(a.x+b.x)/2,cy:(a.y+b.y)/2};};
 /* Deliberately no setPointerCapture: capturing on the svg retargets the click that
    follows, which would swallow every box and line selection. Window listeners give
    the same "keep dragging outside the frame" behaviour without touching click targets. */
 svg.addEventListener("pointerdown",ev=>{
   if(ev.pointerType==="mouse"&&ev.button!==0)return;
+  if(ev.pointerType!=="mouse")touches.set(ev.pointerId,{x:ev.clientX,y:ev.clientY});
+  if(touches.size===2){
+    /* A second finger cancels the pan it interrupted, so the canvas does not lurch. */
+    drag=null; window.__panned=true; stage.classList.remove("dragging");
+    const s=span(); pinch={d:s.d,k:vp.k};
+    return;
+  }
   drag={sx:ev.clientX,sy:ev.clientY,ox:vp.x,oy:vp.y,u:pxPerUnit()}; window.__panned=false;
 });
 addEventListener("pointermove",ev=>{
+  if(touches.has(ev.pointerId))touches.set(ev.pointerId,{x:ev.clientX,y:ev.clientY});
+  if(pinch&&touches.size===2){
+    const s=span();
+    if(s.d>0){const p=screenToVB(s.cx,s.cy); zoomBy((s.d/pinch.d)*(pinch.k/vp.k),p.x,p.y);}
+    return;
+  }
   if(!drag)return;
   const dx=ev.clientX-drag.sx, dy=ev.clientY-drag.sy;
   if(!window.__panned&&Math.hypot(dx,dy)<DRAG_SLOP)return;
   if(!window.__panned){window.__panned=true;stage.classList.add("dragging");}
   vp.x=drag.ox+dx/drag.u; vp.y=drag.oy+dy/drag.u; apply();
 });
-["pointerup","pointercancel"].forEach(t=>addEventListener(t,()=>{drag=null;stage.classList.remove("dragging");}));
+["pointerup","pointercancel"].forEach(t=>addEventListener(t,ev=>{
+  touches.delete(ev.pointerId);
+  if(touches.size<2)pinch=null;
+  drag=null; stage.classList.remove("dragging");
+}));
 svg.addEventListener("wheel",ev=>{ev.preventDefault();const p=screenToVB(ev.clientX,ev.clientY);zoomBy(ev.deltaY<0?1.12:1/1.12,p.x,p.y);},{passive:false});
 svg.addEventListener("click",ev=>{
   if(window.__panned)return;
@@ -850,7 +907,7 @@ document.getElementById("zout").onclick=()=>zoomBy(1/1.25);
 document.getElementById("zfit").onclick=fit;
 addEventListener("keydown",ev=>{
   if(ev.target.matches("input,textarea,[type=search]"))return;
-  if(ev.key==="Escape")clearSel();
+  if(ev.key==="Escape"){clearSel();menu(false);}
   else if(ev.key==="+"||ev.key==="=")zoomBy(1.25);
   else if(ev.key==="-")zoomBy(1/1.25);
   else if(ev.key==="0")fit();
@@ -938,6 +995,11 @@ else{
   });
 }
 
+/* "scroll to zoom" is a lie on a phone, where the wheel event never fires. */
+if(matchMedia("(pointer:coarse)").matches){
+  const h=document.getElementById("hint");
+  if(h)h.innerHTML='<span>drag to pan</span><span>pinch to zoom</span><span>tap a box or a line</span>';
+}
 document.getElementById("brand").innerHTML=
   `<b>${esc(CONFIG.title)}</b><span>${esc(CONFIG.tagline)}</span>`;
 iconBtn.setAttribute("aria-label",CONFIG.iconLabel);
@@ -947,7 +1009,9 @@ document.getElementById("savepng").addEventListener("click",exportPng);
 const stageBar=document.getElementById("stages");
 STAGES.forEach(st=>{
   const b=document.createElement("button");
-  b.textContent=st.label; b.setAttribute("aria-pressed",st.id===deployStage?"true":"false");
+  const long=document.createElement("span"); long.className="s-long"; long.textContent=st.label;
+  const short=document.createElement("span"); short.className="s-short"; short.textContent=st.id;
+  b.append(long,short); b.setAttribute("aria-pressed",st.id===deployStage?"true":"false");
   b.onclick=()=>{
     deployStage=st.id;
     [...stageBar.children].forEach(c=>c.setAttribute("aria-pressed",c===b?"true":"false"));

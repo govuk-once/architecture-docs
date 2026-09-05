@@ -7,9 +7,21 @@
       <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M9.8 3.5 5.3 8l4.5 4.5"/></svg>
     </a>
     <div class="brand" id="brand"></div>
+    <!-- Phone-only, hidden by CSS elsewhere: Fit stays in reach because it is the
+         recovery gesture after a pinch, and everything else goes behind the menu. -->
+    <div class="hbtns">
+      <button class="btn ico line fitm canvas-only" id="fitm" type="button"
+        title="Fit to view" aria-label="Fit to view">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 2H2.8a.8.8 0 0 0-.8.8V6"/><path d="M10 2h3.2a.8.8 0 0 1 .8.8V6"/><path d="M14 10v3.2a.8.8 0 0 1-.8.8H10"/><path d="M6 14H2.8a.8.8 0 0 1-.8-.8V10"/></svg>
+      </button>
+      <button class="btn ico line menubtn" id="menubtn" type="button" aria-expanded="false"
+        aria-controls="ctrls" aria-label="Display and export options" title="Display and export options">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4h12"/><path d="M2 8h12"/><path d="M2 12h12"/></svg>
+      </button>
+    </div>
     <div class="spacer"></div>
     <div class="stagepick" role="group" aria-label="Deployment stage"><span class="eyebrow">Stage</span><div id="stages"></div></div>
-    <div class="ctrls">
+    <div class="ctrls" id="ctrls">
       <!-- Three groups, because these are three kinds of thing: what the diagram shows,
            how it is framed, and what you take away. Segmented like the stage picker so
            the whole header speaks one language. -->
@@ -23,7 +35,9 @@
         <button class="btn" id="zout" title="Zoom out (-)" aria-label="Zoom out">&minus;</button>
         <span class="zoomval mono" id="zval">100%</span>
         <button class="btn" id="zin" title="Zoom in (+)" aria-label="Zoom in">+</button>
-        <button class="btn" id="zfit" title="Fit to view (0)">Fit</button>
+        <button class="btn ico line" id="zfit" title="Fit to view (0)" aria-label="Fit to view">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 2H2.8a.8.8 0 0 0-.8.8V6"/><path d="M10 2h3.2a.8.8 0 0 1 .8.8V6"/><path d="M14 10v3.2a.8.8 0 0 1-.8.8H10"/><path d="M6 14H2.8a.8.8 0 0 1-.8-.8V10"/></svg>
+        </button>
       </div>
       <div class="seg canvas-only" role="group" aria-label="Export">
         <button class="btn ico line" id="savepng" type="button"
@@ -46,6 +60,19 @@
     </div>
   </div>
   <aside>
+    <!-- Phone-only handle. On a phone the panel is a bottom sheet; this is what
+         peeks above the fold and what a reader drags or taps to open it. -->
+    <button class="sheetgrip" id="sheetgrip" type="button" aria-expanded="false" aria-controls="insp">
+      <span class="grip-bar" aria-hidden="true"></span>
+      <span class="grip-label" id="griplabel">Details</span>
+    </button>
+    <!-- Shown only where the panel collapses. Its containing block differs by shape: in
+         portrait the sheet is fixed and so positions it, in landscape the panel scrolls
+         and the shell positions it instead — which is what keeps it from scrolling away. -->
+    <button class="panelclose" id="panelclose" type="button" aria-label="Close the details panel"
+      title="Close the details panel">
+    <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4.4 4.4 7.2 7.2"/><path d="m11.6 4.4-7.2 7.2"/></svg>
+    </button>
     <div id="viewhdr"></div>
     <div id="insp" aria-live="polite"></div>
   </aside>

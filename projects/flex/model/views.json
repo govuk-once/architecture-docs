@@ -138,7 +138,7 @@
     "audience": "Domain teams — this is the part you write",
     "blurb": "C4 level 3: what a domain team actually writes, and what the platform's own libraries do with it. Every box here is FLEX code — this is the product the platform ships to its domain teams.",
     "note": "Two files ship a route: domains/{name}/domain.config.ts and one handler file whose path toHandlerPath derives from the route key. Route counts live on Resources, log retention and redaction patterns under Resources ▸ Observability, and the private API's access model on Resources, API layer (api-private).",
-    "dashMeans": "dashed: wiring — config, derivation, types — not a request at runtime",
+    "dashMeans": "wiring — config, derivation, types — not a request at runtime",
     "tables": [
       {
         "name": "Route key grammar",
@@ -578,7 +578,7 @@
     "audience": "Security review, assurance and threat modelling",
     "blurb": "Every control, drawn where it acts, outside in: what the edge drops, what the origin lock demands, what the token is allowed to prove, what IAM permits once inside, and the identity column that bounds every box. Counts are read from the synthesised CloudFormation; use the stage selector — Shield and the VPC read 0 where they are not created.",
     "note": "Two gaps are real and unfixed. <code>pnpm validate:integrations</code> filters to <code>type: \"domain\"</code>, so only 6 of the 36 declared integrations are checked — the 30 gateway integrations pass CI unexamined, including local-council's two, which point at <code>/v1/local-council/*</code> routes the udp gateway does not define. And the authorizer's allow policy names <code>Resource: \"*\"</code> rather than the invoked method ARN.",
-    "dashMeans": "dashed: a control or a supporting fetch, not the request itself",
+    "dashMeans": "a control or a supporting fetch, not the request itself",
     "tables": [
       {
         "name": "Where each control is proven",
@@ -913,7 +913,7 @@
     "audience": "Platform engineers and on-call",
     "blurb": "How code reaches production, and how production reaches a human when it goes wrong. Nothing on this tab is on a user's request path.",
     "note": "A <b>solid line blocks the release; a dashed one runs beside it and blocks nothing</b> — the spine down the middle is the only path to production. Two of the paths drawn here do not work today. The canary's alarm has no alarm action, and the cross-region relay's inline handler has a syntax error, so the smoke test and every us-east-1 edge alarm reach nobody. A third is worth reading the test table for: the platform suite is the only test that can fail a deploy, and it is skipped in production.",
-    "dashMeans": "dashed: runs beside the release and blocks nothing",
+    "dashMeans": "runs beside the release and blocks nothing",
     "tables": [
       {
         "name": "Every kind of test, where it runs, and what it gates",

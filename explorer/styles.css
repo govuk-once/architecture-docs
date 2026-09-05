@@ -31,11 +31,17 @@ header{
 .tabs > .tabgroup:first-child{border-left:0;padding-left:0;margin-left:0}
 .tab{
   font:500 13px/1 "IBM Plex Sans",sans-serif;padding:8px 13px;border-radius:6px;border:1px solid transparent;
-  background:none;color:var(--ink-2);cursor:pointer;
+  background:none;color:var(--ink-2);cursor:pointer;white-space:nowrap;flex:0 0 auto;
 }
 .tab:hover{background:var(--surface-2)}
 .tab[aria-selected="true"]{background:var(--accent-soft);color:var(--accent);border-color:var(--accent);font-weight:600}
 .spacer{flex:1}
+/* Phone-only chrome. Present in every page's markup, shown only under the
+   narrow-screen block at the foot of this file. */
+.hbtns{display:none}
+.sheetgrip{display:none}
+.panelclose{display:none}
+.s-short{display:none}
 /* Groups read as units: a wider gap between them than within them, and each one
    segmented the same way the stage picker is, so the whole header uses one idiom. */
 .ctrls{display:flex;align-items:center;gap:12px}
@@ -43,7 +49,8 @@ header{
 .seg{display:flex;align-items:stretch;border:1px solid var(--line-2);border-radius:7px;overflow:hidden;background:var(--surface)}
 .seg .btn{border:0;border-right:1px solid var(--line-2);border-radius:0;background:transparent}
 .seg > :last-child{border-right:0}
-.seg .zoomval{display:flex;align-items:center;padding:0 4px;border-right:1px solid var(--line-2)}
+.seg .zoomval{display:flex;align-items:center;justify-content:center;padding:0 4px;
+  border-right:1px solid var(--line-2)}
 .seg .btn:hover{background:var(--surface-2);border-color:var(--line-2)}
 .seg .btn[aria-pressed="true"]{background:var(--accent-soft);color:var(--accent)}
 .btn{
@@ -329,3 +336,234 @@ td code{font-size:11.5px}
 .audience span{flex:0 0 auto;font:600 9.5px/1 "IBM Plex Mono",monospace;letter-spacing:.13em;text-transform:uppercase;
   color:var(--accent);border:1px solid var(--accent);border-radius:4px;padding:4px 6px}
 .doc-head .audience{max-width:70ch}
+
+
+/* ---------- phones ----------
+   Last in the file on purpose. These rules have to beat later sections written for the
+   wide layout — `.stage.has-tables .hint` outranks a bare `.hint` on specificity, so the
+   only way a narrow override wins is to come after it at equal weight.
+
+   The problem this solves: at 390px the header spent ~330px on a brand, a stage picker
+   and three control segments before a single box was drawn, and the details panel took
+   whatever the diagram did not. So the controls go behind a menu, the panel becomes a
+   sheet that stays out of the way until something is tapped, and the canvas gets the
+   screen. */
+@media (max-width:760px){
+  /* How much of the sheet stays above the fold. Everything that must not sit under it —
+     the pan hint, the last line of a reference view — measures from this. */
+  :root{--peek:50px}
+
+  /* The panel menu hangs off the header, so the header is the positioning context. */
+  header{position:relative;padding:10px 14px 8px;gap:9px}
+  .hrow{flex-wrap:wrap;gap:10px}
+  .brand{min-width:0;flex:1 1 auto}
+  /* Truncate rather than wrap: four lines of title is a third of the viewport. */
+  .brand b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
+  .brand span{display:none}
+  .spacer{display:none}
+  .hbtns{display:flex;align-items:center;gap:8px;flex:0 0 auto}
+  /* .btn.ico sizes it now; it only needs to stop being a 32px-min text button. */
+  .fitm{min-width:0}
+
+  /* The stage picker keeps its own row and is never hidden: it changes every number on
+     the page, so a reader who cannot see which stage they are looking at is misreading
+     the diagram rather than merely inconvenienced. */
+  .stagepick{margin-left:0;flex:1 1 100%}
+  .stagepick .eyebrow{display:none}
+  .stagepick > div{flex:1;min-width:0}
+  /* "Development" and "Ephemeral PR" set the width of the whole picker to say what
+     "dev" and "eph" say. Every project already declares the short form as the stage id. */
+  .s-long{display:none}
+  .s-short{display:inline;text-transform:uppercase;letter-spacing:.04em}
+  .stagepick button{flex:1;min-width:0;padding:8px 4px;font-size:12px;
+    font-family:"IBM Plex Mono",monospace;font-weight:600}
+  /* The handle says the panel can move; this says how to put it away. */
+  .panelclose{display:flex;position:absolute;top:9px;right:10px;z-index:3;
+    align-items:center;justify-content:center;width:30px;height:30px;padding:0;
+    border:1px solid var(--line-2);border-radius:7px;background:var(--surface);
+    color:var(--ink-2);cursor:pointer}
+  .panelclose svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.7;
+    stroke-linecap:round}
+  .panelclose:hover{background:var(--surface-2);border-color:var(--accent);color:var(--accent)}
+  body:not(.sheet-open) .panelclose{display:none}
+
+  /* Display and export are settings, reached once and then left alone, so they go behind
+     the menu button. Zoom goes with them and then hides: pinch is the gesture a phone
+     reader already has, and Fit — the way back from a pinch gone wrong — is promoted out
+     of the menu into the header instead. */
+  .ctrls{
+    display:none;position:absolute;right:14px;top:calc(100% - 5px);z-index:40;
+    width:auto;flex-direction:column;align-items:stretch;gap:8px;padding:10px;
+    background:var(--surface);border:1px solid var(--line-2);border-radius:10px;
+    box-shadow:0 12px 32px rgba(0,0,0,.2)}
+  header.menu-open .ctrls{display:flex}
+  .ctrls .seg[aria-label="Zoom"]{display:none}
+
+  .tabs{gap:2px}
+  .tab{padding:7px 10px;font-size:12.5px}
+  /* The group labels cost 273px of a 926px scroll strip to repeat what the tab beside
+     them already says. On a screen this narrow that is a tab and a half. */
+  .tabgroup{display:none}
+
+  /* One column, and the canvas takes what is left rather than a fixed slice: the sheet
+     is out of flow now, so there is no second row to leave room for. */
+  .shell{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr)}
+  .stage{min-height:0}
+  /* The sheet handle covers the stage floor, and everything anchored there is anchored
+     to a floor that is now 50px higher. The reference tables strip was left at bottom:0
+     and drawn entirely underneath the handle — not merely hard to see, but impossible to
+     tap, because the handle takes the pointer. */
+  .shell:not(.is-doc) .stage{padding-bottom:var(--peek)}
+  #tables{bottom:var(--peek)}
+  .hint{left:10px;bottom:calc(var(--peek) + 8px);gap:10px;font-size:10px}
+  .stage.has-tables .hint{bottom:calc(var(--peek) + 46px)}
+  /* Opened, the tables are what the reader came for, so they take the larger share here
+     rather than the smaller one a wide screen can afford to give them. */
+  .stage.split svg{height:38%}
+  .stage.split #tables{height:62%}
+  .stage.has-tables.split .hint{bottom:calc(var(--peek) + 62% + 10px)}
+  /* A phone shows the table one column at a time; the strip's own summary of which
+     tables it holds is a second line of text nobody can act on. */
+  .tbl-names{display:none}
+  .tbl-body{padding:14px 14px 20px}
+
+  /* The details panel as a bottom sheet. A phone has no room for a permanent 372px
+     column, and a reader who has not tapped anything has nothing to read in it. */
+  aside{
+    position:fixed;left:0;right:0;bottom:0;z-index:50;max-height:84vh;
+    border-left:0;border-top:1px solid var(--line);border-radius:14px 14px 0 0;
+    box-shadow:0 -10px 30px rgba(0,0,0,.16);
+    transform:translateY(calc(100% - var(--peek)));transition:transform .22s ease}
+  body.sheet-open aside{transform:translateY(0)}
+  .sheetgrip{
+    display:flex;flex-direction:column;align-items:center;gap:7px;flex:0 0 auto;
+    width:100%;height:var(--peek);padding:9px 14px 0;border:0;background:none;
+    color:var(--ink-2);font-family:inherit;font-size:13px;cursor:pointer}
+  .grip-bar{width:36px;height:4px;border-radius:2px;background:var(--line-2);flex:0 0 auto}
+  .grip-label{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+    font-weight:600;color:var(--ink)}
+  #viewhdr{padding:14px 14px 12px}
+  #insp{padding:14px 14px 26px}
+
+  /* Three columns on a 390px row leave the name about 18 characters, so
+     "Private-with-egress subnets" came out as four stacked words beside two tags with
+     room to spare. Name and count share the first line, the tags get the second. */
+  .row{grid-template-columns:minmax(0,1fr) auto;gap:8px 12px;align-items:baseline}
+  .row .rmeta{grid-column:1 / -1;justify-content:flex-start}
+
+  /* A reference view has nothing to pan, so trapping it in a fixed window just hides it
+     mid-sentence. Let it run to its natural height and let the page scroll — and keep
+     the last line clear of the sheet. */
+  .shell.is-doc{grid-template-rows:auto}
+  .shell.is-doc .stage{overflow:visible;height:auto;min-height:0}
+  /* .doc is absolutely positioned inside the stage, so height:auto alone left it
+     collapsed to nothing; it has to rejoin normal flow to give the stage a height. */
+  .shell.is-doc .doc{position:static;overflow:visible;height:auto;
+    padding:20px 14px calc(40px + var(--peek))}
+}
+
+/* ---------- landscape phones ----------
+   Short, not narrow, and the two need opposite answers. Everything above keys off width,
+   so a 844x390 phone was served the wide layout: the brand wrapped to seven lines, the
+   header took 202px of the 390 available, and the 1080px rule stacked the panel below a
+   canvas that already did not fit — putting it off the bottom of the screen entirely.
+
+   Height is the only scarce resource here, so the header collapses to one tight row and
+   nothing is allowed to claim vertical space it does not need. */
+@media (max-height:500px){
+  .s-long{display:none}
+  .s-short{display:inline;text-transform:uppercase;letter-spacing:.04em}
+  header{padding:6px 12px 5px;gap:5px}
+  .hrow{gap:12px}
+  .brand{min-width:0;flex:1 1 auto}
+  .brand b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;font-size:14px}
+  /* The strapline is the first thing to go: it names the project the title just named. */
+  .brand span{display:none}
+  .stagepick{gap:7px}
+  .stagepick .eyebrow{display:none}
+  .stagepick button{padding:7px 9px;font-size:12px}
+  .tabs{gap:2px}
+  .tab{padding:5px 9px;font-size:12px}
+  .tabgroup{display:none}
+  .hint{font-size:9.5px;gap:9px}
+  /* A handle worth 13% of the viewport is not a peek. */
+  :root{--peek:42px}
+}
+
+/* Wide enough to seat the panel beside the canvas — and that is the right trade here,
+   because a column costs width, of which a landscape phone has plenty, while a sheet
+   costs height, of which it has none. */
+/* Narrow as well as short — a small phone turned sideways. The sheet is right here (the
+   width will not seat a column), but the picker's own row is not: it costs 16% of the
+   height to say four words that fit beside the title. */
+@media (max-height:500px) and (max-width:760px){
+  .spacer{display:block;flex:1}
+  /* Reordered rather than moved, so the buttons stay top-right as they are in portrait
+     without a second copy of them in the markup. */
+  .hbtns{order:9}
+  .stagepick{flex:0 1 auto}
+  .stagepick > div{flex:0 1 auto}
+  .stagepick button{flex:0 1 auto;min-width:0;padding:6px 9px;font-size:11.5px}
+}
+
+@media (max-height:500px) and (min-width:761px){
+  /* Collapsed to its rail by default, and opened by the same events that raise the sheet
+     in portrait — so there is one behaviour and two ways of drawing it, not two
+     behaviours. Closed, the canvas and the reference tables get the full width. */
+  .shell{position:relative;grid-template-columns:minmax(0,1fr) 30px;
+    grid-template-rows:minmax(0,1fr);transition:grid-template-columns .2s ease}
+  body.sheet-open .shell{grid-template-columns:minmax(0,1fr) 320px}
+  /*
+   * The panel scrolls as one piece here, header and all. A pinned header costs the same
+   * 214px whatever the screen is, and of a 314px panel that is 68% spent on a legend and
+   * an audience line, leaving 100px to read 1000px of content through. On a tall screen
+   * pinning it is worth the space; on this one it is most of the space.
+   *
+   * Which means the panel is deliberately NOT the positioning context: the rail and the
+   * close button anchor to the shell, which does not scroll, so they stay put while
+   * everything between them moves.
+   */
+  aside{position:static;padding-left:30px;overflow-x:hidden;overflow-y:auto;
+    border-left:1px solid var(--line);border-top:0}
+  #viewhdr,#insp{flex:0 0 auto;overflow:visible;min-height:0}
+  /* Closed, the panel is 30px wide with 30px of padding: its contents would be zero
+     pixels across and a mile tall. Nothing to show, so show nothing. */
+  body:not(.sheet-open) #viewhdr,body:not(.sheet-open) #insp{display:none}
+  .sheetgrip{
+    display:flex;position:absolute;top:0;bottom:0;right:0;width:30px;z-index:4;
+    flex-direction:column;align-items:center;gap:10px;padding:11px 0 0;
+    border:0;border-left:1px solid var(--line);background:var(--surface);
+    color:var(--ink-2);font-family:inherit;font-size:12px;cursor:pointer}
+  body.sheet-open .sheetgrip{right:290px}
+  .sheetgrip:hover{background:var(--surface-2)}
+  .grip-bar{width:4px;height:26px;border-radius:2px;background:var(--line-2);flex:0 0 auto}
+  /* Turned on its side it reads as a tab down the edge, and it names the open thing for
+     the same reason the handle does in portrait. */
+  .grip-label{writing-mode:vertical-rl;max-height:calc(100% - 48px);
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+    font-weight:600;color:var(--ink)}
+  #viewhdr{padding:11px 14px 9px}
+  #insp{padding:12px 14px 22px}
+  /* Same control as portrait, same place on the panel; only the containing block differs */
+  .panelclose{display:flex;position:absolute;top:8px;right:10px;z-index:5;
+    align-items:center;justify-content:center;width:28px;height:28px;padding:0;
+    border:1px solid var(--line-2);border-radius:7px;background:var(--surface);
+    color:var(--ink-2);cursor:pointer}
+  .panelclose svg{width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:1.7;
+    stroke-linecap:round}
+  .panelclose:hover{background:var(--surface-2);border-color:var(--accent);color:var(--accent)}
+  body:not(.sheet-open) .panelclose{display:none}
+  /* Opened, the tables are what the reader came for. 40% of a 314px stage is 126px. */
+  .stage.split svg{height:38%}
+  .stage.split #tables{height:62%}
+  .stage.has-tables.split .hint{bottom:calc(62% + 10px)}
+}
+
+@media (prefers-reduced-motion:reduce){.shell{transition:none}}
+
+@media (prefers-reduced-motion:reduce){aside{transition:none}}
+
+/* Anything without a hover — the hover-to-isolate affordance does not exist there. */
+@media (pointer:coarse){
+  .hint span:last-child{display:none}
+}
