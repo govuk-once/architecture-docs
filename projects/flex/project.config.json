@@ -9,6 +9,7 @@
   "iconLabel": "AWS icons",
   "filterHint": "Filter — try isolated, KMS, 365 days, alarm",
   "softBudget": 7,
+  "placementBudget": 74,
   "kinds": [
     {
       "id": "person",

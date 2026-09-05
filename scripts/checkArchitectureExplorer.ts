@@ -40,6 +40,8 @@ import { type Project, selectProjects } from "./lib/projects.js";
  * ratchet exists to stop.
  */
 const softBudget = (project: Project) => project.config.softBudget ?? 0;
+const placementBudget = (project: Project) =>
+  project.config.placementBudget ?? 0;
 
 /** Type-only, so it is erased at runtime and the import below stays optional. */
 type ChromiumLauncher = typeof import("playwright").chromium;
@@ -77,10 +79,22 @@ async function main() {
   /** One row per page checked, so the verdict is given per project and then overall. */
   const scores = new Map<
     string,
-    { hard: number; soft: number; budget: number }
+    {
+      hard: number;
+      soft: number;
+      budget: number;
+      place: number;
+      placeBudget: number;
+    }
   >();
   const score = (id: string) => {
-    const at = scores.get(id) ?? { hard: 0, soft: 0, budget: 0 };
+    const at = scores.get(id) ?? {
+      hard: 0,
+      soft: 0,
+      budget: 0,
+      place: 0,
+      placeBudget: 0,
+    };
     scores.set(id, at);
     return at;
   };
@@ -258,6 +272,7 @@ async function main() {
     const PAGE = project.pagePath;
     const tally = score(project.id);
     tally.budget = softBudget(project);
+    tally.placeBudget = placementBudget(project);
     console.log(`\n${project.id}: ${path.relative(DOCS_ROOT, PAGE)}`);
     for (const colorScheme of ["light", "dark"] as const) {
       const page = await browser.newPage({
@@ -316,16 +331,22 @@ async function main() {
          text, so without the real faces none of it means anything. */
         if (fontsLoaded)
           tally.soft += r.cross.length + r.onBox.length + r.clash.length;
+        tally.place += r.upward.length + r.diagonal.length + r.tail.length;
         console.log(
           `  ${tab.padEnd(13)}${String(r.nodes).padStart(3)} boxes ${String(r.edges).padStart(3)} lines` +
             ` · overflow ${String(r.over.length)} · crossings ${String(r.cross.length)}` +
-            ` · label-on-box ${String(r.onBox.length)} · label-clash ${String(r.clash.length)}`,
+            ` · label-on-box ${String(r.onBox.length)} · label-clash ${String(r.clash.length)}` +
+            ` · up ${String(r.upward.length)} · diagonal ${String(r.diagonal.length)}` +
+            ` · zone-tail ${String(r.tail.length)}`,
         );
         for (const [label, list] of [
           ["overflow", fontsLoaded ? r.over : []],
           ["crossing", r.cross],
           ["on box", r.onBox],
           ["clash", r.clash],
+          ["upward", r.upward],
+          ["diagonal", r.diagonal],
+          ["zone tail", r.tail],
         ] as const)
           if (list.length)
             console.log(`      ${label}: ${list.slice(0, 3).join(" | ")}`);
@@ -389,25 +410,38 @@ async function main() {
 
   console.log("");
   let failed = 0;
-  for (const [id, { hard, soft, budget }] of scores) {
-    const over = soft > budget;
+  for (const [id, { hard, soft, budget, place, placeBudget }] of scores) {
+    const over = soft > budget || place > placeBudget;
     console.log(
-      `${id.padEnd(12)} hard ${String(hard)} · soft ${String(soft)} of ${String(budget)}`,
+      `${id.padEnd(12)} hard ${String(hard)} · soft ${String(soft)} of ${String(budget)}` +
+        (placeBudget || place
+          ? ` · placement ${String(place)} of ${String(placeBudget)}`
+          : ""),
     );
     if (hard)
       console.log(
         `  FAIL — ${String(hard)} hard defect(s). Text must fit, every target must ` +
           `open, every tab keeps its audience, no errors.`,
       );
-    else if (over)
+    else if (soft > budget)
       console.log(
         `  FAIL — soft geometry rose to ${String(soft)}, above the ${String(budget)} ` +
           `ratchet. Fix the layout, or raise softBudget in ` +
           `projects/${id}/project.config.json deliberately and say why.`,
       );
+    else if (place > placeBudget)
+      console.log(
+        `  FAIL — placement rose to ${String(place)}, above the ${String(placeBudget)} ` +
+          `ratchet. See projects/CANVAS.md rules 1, 3 and 5, or raise placementBudget in ` +
+          `projects/${id}/project.config.json deliberately and say why.`,
+      );
     else if (soft < budget)
       console.log(
         `  PASS — and soft geometry improved; lower softBudget to ${String(soft)} to lock it in.`,
+      );
+    else if (place < placeBudget)
+      console.log(
+        `  PASS — and placement improved; lower placementBudget to ${String(place)} to lock it in.`,
       );
     if (hard || over) failed++;
   }
@@ -428,6 +462,9 @@ function measure() {
       cross: [] as string[],
       onBox: [] as string[],
       clash: [] as string[],
+      upward: [] as string[],
+      diagonal: [] as string[],
+      tail: [] as string[],
     };
   const nodes = [...document.querySelectorAll("#root .node")];
   const boxes = nodes.map((g) => ({
@@ -450,6 +487,87 @@ function measure() {
         over.push(`${g.getAttribute("aria-label") ?? ""} · ${t.textContent}`);
     });
   });
+  /*
+   * Placement rules 1, 3 and 5 from projects/CANVAS.md, which until now were prose an
+   * author was trusted to have followed:
+   *
+   *   1. flow runs top to bottom — a line that has to go up is a placement error
+   *   3. an edge's endpoints share a column or a row, never a diagonal across the canvas
+   *   5. a zone ends at its last box — a tall empty tail invites a line through it
+   *
+   * Measured off the drawn path rather than the model, so what is counted is what a
+   * reader sees. The 24px tolerance on a diagonal is the difference between "not quite
+   * aligned" and "across the canvas"; the rule objects to the second.
+   */
+  const upward: string[] = [];
+  const diagonal: string[] = [];
+  const rects = [...document.querySelectorAll("#root .node")].map((g) =>
+    (g.querySelector(".box") as SVGGraphicsElement).getBBox(),
+  );
+  /*
+   * Which boxes an edge joins, found from where its path starts and ends: a route leaves
+   * one box's perimeter and arrives at another's. The rule is about where the boxes sit,
+   * not where the line happens to enter them — a route may leave a side and arrive at a
+   * top while the two boxes still share a column, and that is not what rule 3 objects to.
+   */
+  const nearest = (pt: DOMPoint) => {
+    let best: DOMRect | null = null;
+    let bestD = Infinity;
+    for (const r of rects) {
+      const dx = Math.max(r.x - pt.x, 0, pt.x - (r.x + r.width));
+      const dy = Math.max(r.y - pt.y, 0, pt.y - (r.y + r.height));
+      const d = dx * dx + dy * dy;
+      if (d < bestD) {
+        bestD = d;
+        best = r;
+      }
+    }
+    return bestD <= 900 ? best : null;
+  };
+  document.querySelectorAll("#root .edge .line").forEach((p) => {
+    const el = p as SVGPathElement;
+    const len = el.getTotalLength();
+    if (!len) return;
+    const a = nearest(el.getPointAtLength(0));
+    const b = nearest(el.getPointAtLength(len));
+    if (!a || !b || a === b) return;
+    const label = el.closest(".edge")?.getAttribute("aria-label") ?? "";
+    if (b.y + b.height / 2 < a.y + a.height / 2 - 8) upward.push(label);
+    const gapX = Math.max(
+      0,
+      Math.max(a.x, b.x) - Math.min(a.x + a.width, b.x + b.width),
+    );
+    const gapY = Math.max(
+      0,
+      Math.max(a.y, b.y) - Math.min(a.y + a.height, b.y + b.height),
+    );
+    if (gapX > 24 && gapY > 24) diagonal.push(label);
+  });
+
+  const tail: string[] = [];
+  document.querySelectorAll("#root .zone").forEach((z) => {
+    const zb = (
+      z.querySelector("rect") as SVGGraphicsElement | null
+    )?.getBBox();
+    if (!zb) return;
+    let bottom = -Infinity;
+    for (const g of document.querySelectorAll("#root .node")) {
+      const nb = (g.querySelector(".box") as SVGGraphicsElement).getBBox();
+      if (
+        nb.x >= zb.x &&
+        nb.y >= zb.y &&
+        nb.x + nb.width <= zb.x + zb.width &&
+        nb.y + nb.height <= zb.y + zb.height
+      )
+        bottom = Math.max(bottom, nb.y + nb.height);
+    }
+    if (bottom > -Infinity && zb.y + zb.height - bottom > 60)
+      tail.push(
+        `${z.getAttribute("aria-label") ?? ""} runs ` +
+          `${String(Math.round(zb.y + zb.height - bottom))}px past its last box`,
+      );
+  });
+
   const cross = new Set<string>();
   document.querySelectorAll("#root .edge .line").forEach((p) => {
     const el = p as SVGPathElement;
@@ -506,6 +624,9 @@ function measure() {
     cross: [...cross],
     onBox,
     clash,
+    upward,
+    diagonal,
+    tail,
   };
 }
 

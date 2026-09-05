@@ -35,6 +35,19 @@ rise, and when the check reports fewer than the budget, lower the budget to lock
 Zero is achievable on a 29-box view and is the target; a budget above zero is a debt with
 a reason in the commit.
 
+Placement: rules 1, 3 and 5 below are geometry, so they are counted rather than trusted,
+on every canvas tab. `placementBudget` is a second ratchet with the same rule as the
+first — it may fall, never rise. FLEX opens at 74, which is a debt, not a target: 26 lines
+that run upward, 40 that cross the canvas diagonally, and 8 zones with an empty tail.
+
+- **upward** — an edge whose target box sits above its source. Rule 1 exempts a return
+  path and nothing in the model marks one, so a genuine return path stays in the budget.
+- **diagonal** — the two boxes clear each other by more than 24px in _both_ axes, so the
+  line has to travel across the canvas rather than down a column or along a row. Measured
+  between the boxes, not between the ends of the drawn route: a route may leave a side and
+  arrive at a top while the boxes still share a column, and that is not what rule 3 means.
+- **zone tail** — a zone running more than 60px past its last box.
+
 ## Rules for placement
 
 1. **Flow runs top to bottom.** The caller at the top, the edge below it, ingress below
