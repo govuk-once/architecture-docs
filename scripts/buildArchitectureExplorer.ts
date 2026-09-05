@@ -29,6 +29,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 
 import { check } from "prettier";
 
@@ -210,7 +211,7 @@ function page(title: string, head: string, body: string): string {
 type Plane = "request" | "control";
 
 /** The payload behind every clickable thing: what it is, and the code that proves it. */
-interface Detail {
+export interface Detail {
   facts: string[];
   code?: string[][];
   type?: string;
@@ -223,7 +224,7 @@ interface Detail {
   carries?: string;
 }
 
-interface Box {
+export interface Box {
   id: string;
   label: string;
   x: number;
@@ -233,7 +234,7 @@ interface Box {
   d: Detail;
 }
 
-interface ViewNode extends Box {
+export interface ViewNode extends Box {
   sub: string;
   kind: string;
   plane: Plane;
@@ -241,11 +242,11 @@ interface ViewNode extends Box {
   icon?: string;
 }
 
-interface Zone extends Box {
+export interface Zone extends Box {
   hard: boolean;
 }
 
-interface Edge {
+export interface Edge {
   from: string;
   to: string;
   label: string;
@@ -288,7 +289,7 @@ interface DocGroup {
   items: DocItem[];
 }
 
-interface View {
+export interface View {
   id: string;
   name: string;
   order: number;
@@ -335,7 +336,7 @@ function checkAngleBrackets(views: View[]) {
     );
 }
 
-function checkGeometry(views: View[], kindIds: Set<string>) {
+export function checkGeometry(views: View[], kindIds: Set<string>) {
   const problems: string[] = [];
   for (const v of views) {
     const nodes = v.nodes ?? [];
@@ -894,4 +895,12 @@ async function main() {
   );
 }
 
-await main();
+/*
+ * Runs when invoked, not when imported. The gates below are the product — a regression
+ * that stops one *catching* things fails nothing — so they have to be reachable from a
+ * test without the script executing against a real project on import.
+ */
+const invokedDirectly =
+  process.argv[1] !== undefined &&
+  import.meta.url === pathToFileURL(process.argv[1]).href;
+if (invokedDirectly) await main();

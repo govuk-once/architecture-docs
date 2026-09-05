@@ -178,3 +178,62 @@ jobs:
       - name: Deploy
         id: deploy
         uses: actions/deploy-pages@v4
+
+  # A scheduled run is the only thing that notices a documented repository moving between
+  # one manual run and the next, and a scheduled run that fails is invisible: no pull
+  # request shows it, and nobody is watching the Actions tab on a Tuesday. This one failed
+  # every day for a week — `Input required and not supplied: token`, from a checkout step
+  # that still wanted a secret for a repository that had since gone public — and the first
+  # anyone knew of it was somebody going to look. Silence is the failure mode; an issue is
+  # the fix, because an issue is the one thing in a repository that stays until answered.
+  report-schedule:
+    name: Report the scheduled run
+    needs: build
+    if: always() && github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - name: Open, update or close the alarm
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OUTCOME: ${{ needs.build.result }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          title='Scheduled build is failing'
+          # Matched on title rather than a label, because a label has to exist first and a
+          # missing one would fail the very step meant to raise the alarm.
+          number=$(gh issue list --state open --limit 50 --json number,title \
+            --jq ".[] | select(.title == \"$title\") | .number" | head -1)
+
+          if [ "$OUTCOME" = 'success' ]; then
+            if [ -n "$number" ]; then
+              gh issue comment "$number" --body "Fixed: the scheduled build passed again. $RUN_URL"
+              gh issue close "$number"
+              echo "closed #$number — the scheduled build is green again"
+            else
+              echo "scheduled build green, nothing to close"
+            fi
+            exit 0
+          fi
+
+          body=$(printf '%s\n' \
+            "The scheduled build failed: $RUN_URL" \
+            "" \
+            "This run is the only thing that notices a documented repository changing" \
+            "between manual runs. While it is failing, the diagrams can drift and nothing" \
+            "here will say so — the site keeps serving whatever was published last." \
+            "" \
+            "This issue is updated on each further failure and closed automatically when a" \
+            "scheduled run passes again.")
+
+          if [ -n "$number" ]; then
+            gh issue comment "$number" --body "$body"
+            echo "commented on #$number"
+          else
+            gh issue create --title "$title" --body "$body"
+            echo "opened a new alarm issue"
+          fi

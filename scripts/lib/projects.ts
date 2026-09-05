@@ -232,7 +232,12 @@ function readConfig(id: string, file: string): ProjectConfig {
   return { ...(cfg as ProjectConfig), planes: cfg.planes ?? DEFAULT_PLANES };
 }
 
-function toProject(id: string): Project {
+/**
+ * A project directory read as a project. Exported so `projects/_template` — which no
+ * site config lists, and which nothing therefore builds — can still be held to the same
+ * contract as a real one.
+ */
+export function toProject(id: string): Project {
   const dir = path.join(PROJECTS_DIR, id);
   if (!existsSync(dir))
     throw new Error(

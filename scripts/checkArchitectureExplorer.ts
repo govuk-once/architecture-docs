@@ -16,6 +16,7 @@
 import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 
 import type { ConsoleMessage, Page } from "playwright";
 
@@ -450,7 +451,7 @@ async function main() {
 }
 
 /** Runs inside the page. Geometry is measured, never eyeballed. */
-function measure() {
+export function measure() {
   if (document.getElementById("doc")?.hidden === false)
     return {
       doc: true,
@@ -648,7 +649,7 @@ function measure() {
  * can reach. This is the exact thing that breaks silently: swapping a word for a glyph
  * looks finished, and the button is simply unusable without sight of it.
  */
-function namelessIcons(): string[] {
+export function namelessIcons(): string[] {
   const out: string[] = [];
   for (const b of document.querySelectorAll("button")) {
     if (b.textContent.trim()) continue;
@@ -897,7 +898,7 @@ async function menuChecks(page: Page): Promise<string[]> {
   return bad;
 }
 
-function measureNarrow(): string[] {
+export function measureNarrow(): string[] {
   const out: string[] = [];
   const doc = document.documentElement;
   if (doc.scrollWidth > window.innerWidth + 1)
@@ -988,4 +989,12 @@ async function auditTargets() {
   return { n, empty, noAudience: [...new Set(noAudience)] };
 }
 
-await main();
+/*
+ * Runs when invoked, not when imported. The gates below are the product — a regression
+ * that stops one *catching* things fails nothing — so they have to be reachable from a
+ * test without the script executing against a real project on import.
+ */
+const invokedDirectly =
+  process.argv[1] !== undefined &&
+  import.meta.url === pathToFileURL(process.argv[1]).href;
+if (invokedDirectly) await main();

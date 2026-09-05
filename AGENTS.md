@@ -149,6 +149,26 @@ cited files have been re-read; only `pnpm drift <id> --mark-read` advances it. S
 of `build` and `drift` no longer matters, and `pnpm drift <id> --since <sha>` still asks
 about any range if you need one.
 
+## The gates have tests, and the tests have to fail
+
+Every rule the build refuses and every number the render check counts is covered by
+`scripts/buildArchitectureExplorer.test.ts` and `scripts/checkArchitectureExplorer.test.ts`.
+The first is pure and fast; the second builds small SVG fixtures and measures them in
+Chromium, because `getBBox` and `getPointAtLength` return nothing useful outside a browser.
+
+A gate that stops catching things fails nothing, and looks exactly like a gate with nothing
+to catch. So when you add one:
+
+- give it a fixture it **must** reject and one it **must not** — a rule tested only against
+  something that passes is a rule you have not tested
+- break the rule in the source and watch the test fail before you believe it. Every counter
+  in there was confirmed that way
+
+`projects/_template` is covered too, in `scripts/lib/projects.test.ts`: no site config
+lists it, so nothing builds it, and the claim it carries — that a second architecture is
+config rather than TypeScript — would otherwise be found broken by the first person to
+rely on it.
+
 ## Never carry a claim forward on trust
 
 This is the rule that matters most, and it is why this repository exists rather than a folder
