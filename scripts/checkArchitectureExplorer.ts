@@ -713,6 +713,9 @@ const SHAPES = [
   { label: "portrait 390", width: 390, height: 844 },
   { label: "landscape 844", width: 844, height: 390 },
   { label: "tablet 768", width: 768, height: 1024 },
+  // A resized browser window, which is neither a phone nor a desktop and was where the
+  // panel ended up under the canvas with nowhere to be read.
+  { label: "window 917", width: 917, height: 544 },
 ] as const;
 
 const AXE = createRequire(import.meta.url).resolve("axe-core/axe.min.js");
@@ -967,6 +970,33 @@ export function measureNarrow(): string[] {
    * the reference tables strip came to be drawn off the bottom of every canvas view with
    * no gate saying a word. Occlusion, not overflow, so it needs its own measurement.
    */
+  /*
+   * The panel has to be on the screen. Where it is not a sheet or a rail — which are
+   * deliberately tucked away and have a handle saying so — it is the thing a reader
+   * consults while looking at the diagram, and a panel below the fold is a panel they
+   * will not find. Stacking it under the canvas put it at y=447 of a 544px window with
+   * 97px left to read through, at every width from 768 to 1080.
+   */
+  const panel = document.querySelector("aside");
+  const handle = document.getElementById("sheetgrip");
+  const tucked = handle ? getComputedStyle(handle).display !== "none" : false;
+  if (panel && !tucked) {
+    const box = panel.getBoundingClientRect();
+    // How much of it a reader can actually see without scrolling.
+    const shown =
+      Math.min(box.bottom, window.innerHeight) - Math.max(box.top, 0);
+    if (box.top >= window.innerHeight - 4)
+      out.push(
+        `the details panel starts at ${String(Math.round(box.top))}px in a ` +
+          `${String(window.innerHeight)}px window — it is off the screen entirely`,
+      );
+    else if (shown < 160)
+      out.push(
+        `the details panel has ${String(Math.round(shown))}px of the window to be read ` +
+          `through — seat it beside the canvas, not under it`,
+      );
+  }
+
   const sheet = document.querySelector("aside");
   if (sheet && getComputedStyle(sheet).position === "fixed") {
     const top = sheet.getBoundingClientRect().top;

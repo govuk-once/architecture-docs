@@ -305,8 +305,16 @@ td code{font-size:11.5px}
   /* The strapline wrapped to two lines and took the header with it. It truncates
      rather than being dropped, because there is room for most of it at these widths. */
   .brand span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
-  .shell{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(340px,58vh) auto}
-  aside{border-left:0;border-top:1px solid var(--line)}
+  /*
+   * Beside the canvas, not under it. Stacking bought the canvas the full width and cost
+   * the panel its place on the screen: at 917x544 the canvas took 340px, the panel began
+   * at 447px and had 97px left to be read through, which is not reading. The canvas pans
+   * and zooms and can afford to be narrower; the panel cannot afford to be off-screen.
+   */
+  .shell{grid-template-columns:minmax(0,1fr) 300px;grid-template-rows:minmax(0,1fr)}
+  aside{border-left:1px solid var(--line);border-top:0}
+  #viewhdr{padding:14px 16px 12px}
+  #insp{padding:16px 16px 28px}
 }
 
 /* ---------- tables under a diagram ---------- */
