@@ -485,7 +485,18 @@ export function measure() {
        * describes this machine.
        */
       if (bb.x + bb.width > b.x + b.width - 10)
-        over.push(`${g.getAttribute("aria-label") ?? ""} · ${t.textContent}`);
+        /*
+         * With the numbers, because "this text overflows" is not actionable on a machine
+         * you cannot open. Three boxes failed here that clear their edge by 20px locally,
+         * and naming the box said nothing about whether the text was wider than expected
+         * or the font was not the one intended.
+         */
+        over.push(
+          `${g.getAttribute("aria-label") ?? ""} · "${t.textContent}" ` +
+            `text ${bb.width.toFixed(1)}px in a ${b.width.toFixed(0)}px box, ` +
+            `clears the edge by ${(b.x + b.width - (bb.x + bb.width)).toFixed(1)}px ` +
+            `[${getComputedStyle(t).fontFamily.split(",")[0]}]`,
+        );
       /*
        * Downwards too. A box holds a label and a sub at a fixed offset, so one sized for
        * a label alone puts the sub through its own bottom border — which is what a 32px
