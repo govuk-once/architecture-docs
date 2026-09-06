@@ -184,10 +184,50 @@ function resolvePath(
   return node as StageCounts | undefined;
 }
 
-const FONTS =
-  '<link rel="preconnect" href="https://fonts.googleapis.com">\n' +
-  '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>\n' +
-  '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">';
+/*
+ * The faces, inlined. `explorer/README.md` has always said a page has to stay single-file
+ * because it is opened straight off disk and published as a shareable artifact — and until
+ * now it fetched its fonts from Google on every open, which made that untrue twice over: a
+ * public page documenting a government platform sent every reader's address to a third
+ * party, and anybody offline got fallback metrics, which is exactly what the geometry
+ * gates measure. Subset to the characters the site renders by `pnpm fonts`, which is the
+ * only thing here that touches the network.
+ */
+function inlineFonts(): string {
+  const dir = inDocs("explorer", "fonts");
+  const manifest = path.join(dir, "fonts.json");
+  if (!existsSync(manifest)) return "";
+  const { faces } = JSON.parse(readFileSync(manifest, "utf8")) as {
+    faces: { family: string; weight: string; file: string }[];
+  };
+  const rules = faces.map((f) => {
+    const b64 = readFileSync(path.join(dir, f.file)).toString("base64");
+    return (
+      `@font-face{font-family:"${f.family}";font-style:normal;` +
+      `font-weight:${f.weight};font-display:swap;` +
+      `src:url(data:font/woff2;base64,${b64}) format("woff2")}`
+    );
+  });
+  return `<style>${rules.join("")}</style>`;
+}
+
+/** The characters the committed faces were subset to, or none if they are absent. */
+function fontCharset(): string {
+  const manifest = inDocs("explorer", "fonts", "fonts.json");
+  if (!existsSync(manifest)) return "";
+  return (JSON.parse(readFileSync(manifest, "utf8")) as { charset: string })
+    .charset;
+}
+
+/** A node fanning out to two, which is what every diagram here is a version of. */
+function inlineFavicon(): string {
+  const file = inDocs("explorer", "favicon.svg");
+  if (!existsSync(file)) return "";
+  const b64 = readFileSync(file).toString("base64");
+  return `<link rel="icon" href="data:image/svg+xml;base64,${b64}">`;
+}
+
+const FONTS = inlineFonts() + "\n" + inlineFavicon();
 
 /** The theme choice is the reader's and this is one site, so every page shares one key. */
 const THEME_KEY = "arch-theme";
@@ -334,6 +374,41 @@ function checkAngleBrackets(views: View[]) {
     throw new Error(
       `raw angle brackets found — use {stage}, {domain} etc instead:\n  ${bad.join("\n  ")}`,
     );
+}
+
+/**
+ * Every character the page will render has to exist in the faces it carries.
+ *
+ * Subsetting the fonts to what the site uses buys a page a fifth the size, and costs it
+ * this: a model edit that reaches for a glyph outside the set renders a blank box, and
+ * nothing else here would notice. The set is generous and lives in the manifest `pnpm
+ * fonts` writes, so this compares the page against exactly what was fetched.
+ */
+export function checkGlyphs(views: unknown, charset: string): string[] {
+  const have = new Set(charset);
+  const missing = new Map<string, string>();
+  const walk = (node: unknown, where: string) => {
+    if (typeof node === "string") {
+      for (const ch of node)
+        if (!have.has(ch) && ch >= " " && !missing.has(ch))
+          missing.set(ch, where);
+      return;
+    }
+    if (Array.isArray(node)) {
+      for (const v of node) walk(v, where);
+      return;
+    }
+    if (node && typeof node === "object")
+      for (const [k, v] of Object.entries(node as Record<string, unknown>))
+        walk(v, k === "id" || k === "name" ? String(v) : where);
+  };
+  walk(views, "model");
+  return [...missing].map(
+    ([ch, where]) =>
+      `"${ch}" (U+${ch.codePointAt(0)?.toString(16).toUpperCase().padStart(4, "0") ?? ""}) ` +
+      `near ${where} is not in the subset — add it to CHARSET in scripts/fetchFonts.ts ` +
+      `and run \`pnpm fonts\``,
+  );
 }
 
 export function checkGeometry(views: View[], kindIds: Set<string>) {
@@ -694,6 +769,7 @@ async function buildProject(project: Project): Promise<Built> {
         ]),
     ...checkKindStyles(project),
     ...checkGeometry(views, kindIds),
+    ...checkGlyphs(views, fontCharset()),
     ...checkPlacement(project, views),
     ...checkDashLegend(views),
     ...checkDerivedCounts(project, views),

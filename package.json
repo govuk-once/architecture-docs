@@ -16,7 +16,8 @@
     "serve": "pnpm build && tsx scripts/serveArchitectureDocs.ts",
     "tsc": "tsc --noEmit",
     "lint": "eslint --max-warnings=0 .",
-    "test": "vitest --passWithNoTests"
+    "test": "vitest --passWithNoTests",
+    "fonts": "tsx scripts/fetchFonts.ts"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

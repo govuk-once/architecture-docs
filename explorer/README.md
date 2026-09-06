@@ -5,20 +5,37 @@ architecture arrives as data the build injects above `app.js`; everything specif
 site arrives the same way on the index page. That is what makes a second architecture a
 directory under [`../projects/`](../projects/) rather than a fork of this one.
 
-| File         | What it is                                                                    |
-| ------------ | ----------------------------------------------------------------------------- |
-| `theme.css`  | Colour, type and the page reset. Inlined first on every page the build writes |
-| `styles.css` | The explorer's own layout: header, canvas, inspector, reference tables        |
-| `shell.html` | The explorer's markup                                                         |
-| `app.js`     | Renderer, edge routing, pan/zoom, inspector, stage selector                   |
-| `icons.svg`  | AWS service icons as `<symbol>` defs, inlined whole so a page stays one file  |
-| `index.html` | The frame of the index page over the projects, and its theme toggle           |
-| `index.css`  | The index page's layout                                                       |
+| File          | What it is                                                                    |
+| ------------- | ----------------------------------------------------------------------------- |
+| `theme.css`   | Colour, type and the page reset. Inlined first on every page the build writes |
+| `styles.css`  | The explorer's own layout: header, canvas, inspector, reference tables        |
+| `shell.html`  | The explorer's markup                                                         |
+| `app.js`      | Renderer, edge routing, pan/zoom, inspector, stage selector                   |
+| `icons.svg`   | AWS service icons as `<symbol>` defs, inlined whole so a page stays one file  |
+| `index.html`  | The frame of the index page over the projects, and its theme toggle           |
+| `index.css`   | The index page's layout                                                       |
+| `fonts/`      | The two typefaces, subset and committed; `pnpm fonts` refetches them          |
+| `favicon.svg` | The tab icon, inlined as a data URI                                           |
 
 Nothing here is served directly. [`../scripts/buildArchitectureExplorer.ts`](../scripts/buildArchitectureExplorer.ts)
 inlines it into `site/<id>/index.html` for each project and `site/index.html` for the index,
 because a page has to stay single-file: it is opened straight off disk and published as a
 shareable artifact, and neither can fetch a sibling file.
+
+Single-file means it, now. The page used to fetch IBM Plex from Google on every open —
+five third-party requests, which made a page opened off disk depend on the network, sent
+every reader of a public government page to a third party, and left anyone offline reading
+fallback metrics, which is the very thing the geometry gates measure. The faces are
+committed under `fonts/`, subset by `pnpm fonts` to the characters the site renders, and
+inlined as base64. `pnpm fonts` is the only command here that touches the network; a build
+that reaches for it is a build that fails on a train.
+
+Subsetting costs one thing, and the build checks it: a model reaching for a glyph outside
+the set would render a blank box, so `checkGlyphs` compares every string in the model
+against the manifest and names the character, its code point, and what to do about it.
+
+Sans is one variable face covering 400-700 in 31KB; Mono has no variable build, so it is
+three static weights. Together about 52KB, against 139KB for seven static faces.
 
 Two things are deliberately not per project:
 
