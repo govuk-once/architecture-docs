@@ -48,6 +48,13 @@ that run upward, 40 that cross the canvas diagonally, and 8 zones with an empty 
   arrive at a top while the boxes still share a column, and that is not what rule 3 means.
 - **zone tail** — a zone running more than 60px past its last box.
 
+Design to the wider platform, and do not trust a local pass. Linux Chromium renders IBM
+Plex about **17% wider** than macOS at 13px — "OpenAPI breaking check" is 140.6px here and
+164.9px on CI. A box clearing its edge by 20px on a Mac can clear it by 5px on CI and fail
+the render check there. The build's static rule is calibrated to the wider platform for
+exactly this reason; the render check can only measure the machine it runs on, and on a Mac
+it under-reports.
+
 ## Rules for placement
 
 1. **Flow runs top to bottom.** The caller at the top, the edge below it, ingress below

@@ -495,7 +495,7 @@ export function measure() {
           `${g.getAttribute("aria-label") ?? ""} · "${t.textContent}" ` +
             `text ${bb.width.toFixed(1)}px in a ${b.width.toFixed(0)}px box, ` +
             `clears the edge by ${(b.x + b.width - (bb.x + bb.width)).toFixed(1)}px ` +
-            `[${getComputedStyle(t).fontFamily.split(",")[0]}]`,
+            `[${getComputedStyle(t).fontFamily.split(",")[0] ?? "?"}]`,
         );
       /*
        * Downwards too. A box holds a label and a sub at a fixed offset, so one sized for
