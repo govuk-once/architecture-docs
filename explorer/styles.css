@@ -290,6 +290,21 @@ td code{font-size:11.5px}
 
 @media (max-width:1080px){
   .stagepick .eyebrow{display:none}
+  /*
+   * Below this the header cannot seat full stage names beside the controls: at 768px the
+   * row wanted 791px in 728 and wrapped to 136px, and the picker was 336px of it. The
+   * short form is each stage's id, which every project declares anyway.
+   */
+  .s-long{display:none}
+  .s-short{display:inline;text-transform:uppercase;letter-spacing:.04em}
+  .stagepick button{font-family:"IBM Plex Mono",monospace;font-weight:600}
+  /* Even then the row fits to the pixel, and text is wider on other platforms. The title
+     is the one thing here that can give, so let it truncate rather than push the row. */
+  .brand{min-width:0;flex:1 1 auto}
+  .brand h1{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
+  /* The strapline wrapped to two lines and took the header with it. It truncates
+     rather than being dropped, because there is room for most of it at these widths. */
+  .brand span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
   .shell{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(340px,58vh) auto}
   aside{border-left:0;border-top:1px solid var(--line)}
 }

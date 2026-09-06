@@ -231,15 +231,23 @@ async function main() {
 
     // The sheet and the menu exist only where the narrow layout does. In landscape the
     // panel is a column and there is no menu to open, so working them there tests nothing.
-    // The panel exists in both shapes — a sheet in portrait, a rail in landscape — so it
-    // is checked in both. The menu exists only where the header cannot seat the controls.
-    const broken = await panelChecks(page);
-    console.log(
-      `  ${"details panel".padEnd(13)}    ` +
-        (broken.length
-          ? `${String(broken.length)} defect(s)`
-          : "closed on load, opens on tap, handle and escape close it"),
-    );
+    /*
+     * The panel collapses in the shapes that cannot afford it — a sheet in portrait, a
+     * rail in landscape — and on a tablet it is a stacked column that should not collapse
+     * at all. Its handle is what says which, so that is what decides whether to work it.
+     */
+    const collapsible = await page.evaluate(() => {
+      const g = document.getElementById("sheetgrip");
+      return !!g && getComputedStyle(g).display !== "none";
+    });
+    const broken = collapsible ? await panelChecks(page) : [];
+    if (collapsible)
+      console.log(
+        `  ${"details panel".padEnd(13)}    ` +
+          (broken.length
+            ? `${String(broken.length)} defect(s)`
+            : "closed on load, opens on tap, handle and escape close it"),
+      );
     for (const line of broken) console.log(`      ${line}`);
     tally.hard += broken.length;
 
@@ -403,7 +411,7 @@ async function main() {
     // Portrait and landscape are two layouts, not one layout at two sizes: the first is
     // narrow with height to spare, the second is short with width to spare, and each was
     // broken at a point the other could not have found.
-    for (const shape of PHONES) await checkMobile(project, shape);
+    for (const shape of SHAPES) await checkMobile(project, shape);
   }
   await checkIndex();
 
@@ -694,10 +702,17 @@ export function namelessIcons(): string[] {
   return out;
 }
 
-/** The two shapes a phone actually presents. Widths chosen at the common device sizes. */
-const PHONES = [
+/**
+ * The shapes a reader actually holds. Two phones and a tablet, because the bugs have all
+ * been at the seams rather than the middle: the wide layout was served to a 390px-tall
+ * landscape phone, and the header wanted 791px in 728 on a tablet in portrait — a width
+ * above the narrow rules and below the desktop ones, which is to say a width no check was
+ * looking at. Every one of these was clean at 1440 and broken here.
+ */
+const SHAPES = [
   { label: "portrait 390", width: 390, height: 844 },
   { label: "landscape 844", width: 844, height: 390 },
+  { label: "tablet 768", width: 768, height: 1024 },
 ] as const;
 
 const AXE = createRequire(import.meta.url).resolve("axe-core/axe.min.js");
