@@ -147,6 +147,15 @@ describe("measure — soft geometry", () => {
     expect(r.cross).toEqual([]);
   });
 
+  it("counts a sub-label pushed through the bottom of a box sized for a label alone", async () => {
+    // The fixture puts the baseline at y+24, so the glyph box runs to roughly y+27: a
+    // 20px box cannot contain it however wide the box is, and a 60px one can.
+    const short = await measured(node("A", 40, 40, 400, 20, "fits across"));
+    expect(short.over.some((o) => o.includes("below its box"))).toBe(true);
+    const tall = await measured(node("A", 40, 40, 400, 60, "fits across"));
+    expect(tall.over).toEqual([]);
+  });
+
   it("counts label text that runs past its box, with the 10px margin", async () => {
     // The text starts 16px in and is far wider than the 200px box.
     const r = await measured(

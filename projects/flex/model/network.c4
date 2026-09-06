@@ -157,7 +157,7 @@ model {
       x '400'
       y '70'
       w '1000'
-      h '790'
+      h '744'
       boundary 'hard'
     }
 
@@ -177,7 +177,7 @@ model {
         x '430'
         y '200'
         w '940'
-        h '630'
+        h '590'
         boundary 'hard'
         resources [
           'vpc',
@@ -362,7 +362,7 @@ model {
           x '456'
           y '584'
           w '600'
-          h '216'
+          h '152'
           boundary 'soft'
           resources [
             'subnets-isolated',

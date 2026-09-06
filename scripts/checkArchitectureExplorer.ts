@@ -486,6 +486,16 @@ export function measure() {
        */
       if (bb.x + bb.width > b.x + b.width - 10)
         over.push(`${g.getAttribute("aria-label") ?? ""} · ${t.textContent}`);
+      /*
+       * Downwards too. A box holds a label and a sub at a fixed offset, so one sized for
+       * a label alone puts the sub through its own bottom border — which is what a 32px
+       * trigger box was doing on Delivery, past every gate, because they all measured
+       * width and none measured height.
+       */
+      if (bb.y + bb.height > b.y + b.height)
+        over.push(
+          `${g.getAttribute("aria-label") ?? ""} · "${t.textContent}" sits below its box`,
+        );
     });
   });
   /*
@@ -546,14 +556,25 @@ export function measure() {
   });
 
   const tail: string[] = [];
-  document.querySelectorAll("#root .zone").forEach((z) => {
+  const zoneEls = [...document.querySelectorAll("#root .zone")];
+  zoneEls.forEach((z) => {
     const zb = (
       z.querySelector("rect") as SVGGraphicsElement | null
     )?.getBBox();
     if (!zb) return;
     let bottom = -Infinity;
-    for (const g of document.querySelectorAll("#root .node")) {
-      const nb = (g.querySelector(".box") as SVGGraphicsElement).getBBox();
+    /*
+     * A zone holds zones as well as boxes. Measuring only the boxes calls a zone empty
+     * below its last box while a whole nested zone sits in that space — half of what this
+     * rule first reported was that, and shrinking those would have cropped a child.
+     */
+    const held = [
+      ...document.querySelectorAll("#root .node .box"),
+      ...zoneEls.filter((o) => o !== z).map((o) => o.querySelector("rect")),
+    ];
+    for (const el of held) {
+      if (!el) continue;
+      const nb = (el as SVGGraphicsElement).getBBox();
       if (
         nb.x >= zb.x &&
         nb.y >= zb.y &&

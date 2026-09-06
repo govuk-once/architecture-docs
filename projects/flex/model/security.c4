@@ -138,7 +138,7 @@ model {
       x '470'
       y '930'
       w '340'
-      h '220'
+      h '136'
       boundary 'hard'
       resources [
         'nat',
@@ -176,7 +176,7 @@ model {
       x '1680'
       y '130'
       w '340'
-      h '1090'
+      h '936'
       boundary 'hard'
     }
   }
@@ -194,7 +194,7 @@ model {
       x '440'
       y '1360'
       w '1200'
-      h '170'
+      h '126'
       boundary 'hard'
     }
   }

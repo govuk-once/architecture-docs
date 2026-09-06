@@ -133,10 +133,10 @@ model {
         ]
         sourceId 'ghpr'
         order '4'
-        x '46'
-        y '371'
+        x '247'
+        y '348'
         w '240'
-        h '32'
+        h '54'
         ownership 'third'
       }
     }
@@ -347,7 +347,7 @@ model {
       x '23'
       y '800'
       w '707'
-      h '197'
+      h '150'
       boundary 'soft'
     }
 
@@ -874,7 +874,7 @@ model {
       x '1482'
       y '65'
       w '456'
-      h '933'
+      h '829'
       boundary 'soft'
     }
 
