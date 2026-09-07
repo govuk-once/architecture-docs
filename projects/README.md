@@ -201,20 +201,23 @@ artifact, and neither can fetch a sibling file.
 `project.config.json` holds everything true of one architecture rather than of the site or
 of the renderer. The directory name is the id: it names the URL and prefixes exported files.
 
-| Field              | What it does                                                                                                  |
-| ------------------ | ------------------------------------------------------------------------------------------------------------- |
-| `name`             | Short name, on the index card                                                                                 |
-| `title`, `tagline` | The browser tab and the header brand                                                                          |
-| `blurb`            | One paragraph on the index card: what this architecture is                                                    |
-| `repo`             | Base URL that every `code` citation links against                                                             |
-| `inventoryView`    | Which view is the resource inventory — `resources` here                                                       |
-| `iconLabel`        | Names the service-icon control, for readers and screen readers                                                |
-| `filterHint`       | Placeholder in the Resources filter box                                                                       |
-| `softBudget`       | How much soft geometry the render check allows this project — a ratchet, zero if unset                        |
-| `kinds`            | The ownership kinds: `id`, `label`, and the palette `colour` each uses                                        |
-| `stages`           | The stage selector: `id`, `label`, and `facts` — the name the same stage goes by in `architecture-facts.json` |
-| `source`           | `repo`, `ref` and `root`: the repository this documents and where its checkout lands                          |
-| `derive`           | Optional. `module` in `scripts/derive/`, and the `inputs` it reads. No block, no facts                        |
+| Field              | What it does                                                                                                   |
+| ------------------ | -------------------------------------------------------------------------------------------------------------- |
+| `name`             | Short name, on the index card                                                                                  |
+| `title`, `tagline` | The browser tab and the header brand                                                                           |
+| `blurb`            | One paragraph on the index card: what this architecture is                                                     |
+| `repo`             | Base URL that every `code` citation links against                                                              |
+| `inventoryView`    | Which view is the resource inventory — `resources` here                                                        |
+| `inventoryLabel`   | What the inventory's count line calls the things it counts — "AWS resources" here                              |
+| `iconLabel`        | Names the service-icon control, for readers and screen readers                                                 |
+| `filterHint`       | Placeholder in the Resources filter box                                                                        |
+| `softBudget`       | How much soft geometry the render check allows this project — a ratchet, zero if unset                         |
+| `placementBudget`  | The same ratchet for CANVAS.md's placement rules: upward edges, diagonals, zone tails. Zero if unset           |
+| `kinds`            | The ownership kinds: `id`, `label`, and the palette `colour` each uses                                         |
+| `stages`           | The stage selector: `id`, `label`, and `facts` — the name the same stage goes by in `architecture-facts.json`  |
+| `source`           | `repo`, `ref` and `root`: the repository this documents and where its checkout lands                           |
+| `synth`            | How to run the CDK app per stage: `cwd`, `command`, `env` with `{stage}` filled, `output`. Needed for `derive` |
+| `derive`           | Optional. `module`, the `inputs` it reads, and `counts` — what to count in the templates. No block, no facts   |
 
 Nothing about presentation is in here — colours live in `theme.css` — and nothing that
 duplicates a view: a resource's `from` sits on the resource. The build validates the file
@@ -405,10 +408,10 @@ Containers domain boxes are the case: their type reads `Container group · one L
 route`, which no mapping can resolve, so they name the icon. An explicit `icon` always
 wins over the derived one.
 
-The mapping from CloudFormation namespace to icon lives in `SERVICE_ICON` in
-`buildArchitectureExplorer.ts`, with `TYPE_ICON` overriding it for full types AWS draws
+The mapping from CloudFormation namespace to icon lives in `explorer/icons.json` — a
+`service` map keyed by namespace, and a `type` map overriding it for full types AWS draws
 distinctly — `AWS::EC2::NatGateway` gets the NAT gateway icon rather than the generic VPC
-one. It is defined in the build, not the renderer, so the unused-symbol check below sees
+one. The build reads it; nothing in the renderer knows it, so the unused-symbol check below sees
 exactly what the page sees.
 
 Icons appear in four places, all on the one **AWS icons** control in the header: the
@@ -567,7 +570,11 @@ while the identities stay honest.
 - a view file that is not valid JSON, not prettier-formatted, or sharing an `id` with another
 - an `icon` with no matching symbol in `icons.svg`, or a symbol nothing uses
 - a raw `<` or `>` in any string
-- an unknown `kind` or `plane`, or a node narrower than 176px
+- a node with no `ownership`, an unknown `kind` or `plane`, or a node narrower than 176px
+- a sub-label that only repeats its label
+- a kind naming a palette colour `theme.css` does not define
+- a view that draws a dashed edge without declaring `dashMeans`, or declares it and draws none
+- a character the embedded fonts do not carry — see `explorer/README.md` for the subset
 - two node boxes overlapping, or a node straddling a zone edge
 - text that will not fit its box
 - an edge referencing a node that does not exist
@@ -596,6 +603,17 @@ It splits results in two:
   ratchet: it may fall, never rise. When the check reports fewer soft defects than the
   budget, lower it to lock the improvement in; if a change genuinely needs more, raise it
   deliberately and say why in the commit.
+- **Placement** — three of CANVAS.md's rules, counted on every canvas tab: an edge running
+  upward, one whose boxes share neither a row nor a column, a zone running past its last
+  content. `placementBudget` is a second ratchet with the same rule.
+
+It also runs axe-core over both colour schemes on the WCAG 2.2 AA rule set, and renders
+every tab in four viewport shapes — a phone upright and sideways, a tablet, a resized
+window — failing on sideways scroll, an element wider than its box, one covered by the
+sheet handle, a tab strip that wraps, a header taking more than half the screen, or a
+details panel with under 160px of the window to be read through. Where the panel
+collapses it works the sheet, the menu and the toggles as a reader would. Every one of
+those rules has a test that fails when the rule is removed.
 
 The browser binary is not in the lockfile, so on a clean machine:
 
@@ -666,9 +684,9 @@ project. Adding one is these things and nothing else:
 `icons.svg` is shared, and the build fails on a symbol nothing references, so a project
 that needs a new service icon adds it there.
 
-What you do not touch: `buildArchitectureExplorer.ts` beyond its `SERVICE_ICON` map,
-`checkArchitectureExplorer.ts`, `serveArchitectureDocs.ts`, `app.js`, `theme.css` beyond a
-token, or `styles.css`.
+What you do not touch: `buildArchitectureExplorer.ts`, `checkArchitectureExplorer.ts`,
+`serveArchitectureDocs.ts`, `app.js`, `theme.css` beyond a token, or `styles.css`. A new
+service icon is an entry in `explorer/icons.json` and a symbol in `icons.svg`, not code.
 
 ---
 

@@ -27,8 +27,9 @@ five third-party requests, which made a page opened off disk depend on the netwo
 every reader of a public government page to a third party, and left anyone offline reading
 fallback metrics, which is the very thing the geometry gates measure. The faces are
 committed under `fonts/`, subset by `pnpm fonts` to the characters the site renders, and
-inlined as base64. `pnpm fonts` is the only command here that touches the network; a build
-that reaches for it is a build that fails on a train.
+inlined as base64. It is not part of the build and never runs from one: a build that
+reaches for the network is a build that fails on a train. (`pnpm sync` reaches for it too,
+to clone the sources — that is a different loop, run when a source moves.)
 
 Subsetting costs one thing, and the build checks it: a model reaching for a glyph outside
 the set would render a blank box, so `checkGlyphs` compares every string in the model
@@ -89,6 +90,19 @@ things to keep true rather than one. What changes:
   the reference tables strip, the pan hint — is anchored to a floor the sheet now covers.
   Opened, the tables take the larger share of the stage rather than the smaller one.
 
+## Between a phone and a desk
+
+From 761px to 1080px — a tablet in portrait, or a browser window somebody has resized —
+the panel is a 300px column beside the canvas rather than the 372px one a wide screen
+gets, and nothing is stacked. It used to stack, which bought the canvas the full width
+and cost the panel its place on the screen: at 917x544 it began at 447px with 97px left
+to be read through. The canvas pans and zooms and can afford to be narrower; the panel
+cannot afford to be off-screen.
+
+The header at these widths uses the short stage names, and the title and strapline
+truncate rather than wrap: at 768px the row wanted 791px in 728 and took 202px of the
+screen before a box was drawn.
+
 ## Turned sideways
 
 Landscape is **short, not narrow**, and the two want opposite answers — so it keys off
@@ -113,13 +127,17 @@ Landscape is **short, not narrow**, and the two want opposite answers — so it 
 The narrow rules sit at the foot of `styles.css` on purpose: they have to beat later
 sections written for the wide layout, and at equal specificity the last rule wins.
 
-`checkArchitectureExplorer.ts` renders every tab in both shapes — 390x844 and 844x390 —
-and fails on sideways scroll, an element wider than its box, one anchored under the sheet
-handle, a tab strip that wraps instead of scrolling, or a header taking more than half the
-viewport. It then works the details panel in both shapes — closed on
-load, opened by a tap, closed again by the handle and by Escape, and, where the panel is
-a column, actually handing its width back when it closes. The controls menu is worked
-wherever the header cannot seat the control row.
+`checkArchitectureExplorer.ts` renders every tab in four shapes — 390x844, 844x390,
+768x1024 and 917x544 — and fails on sideways scroll, an element wider than its box, one
+anchored under the sheet handle, a tab strip that wraps instead of scrolling, a header
+taking more than half the viewport, or a details panel with under 160px of the window to
+be read through where it is not deliberately tucked away. Where the panel collapses it
+then works it — closed on load, opened by a tap, closed again by the handle, by Escape
+and by the close button, and, where the panel is a column, actually handing its width
+back when it closes. The controls menu is worked wherever the header cannot seat the
+control row. Every layout bug so far has been at a seam between two rules rather than in
+the middle of one, and every one was clean at 1440: that is why there are four shapes and
+not one.
 
 `app.js` is written compactly because it is inlined verbatim into a document where bytes
 count, and it reads globals the build injects above it. It is excluded from eslint for both

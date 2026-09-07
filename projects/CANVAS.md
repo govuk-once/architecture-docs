@@ -37,8 +37,9 @@ a reason in the commit.
 
 Placement: rules 1, 3 and 5 below are geometry, so they are counted rather than trusted,
 on every canvas tab. `placementBudget` is a second ratchet with the same rule as the
-first — it may fall, never rise. FLEX opens at 74, which is a debt, not a target: 26 lines
-that run upward, 40 that cross the canvas diagonally, and 8 zones with an empty tail.
+first — it may fall, never rise. FLEX opened at 74 and stands at 65, which is a debt, not
+a target: 26 lines that run upward and 39 that cross the canvas diagonally, 16 of them on
+Containers. The zone tails are gone.
 
 - **upward** — an edge whose target box sits above its source. Rule 1 exempts a return
   path and nothing in the model marks one, so a genuine return path stays in the budget.
@@ -46,7 +47,9 @@ that run upward, 40 that cross the canvas diagonally, and 8 zones with an empty 
   line has to travel across the canvas rather than down a column or along a row. Measured
   between the boxes, not between the ends of the drawn route: a route may leave a side and
   arrive at a top while the boxes still share a column, and that is not what rule 3 means.
-- **zone tail** — a zone running more than 60px past its last box.
+- **zone tail** — a zone running more than 60px past its last content, where content
+  means the zones inside it as well as the boxes. Counting boxes alone called half the
+  first eight empty while a nested zone sat in the space.
 
 Design to the wider platform, and do not trust a local pass. Linux Chromium renders IBM
 Plex about **17% wider** than macOS at 13px — "OpenAPI breaking check" is 140.6px here and

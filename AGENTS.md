@@ -192,9 +192,11 @@ build already.
 `pnpm build` exits non-zero — it does not warn — on a count that disagrees with the derived
 facts, an alarm table that no longer matches the synthesised templates, a reference table with no
 citation, a citation pointing at a file that no longer exists, text that will not fit its box,
-overlapping boxes, a box straddling a zone edge, an edge to a node that does not exist, a view
-with no stated audience, a raw `<` that would swallow a label, or JSON that is not
-prettier-formatted.
+overlapping boxes, a box straddling a zone edge, an edge to a node that does not exist, a box
+with no `ownership`, a sub-label that repeats its label, a dashed edge on a view that never says
+what dashed means, a kind naming a colour the theme lacks, a character the embedded fonts do
+not carry, a view with no stated audience, a raw `<` that would swallow a label, or JSON that
+is not prettier-formatted.
 
 `pnpm check` then renders the page in headless Chromium, light and dark, and measures what
 static validation cannot see. Run both.
@@ -259,6 +261,12 @@ changed a model without rebuilding; on the scheduled run it means a source moved
 docs have not caught up. It then prints the `pnpm drift` reading list without failing on it,
 runs the render check, lint, typecheck and tests, and publishes `site/` to Pages from
 `main`.
+
+A scheduled run that fails opens an issue titled _Scheduled build is failing_, comments on
+it rather than opening another on each further failure, and closes it when a scheduled run
+passes again. The schedule is the only thing that notices a source moving between manual
+runs, and a schedule that fails silently is one nobody notices failing — it did, for a week,
+over a checkout step that still asked for a token for a repository that had gone public.
 
 Things that are the workflow's, not the scripts':
 
