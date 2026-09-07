@@ -138,6 +138,7 @@
     "audience": "Domain teams — this is the part you write",
     "blurb": "C4 level 3: what a domain team actually writes, and what the platform's own libraries do with it. Every box here is FLEX code — this is the product the platform ships to its domain teams.",
     "note": "Two files ship a route: domains/{name}/domain.config.ts and one handler file whose path toHandlerPath derives from the route key. Route counts live on Resources, log retention and redaction patterns under Resources ▸ Observability, and the private API's access model on Resources, API layer (api-private).",
+    "dashMeans": "wiring — config, derivation, types — not a request at runtime",
     "tables": [
       {
         "name": "Route key grammar",
@@ -575,9 +576,106 @@
     "order": 6,
     "group": "Cross-cutting",
     "audience": "Security review, assurance and threat modelling",
-    "blurb": "Every control a request meets, outside in: what the edge drops, what the origin lock demands, what the token is allowed to prove, and what IAM permits once the request is inside. The permissions boundary at layer 3 is the reason the private API exists at all.",
+    "blurb": "Every control, drawn where it acts, outside in: what the edge drops, what the origin lock demands, what the token is allowed to prove, what IAM permits once inside, and the identity column that bounds every box. Counts are read from the synthesised CloudFormation; use the stage selector — Shield and the VPC read 0 where they are not created.",
     "note": "Two gaps are real and unfixed. <code>pnpm validate:integrations</code> filters to <code>type: \"domain\"</code>, so only 6 of the 36 declared integrations are checked — the 30 gateway integrations pass CI unexamined, including local-council's two, which point at <code>/v1/local-council/*</code> routes the udp gateway does not define. And the authorizer's allow policy names <code>Resource: \"*\"</code> rather than the invoked method ARN.",
+    "dashMeans": "a control or a supporting fetch, not the request itself",
     "tables": [
+      {
+        "name": "Where each control is proven",
+        "note": "A map from the box to the file that creates it and the zone it sits in. The counts are gated on Resources — 27 rows bound to the templates.",
+        "code": [
+          ["global.ts", "platform/infra/flex/src/stacks/global.ts"],
+          ["platform.ts", "platform/infra/flex/src/stacks/platform.ts"],
+          ["vpc.ts", "platform/infra/flex/src/stacks/core/vpc.ts"],
+          ["endpoints.ts", "platform/infra/flex/src/stacks/core/endpoints.ts"],
+          ["domain.ts", "platform/infra/flex/src/stacks/domain.ts"],
+          [
+            "createPermissionsBoundary.ts",
+            "platform/infra/flex/src/utils/createPermissionsBoundary.ts"
+          ]
+        ],
+        "cols": ["Control", "Enforces", "Created in", "Zone"],
+        "rows": [
+          [
+            "CloudFront Web ACL",
+            "managed rule groups, IP reputation, 2000/IP rate limit, e2e bypass",
+            "<code>stacks/global.ts</code>",
+            "1 · Edge"
+          ],
+          [
+            "Shield Advanced",
+            "DDoS detection, automatic response in count mode; staging and production only",
+            "<code>stacks/global.ts</code>",
+            "1 · Edge"
+          ],
+          [
+            "Response headers",
+            "HSTS 365d, nosniff, DENY framing, no-referrer; CSP on the API behaviour only",
+            "<code>constructs/cloudfront/flex-response-headers-policy.ts</code>",
+            "1 · Edge"
+          ],
+          [
+            "Origin lock",
+            "<code>x-origin-verify</code> from CloudFront, demanded by the regional Web ACL, default block",
+            "<code>stacks/platform.ts</code>",
+            "Ingress"
+          ],
+          [
+            "Token authorizer",
+            "Cognito access-token verification; asserts <code>pairwiseId</code> only",
+            "<code>platform/domains/auth</code>",
+            "Ingress"
+          ],
+          [
+            "Private API policy",
+            "Deny unless <code>aws:SourceVpce</code> is the VPC endpoint; IAM on every method",
+            "<code>stacks/platform.ts</code>",
+            "Ingress · Identity"
+          ],
+          [
+            "Permissions boundary",
+            "Deny direct Lambda invoke; execute-api only on the private API",
+            "<code>utils/createPermissionsBoundary.ts</code>",
+            "Ingress · Identity"
+          ],
+          [
+            "Subnet tiers",
+            "egress tier reaches NAT; isolated tier reaches six endpoints on 443 and nothing else",
+            "<code>stacks/core/vpc.ts</code>",
+            "VPC"
+          ],
+          [
+            "Network ACLs",
+            "stateless deny on 0–1023 and 3389 inbound from anywhere; isolated tier has no outbound-to-internet rule",
+            "<code>stacks/core/vpc.ts</code>",
+            "VPC"
+          ],
+          [
+            "Interface endpoints",
+            "execute-api, logs, secretsmanager, ssm, sts, kms; no cognito-idp, no X-Ray",
+            "<code>stacks/core/endpoints.ts</code>",
+            "VPC"
+          ],
+          [
+            "Flow logs",
+            "ALL traffic to a KMS-encrypted, object-locked bucket",
+            "<code>stacks/core/vpc.ts</code>",
+            "VPC"
+          ],
+          [
+            "Secrets and keys",
+            "origin-verify and e2e-bypass secrets; flow-log and alarm-topic keys",
+            "<code>stacks/platform.ts</code> · <code>stacks/global.ts</code>",
+            "3 · Identity"
+          ],
+          [
+            "Logs",
+            "every group at 365 days, CDK-managed at 731; redacted at source; no CloudTrail, GuardDuty or WAF logging created here",
+            "<code>stacks/platform.ts</code> · <code>libs/logging</code>",
+            "3 · Identity"
+          ]
+        ]
+      },
       {
         "name": "Where each log stream goes",
         "note": "Read the encryption column against itself: the flow-log bucket names a customer-managed key, the Lambda log groups and both S3 access-log buckets leave the property unset. The two execution log groups are created only when the stage is production, so in other stages API Gateway execution logging has no log group of its own.",
@@ -672,10 +770,10 @@
           ],
           [
             "Macie scan of the CloudFront access-log bucket",
-            "Not deployed — <code>FlexMacieStack</code> is commented out",
-            "—",
-            "—",
-            "Would be: weekly Monday scan, 100% sampling, recommended managed identifiers",
+            "<code>FlexMacieStack</code>, persistent stages only",
+            "us-east-1",
+            "Weekly",
+            "Monday, 100% sampling, recommended managed identifiers; findings published every 15 minutes, results to a KMS-encrypted bucket",
             "<code>app.ts</code> lines 11 and 93, <code>stacks/macie.ts</code>"
           ]
         ]
@@ -785,7 +883,7 @@
           [
             "Amazon Macie",
             "<code>FlexMacieStack</code>",
-            "Stack is written, but its instantiation is commented out in <code>app.ts</code> — temporarily, pending a Platform IAM guardrail fix. CI still runs <code>validate:macie-coverage</code> on every pull request and posts a Slack notice for uncovered domains, so the coverage gate reports against a stack that is not deployed."
+            "Deployed to persistent stages since FLEX-491, which re-enabled it with an explicit custom-resource role — the Platform IAM guardrail that held it back is resolved. <code>validate:macie-coverage</code> runs in Hygiene on every pull request and posts a Slack notice for uncovered domains; it now reports against a stack that is deployed."
           ],
           [
             "VPC flow logs",
@@ -805,8 +903,8 @@
         ]
       }
     ],
-    "w": 1500,
-    "h": 800
+    "w": 2040,
+    "h": 1560
   },
   "delivery": {
     "name": "Delivery",
@@ -814,11 +912,99 @@
     "group": "Cross-cutting",
     "audience": "Platform engineers and on-call",
     "blurb": "How code reaches production, and how production reaches a human when it goes wrong. Nothing on this tab is on a user's request path.",
-    "note": "Two of the paths drawn here do not work today. The canary's alarm has no alarm action, and the cross-region relay's inline handler has a syntax error, so the smoke test and every us-east-1 edge alarm currently notify nobody. Both are one-line fixes.",
+    "note": "A <b>solid line blocks the release; a dashed one runs beside it and blocks nothing</b> — the spine down the middle is the only path to production. Two of the paths drawn here do not work today. The canary's alarm has no alarm action, and the cross-region relay's inline handler has a syntax error, so the smoke test and every us-east-1 edge alarm reach nobody. A third is worth reading the test table for: the platform suite is the only test that can fail a deploy, and it is skipped in production.",
+    "dashMeans": "runs beside the release and blocks nothing",
     "tables": [
       {
+        "name": "Every kind of test, where it runs, and what it gates",
+        "note": "Read the last column down. Everything that gates production is run against development and staging — nothing tests production itself, and the platform suite, the only test that can fail a deploy, carries an explicit condition that skips it there. The three non-gating rows are the ones a reader is most likely to assume are gates.",
+        "code": [
+          ["_quality-checks.yml", ".github/workflows/_quality-checks.yml"],
+          ["_build-deploy.yml", ".github/workflows/_build-deploy.yml"],
+          ["_moduleE2E.yml", ".github/workflows/_moduleE2E.yml"],
+          [
+            "ci-pr-quality-checks.yml",
+            ".github/workflows/ci-pr-quality-checks.yml"
+          ],
+          ["main.yml", ".github/workflows/main.yml"],
+          ["listE2eModules.ts", "scripts/listE2eModules.ts"],
+          ["sonar-project.properties", "sonar-project.properties"],
+          ["zap.yml", ".github/workflows/zap.yml"],
+          ["performance-tests.yml", ".github/workflows/performance-tests.yml"]
+        ],
+        "cols": ["Kind", "What it covers", "Where it runs", "Gates"],
+        "rows": [
+          [
+            "Hygiene",
+            "9 pre-commit hooks over every file, then <code>lint</code> and <code>tsc</code>",
+            "Hygiene job, on pull requests and on main alike",
+            "<b>Yes</b>"
+          ],
+          [
+            "Unit",
+            "117 vitest files — 59 libs, 43 domains, 12 platform, 3 scripts",
+            "a step in the SonarQube job, <code>--all</code>, never affected-only",
+            "<b>Yes</b>"
+          ],
+          [
+            "Coverage",
+            "v8 lcov handed to the SonarQube quality gate",
+            "the same step; no threshold is set in the vitest config",
+            "<b>Yes</b> — <code>qualitygate.wait=true</code>"
+          ],
+          [
+            "IaC",
+            "checkov over the templates <code>cdk synth</code> produced",
+            "Security job, only when the CDK app is in the affected set",
+            "<b>Yes</b>"
+          ],
+          [
+            "Dependency review",
+            "dependencies the diff adds",
+            "Security job",
+            "<b>Yes</b>, at high severity"
+          ],
+          [
+            "OpenAPI",
+            "regenerate the spec, then oasdiff for breaking changes",
+            "a pull request only — main never runs it",
+            "<b>Yes</b>"
+          ],
+          [
+            "Platform E2E",
+            "auth, security headers, the private gateway — 3 suites",
+            "a step <b>inside</b> every deploy job",
+            "<b>Yes</b> — but skipped in production"
+          ],
+          [
+            "Module E2E · ephemeral",
+            "6 of the 7 domains, one job each",
+            "after the pull request's ephemeral deploy",
+            "<b>Yes</b>"
+          ],
+          [
+            "Module E2E · dev, staging",
+            "the same 6 suites",
+            "a separate job after each deploy",
+            "No — the next stage does not wait for it"
+          ],
+          [
+            "DAST",
+            "ZAP against a committed OpenAPI document, not the live one",
+            "after a whole production run succeeds",
+            "No — a SARIF artifact nothing reads"
+          ],
+          [
+            "Load",
+            "3 of the 6 Artillery profiles",
+            "<code>workflow_dispatch</code> only",
+            "No — <code>continue-on-error</code>"
+          ]
+        ]
+      },
+      {
         "name": "Every alarm, its threshold, and which topic it reaches",
-        "note": "18 alarms from six constructs in <code>constructs/alarms/</code>. Every one sets <code>treatMissingData: NOT_BREACHING</code>, so silence never fires an alarm. Critical and Warning are two separate SNS topics, wired in <code>constructs/alarms/actions.ts</code>. The CloudFront, CloudFront Function and Shield rows are measured in us-east-1, because that is the only region those metrics are emitted to — they reach the eu-west-2 topics through the cross-region relay.",
+        "note": "19 alarm kinds: 18 from six constructs in <code>constructs/alarms/</code>, plus the smoke-test alarm in <code>stacks/smoke-test.ts</code>, which sets no action and so reaches nobody. Every one sets <code>treatMissingData: NOT_BREACHING</code>, so silence never fires an alarm. Critical and Warning are two separate SNS topics, wired in <code>constructs/alarms/actions.ts</code>. The CloudFront, CloudFront Function and Shield rows are measured in us-east-1, because that is the only region those metrics are emitted to — they reach the eu-west-2 topics through the cross-region relay.",
         "code": [
           [
             "api-gateway.ts",
@@ -835,10 +1021,14 @@
           ],
           ["shield.ts", "platform/infra/flex/src/constructs/alarms/shield.ts"],
           ["waf.ts", "platform/infra/flex/src/constructs/alarms/waf.ts"],
-          ["actions.ts", "platform/infra/flex/src/constructs/alarms/actions.ts"]
+          [
+            "actions.ts",
+            "platform/infra/flex/src/constructs/alarms/actions.ts"
+          ],
+          ["smoke-test.ts", "platform/infra/flex/src/stacks/smoke-test.ts"]
         ],
         "derived": {
-          "from": "alarms",
+          "from": "counts.alarms",
           "key": "id",
           "col": "Alarm"
         },
@@ -987,6 +1177,14 @@
             "outside the band",
             "3 × 5 min, 2 must breach",
             "Warning"
+          ],
+          [
+            "Smoke test",
+            "<code>SmokeTestAlarm</code>",
+            "<code>SmokeTestSuccess</code> sum",
+            "below 1",
+            "1 × 15 min",
+            "— no action wired"
           ]
         ]
       }

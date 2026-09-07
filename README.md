@@ -1,28 +1,20 @@
-# FLEX Architecture
+# GOV.UK Once architecture
 
-The architecture of **FLEX** documented as one interactive page, built from versioned source
-in [`explorer/`](explorer/) and derived from the FLEX code itself rather than from prior
-design documents.
+**→ [govuk-once.github.io/architecture-docs](https://govuk-once.github.io/architecture-docs/)**
 
-FLEX lives in a separate repository. This one holds the model, the pipeline that renders it,
-and the checks that keep it honest; it reads the FLEX source and never writes to it.
+The architectures of the GOV.UK Once platforms, each documented as one interactive page and
+derived from that platform's own code rather than from prior design documents.
 
----
+| Architecture        | State                                                |
+| ------------------- | ---------------------------------------------------- |
+| **FLEX** — `/flex/` | Documented, eight tabs, rebuilt on every merge       |
+| **UDP**, **UNS**    | Planned. Listed on the index, nothing read from them |
 
-## View it
+Each lives in a separate repository. This one holds the models, the pipeline that renders
+them, and the checks that keep them honest; it reads those repositories and never writes to
+them.
 
-Published to GitHub Pages on every merge to `main`. To read it locally, this repository
-pulls the source it documents for you:
-
-```bash
-pnpm install
-pnpm sync              # clone or fetch FLEX into .sources/, and install it
-pnpm serve             # builds, then serves http://localhost:4321
-pnpm clean             # remove the checkout when you are done
-```
-
-The checkout under `.sources/` is disposable: gitignored, hard-reset on every sync so it can
-never carry local edits, and never written to.
+## FLEX
 
 Eight tabs, in three groups. Every box, line and zone is clickable; resource counts update
 when you switch stage.
@@ -38,130 +30,98 @@ when you switch stage.
 | **Delivery**     | Cross-cutting | Platform engineers and on-call                                   |
 | **Resources**    | Reference     | Cost, audit and incident scoping — the detail behind every badge |
 
----
+## How the documentation is kept true
 
-## Build it
+The diagrams are written by reading the code and are checked against it on every merge, but
+the reading is done here, on a machine, by a coding agent — not in CI. Your part of the loop:
 
-```bash
-pnpm facts     # derive counts from the domain and gateway configs, and the alarms
-pnpm build     # facts + validate every view + assemble the site
-pnpm check     # render in headless Chromium and check the geometry
-```
+1. **Clone this repository** and `pnpm install`. That is the whole setup; the agent pulls
+   the source it documents into `.sources/` itself.
+2. **Ask the agent to check and update a project** — `AGENTS.md` is its brief. It fetches the
+   source, synthesises the CloudFormation, lists what changed since the model was last read,
+   re-reads those files, edits the model, and runs the build and checks. The ask matters:
+   a vague one gets a plausible rewrite, a precise one gets the reading. Use these.
 
-`build` runs the facts step first, so it is the only one you normally need. It writes
-`site/`, which is generated and gitignored — CI builds it and publishes from there.
-`architecture-facts.json` **is** committed, so a change in FLEX that moves the route counts
-shows up here as a reviewable diff.
+   To bring an existing project up to date:
 
-### It reads FLEX through one declared contract
+   > Read `AGENTS.md` and follow "Authoring the model" for `flex`. Sync and synth the
+   > source, run `pnpm drift flex`, and re-read every file it lists against the claims that
+   > cite it. Change a claim only where the template or the cited file contradicts it, cite
+   > what you change, run the five checks, and finish with `pnpm drift flex --mark-read`.
+   > Tell me what changed, what you left alone, and anything you could not prove.
 
-Everything this repository reads from FLEX is declared in one place, the `source` block of
-[`explorer/explorer.config.json`](explorer/explorer.config.json), alongside `site`, which
-says where the built page is assembled:
+   To add an architecture:
 
-```json
-"source": {
-  "repo": "git@github.com:govuk-once/flex.git",
-  "ref": "main",
-  "root": ".sources/flex",
-  "domainConfigs": "domains/*/domain.config.ts",
-  "gatewayConfigs": "platform/domains/*/gateway.config.ts",
-  "alarmConstructs": "platform/infra/flex/src/constructs/alarms"
-},
-"site": { "root": "site", "page": "index.html" }
-```
+   > Read `AGENTS.md` and follow "Adding an architecture" for `<id>`, whose source is
+   > `<repository url>`. Start from `projects/_template/`. Work out how its CDK app
+   > synthesises and declare it in the config, then author the model tab by tab from the
+   > templates and the code, citing every claim. Add the checkout step to
+   > `.github/workflows/build.yml`, and tell me if the repository is private.
 
-`repo` and `ref` are what `pnpm sync` clones; `root` is where it lands. Nothing else knows
-those paths: every read resolves through [`scripts/lib/paths.ts`](scripts/lib/paths.ts), which
-turns the two blocks into three roots — this repository, the built site, and the checkout being
-documented. Build without syncing first and the error names the fix rather than quietly
-producing an empty page. CI checks FLEX out to that same path, so there is no second opinion
-about where it lives.
+   To re-verify everything, treating nothing as already correct:
 
-One asymmetry is worth knowing. The domain and gateway configs are **imported** as modules —
-they are the same files the CDK app reads — so the checkout needs its own dependencies
-installed, which `pnpm sync` does. The alarm constructs are read as text and parsed, so they
-need nothing.
+   > Read `AGENTS.md`. Re-verify every claim in `projects/flex` against the current
+   > templates and source as if the model were new. Report every claim you could not prove
+   > from a file, with the file you expected to prove it.
 
-Documenting a second repository — UDP, UNS — means turning `source` into a list and adding an
-index page over the projects. [`AGENTS.md`](AGENTS.md) sets out what that involves and why it
-is not worth doing before there is a second repository.
+3. **Look at the result**: `pnpm serve` builds and serves the site at
+   `http://localhost:4321`, the index at `/` and each project one level down.
+4. **Review the diff** with one question per changed line: which file proves it, and does it
+   still? Fluent prose is not evidence — an earlier draft of FLEX had 80 wrong claims in
+   1,091, every one plausible.
+5. **Commit and open a pull request.** CI rebuilds from the source, fails if anything the
+   model states disagrees with what actually deploys, and publishes to Pages on merge to
+   `main`.
 
-### What the build refuses to produce
+## What is yours to do
 
-The build fails rather than emitting a page with a known defect: label text overflowing its
-box, boxes overlapping or straddling a zone edge, an edge pointing at a node that does not
-exist, a view with no stated audience, a raw `<` that would silently swallow the rest of a
-label, a reference table with no source citation, a citation pointing at a file that no longer
-exists, an alarm table that no longer matches the CDK constructs, and a route or domain count
-that disagrees with the generated facts.
+The agent cannot take these off you:
 
-Those last few are the anti-drift gates. Add a route to a domain in FLEX, forget the diagram,
-and the build names the row, the stage, the number claimed and the number the configs actually
-say. Rename an alarm in `constructs/alarms/` and the Delivery table fails until it agrees. It
-covers the ten route and domain counts read from the configs and all eighteen CloudWatch
-alarms; counts still read from CDK code by hand — keys, subnets, endpoints — are not gated, so
-they are verified by reading the stacks.
+- **Commit the derived files with the model.** `projects/<id>/derived/` holds the counts
+  the build read from the templates and the record of which commit they came from and which
+  commit was read up to. They are generated, but committed, so that a change in the source
+  is a reviewable diff here. CI fails if they are stale.
+- **Say when the reading is done.** `pnpm drift <id>` lists what to re-read;
+  `pnpm drift <id> --mark-read` records that it has been. Nothing else advances that
+  record — not a build, not a sync — so run it only when the reading has actually happened.
+- **For a new project**: a checkout step in `.github/workflows/build.yml`, a token if the
+  repository is private, and Pages set to the GitHub Actions source. Everything else is
+  config the agent writes.
 
-Every reference table also names the files it was transcribed from, and the build fails on a
-citation pointing at a file that has moved.
+## What it costs to keep up to date
 
----
+Measured against twelve weeks of FLEX: 10 commits a week, of which 22 files are ones the
+model cites or the CDK app synthesises. Those are the only ones re-read, which is what
+makes a weekly run cheap — `pnpm drift` turns 87 changed files into 22 worth reading.
 
-## Change it
+| Run                                             | × / yr |   Tokens |
+| ----------------------------------------------- | -----: | -------: |
+| Weekly — nothing documented moved               |     21 |      40k |
+| Weekly — a count drifts, and some prose with it |     23 |     110k |
+| Weekly — one change lands across several claims |      8 |     250k |
+| Quarterly — a sweep of `libs/` for new concepts |      4 |     200k |
+|                                                 | **56** | **6.2M** |
 
-The diagrams are a [LikeC4](https://likec4.dev) model in [`explorer/model/`](explorer/model/)
-— one `.c4` file per tab. Edit those. Never edit the built page; it is generated and
-overwritten.
+At list prices with prompt caching, that is about **$20 a year on Sonnet and $95 on Opus**.
+Sonnet weekly and Opus for the quarterly sweep costs roughly $35 and is the better split:
+the weekly run is mechanical and the gates check it, while the sweep is a judgement about
+whether a new concept deserves a box.
 
-The model is a standard, so the same file gives three levels of detail: a plain C4 tool gets
-boxes and arrows via `likec4 codegen`, `likec4 start` gets the full model with its own layout,
-and this explorer adds the verified facts, hand-placed layout and per-stage counts it keeps in
-`metadata`.
+The sweep is what keeps the Components tab honest. A claim can only cite a file that
+existed when it was written, so a new library or a whole new domain moves nothing cited and
+derives no different count — 68% of changed library source over those twelve weeks was
+invisible to the citation net. `pnpm drift` names those additions now, grouped under the
+nearest place the model does cite from, which turns "you cannot know" into a short list;
+the sweep is where you decide which of them deserve a box.
 
-Authoring that model is the one step that is not automated, and deliberately so. It is the
-step that requires reading the CDK stacks, the domain configs and the SDK to work out what is
-actually true — judgement, not transformation. Everything downstream of it is deterministic
-TypeScript that runs the same way on any machine and in CI.
+The mix of run types is an estimate. The commit rates, file counts and diff sizes are
+measured, and the script that measured them is a `git log` away from being run again.
 
-| Step                           | Automated?                       |
-| ------------------------------ | -------------------------------- |
-| Author and verify the model    | No — this is the judgement step  |
-| Derive counts from the configs | `pnpm facts` — locally and in CI |
-| Validate and assemble the page | `pnpm build` — locally and in CI |
-| Render and check the geometry  | `pnpm check` — locally and in CI |
-| Publish to Pages               | `actions/deploy-pages` — CI only |
+## Where the rest is
 
-### Before you change a view
-
-Read **[`explorer/README.md`](explorer/README.md)**. It is the contract: the node properties,
-the tab-order rationale, the scope rules that keep a fact on exactly one tab, every gate the
-build enforces, and the known code defects the diagrams must not paper over. It leads with the
-rule that matters most:
-
-> **Never carry a claim forward on trust.** Read the code that proves it, every time.
-
-That rule was earned. A verification pass over an earlier draft checked 1,091 claims against
-the repository and found **80** wrong or misleading — five of them repeated across six tabs
-each. Every one looked plausible.
-
-So every claim names the files that prove it: elements and relationships carry LikeC4 `link`
-statements, and reference tables carry a `code` array. When you change a fact, re-verify it
-against those files rather than trusting the previous author.
-
----
-
-## CI
-
-[`.github/workflows/build.yml`](.github/workflows/build.yml) checks out FLEX beside this
-repository, rebuilds, and fails if the committed `architecture-facts.json` no longer matches.
-On a pull request that means someone changed the model without rebuilding; on the scheduled
-weekday run it means FLEX moved and these docs have not caught up. It then runs the render
-check, lint, typecheck and tests, and publishes `site/` to Pages from `main`.
-
-> Two things this repository needs configured, both one-off:
->
-> - **Pages source must be "GitHub Actions"**, not a branch. `site/` is gitignored, so a
->   branch-based build would publish nothing.
-> - **A `FLEX_READ_TOKEN` secret** with `Contents: read` on `govuk-once/flex`. The default
->   `GITHUB_TOKEN` is scoped to this repository alone and cannot check FLEX out.
+- [`AGENTS.md`](AGENTS.md) — the loop, the commands, the rules, CI, and how to add an
+  architecture. Written for the agent; read it to understand the process.
+- [`projects/README.md`](projects/README.md) — the model contract: what a project directory
+  holds, the metadata every node carries, tab order, scope rules, every gate the build
+  enforces, and how to start a model from nothing.
+- [`explorer/README.md`](explorer/README.md) — the renderer, which knows about no project.

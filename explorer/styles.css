@@ -1,44 +1,8 @@
-:root{
-  --bg:#f4f6f8; --surface:#ffffff; --surface-2:#eef1f5; --ink:#0f1720; --ink-2:#3d4b5a; --muted:#66768a;
-  --line:#dbe1e8; --line-2:#c3ccd6; --line-strong:#93a1b0; --accent:#12539f; --accent-soft:#e3ecf8;
-  --focus:#12539f;
-  /* A palette, not a mapping. Nothing here knows what a kind is called: each kind in
-     explorer.config.json picks one of these by name, and the build checks it resolves.
-     That keeps this file the same in every project that uses the explorer. */
-  --legend-purple:#5f3f9e; --legend-blue:#12539f; --legend-teal:#0b6b7d;
-  --legend-amber:#8a5a1a; --legend-green:#2f6b3a; --legend-rose:#9c2f52;
-  --zone-fill:#e2e8ef; --zone-line:#c8d2dd; --canvas:#eff3f7; --grid:#e0e7ee;
-  --shadow:0 1px 2px rgba(15,23,32,.06),0 8px 24px -12px rgba(15,23,32,.18);
-}
-@media (prefers-color-scheme:dark){
-  :root:not([data-theme="light"]){
-    --bg:#0b1119; --surface:#121b26; --surface-2:#182432; --ink:#e8eef5; --ink-2:#b9c6d4; --muted:#8394a6;
-    --line:#25333f; --line-2:#33465a; --line-strong:#6b8199; --accent:#63a4f5; --accent-soft:#152a44;
-    --focus:#63a4f5;
-    --legend-purple:#a98ce8; --legend-blue:#63a4f5; --legend-teal:#4fc0d4;
-    --legend-amber:#e0a44a; --legend-green:#7fc98d; --legend-rose:#ef8fa8;
-    --zone-fill:#101a25; --zone-line:#25333f; --canvas:#0d151e; --grid:#16212d;
-    --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 28px -14px rgba(0,0,0,.7);
-  }
-}
-:root[data-theme="dark"]{
-  --bg:#0b1119; --surface:#121b26; --surface-2:#182432; --ink:#e8eef5; --ink-2:#b9c6d4; --muted:#8394a6;
-  --line:#25333f; --line-2:#33465a; --line-strong:#6b8199; --accent:#63a4f5; --accent-soft:#152a44;
-  --focus:#63a4f5;
-  --legend-purple:#a98ce8; --legend-blue:#63a4f5; --legend-teal:#4fc0d4;
-  --legend-amber:#e0a44a; --legend-green:#7fc98d; --legend-rose:#ef8fa8;
-  --zone-fill:#101a25; --zone-line:#25333f; --canvas:#0d151e; --grid:#16212d;
-  --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 28px -14px rgba(0,0,0,.7);
-}
-*{box-sizing:border-box}
-html,body{height:100%}
-body{
-  margin:0;background:var(--bg);color:var(--ink);
-  font-family:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
-  font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased;
-  display:flex;flex-direction:column;
-}
-.mono{font-family:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace}
+/*
+ * The explorer: header, canvas, inspector, reference tables. Colour and type are in
+ * theme.css, which the build inlines before this file on every page.
+ */
+body{display:flex;flex-direction:column}
 
 /* ---------- header ---------- */
 /* Two rows on purpose. The tab bar is ~1300px once the group labels are in, so a
@@ -50,8 +14,13 @@ header{
 }
 .hrow{display:flex;align-items:center;gap:20px;min-width:0}
 .ctrls{margin-left:auto}
+.home{
+  display:flex;align-items:center;justify-content:center;width:26px;height:26px;flex:0 0 auto;
+  margin-right:-6px;border:1px solid transparent;border-radius:7px;color:var(--muted);
+}
+.home svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
 .brand{display:flex;flex-direction:column;gap:1px;margin-right:4px}
-.brand b{font-size:15px;font-weight:600;letter-spacing:-.01em}
+.brand h1{font-size:15px;font-weight:600;letter-spacing:-.01em;margin:0}
 .brand span{font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
 .tabs{display:flex;gap:4px;align-items:center;overflow-x:auto;scrollbar-width:thin;padding-bottom:1px}
 .tabgroup{
@@ -61,11 +30,27 @@ header{
 .tabs > .tabgroup:first-child{border-left:0;padding-left:0;margin-left:0}
 .tab{
   font:500 13px/1 "IBM Plex Sans",sans-serif;padding:8px 13px;border-radius:6px;border:1px solid transparent;
-  background:none;color:var(--ink-2);cursor:pointer;
+  background:none;color:var(--ink-2);cursor:pointer;white-space:nowrap;flex:0 0 auto;
 }
-.tab:hover{background:var(--surface-2)}
 .tab[aria-selected="true"]{background:var(--accent-soft);color:var(--accent);border-color:var(--accent);font-weight:600}
 .spacer{flex:1}
+/* Announced, never seen. `display:none` and `visibility:hidden` are both silent, so this
+   is the clipped-rectangle idiom instead. */
+.sr-only{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;
+  clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;border:0}
+/* Out of the way until someone tabs to it, then a real control in the corner. Not
+   display:none, which would take it out of the tab order and defeat the point. */
+.skip{position:absolute;left:10px;top:-60px;z-index:100;padding:10px 14px;border-radius:8px;
+  background:var(--accent);color:var(--on-accent);font:600 13px/1 "IBM Plex Sans",sans-serif;
+  text-decoration:none;transition:top .12s ease}
+.skip:focus{top:10px}
+@media (prefers-reduced-motion:reduce){.skip{transition:none}}
+/* Phone-only chrome. Present in every page's markup, shown only under the
+   narrow-screen block at the foot of this file. */
+.hbtns{display:none}
+.sheetgrip{display:none}
+.panelclose{display:none}
+.s-short{display:none}
 /* Groups read as units: a wider gap between them than within them, and each one
    segmented the same way the stage picker is, so the whole header uses one idiom. */
 .ctrls{display:flex;align-items:center;gap:12px}
@@ -73,14 +58,13 @@ header{
 .seg{display:flex;align-items:stretch;border:1px solid var(--line-2);border-radius:7px;overflow:hidden;background:var(--surface)}
 .seg .btn{border:0;border-right:1px solid var(--line-2);border-radius:0;background:transparent}
 .seg > :last-child{border-right:0}
-.seg .zoomval{display:flex;align-items:center;padding:0 4px;border-right:1px solid var(--line-2)}
-.seg .btn:hover{background:var(--surface-2);border-color:var(--line-2)}
+.seg .zoomval{display:flex;align-items:center;justify-content:center;padding:0 4px;
+  border-right:1px solid var(--line-2)}
 .seg .btn[aria-pressed="true"]{background:var(--accent-soft);color:var(--accent)}
 .btn{
   font:500 12px/1 "IBM Plex Mono",monospace;min-width:32px;height:32px;padding:0 9px;
   border:1px solid var(--line-2);border-radius:6px;background:var(--surface);color:var(--ink-2);cursor:pointer;
 }
-.btn:hover{border-color:var(--accent);color:var(--accent)}
 /* Inspector and list icons ride the same switch as the diagram ones, so "AWS icons"
    means one thing everywhere. Sized to the line they sit on, never stretched. */
 .ic{width:17px;height:17px;flex:0 0 auto;vertical-align:-3px;margin-right:7px;display:none}
@@ -101,7 +85,7 @@ header{
 .cap-title{font:600 15px "IBM Plex Sans",sans-serif;fill:var(--ink)}
 .cap-sub{font:400 11.5px "IBM Plex Mono",monospace;fill:var(--muted)}
 .cap-lg{font:400 11.5px "IBM Plex Sans",sans-serif;fill:var(--ink-2)}
-.cap-pl{stroke:var(--line-strong);stroke-width:2}
+.cap-pl{stroke:var(--line-strong);stroke-width:1.5;fill:none}
 
 /* Icon-only controls. The glyph inherits the button's colour, so it tracks the theme
    and the pressed state without a second rule. */
@@ -124,13 +108,24 @@ header{
 .hint[hidden]{display:none}
 /* In the pinned header, not on the canvas: overlaying the drawing traded one problem
    for a worse one — on Security it covered a box outright. */
-.legend{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:11px;
+/* One row per channel — ownership, plane, edge style — because a `|` between groups
+   dangles at a row end as soon as the group above it wraps, which it does on any tab
+   with four kinds. A rule between rows says the same thing and cannot orphan. */
+.legend{display:flex;flex-direction:column;margin-top:11px;
   padding-top:10px;border-top:1px solid var(--line)}
+.lg-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:5px 0}
+.lg-row + .lg-row{border-top:1px solid var(--line);padding-top:9px}
 .lg-item{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--ink-2);white-space:nowrap}
 .lg-item i.sw{width:12px;height:12px;border-radius:3px;border:1.5px solid currentColor;flex:0 0 auto}
 .lg-item i.sw.pl-request{border-color:var(--ink-2);border-style:solid}
 .lg-item i.sw.pl-control{border-color:var(--ink-2);border-style:dashed}
-.lg-sep{width:1px;height:12px;background:var(--line-2)}
+/* A line glyph for a line property, so it is never read as a box border. */
+.lg-item i.ln{width:17px;height:0;border-top:1.5px dashed var(--ink-2);flex:0 0 auto}
+/* The kind and plane chips are two or three words and must not break mid-phrase, but
+   the edge key is a sentence: it wraps, with its glyph pinned to the first line. */
+.lg-row.dash{align-items:flex-start}
+.lg-item.dash{white-space:normal;align-items:flex-start}
+.lg-item.dash i.ln{margin-top:7px}
 .hint{
   position:absolute;left:14px;bottom:12px;display:flex;gap:14px;flex-wrap:wrap;
   font:400 11px/1.4 "IBM Plex Mono",monospace;color:var(--muted);
@@ -165,7 +160,6 @@ aside{background:var(--surface);border-left:1px solid var(--line);display:flex;f
   display:flex;align-items:baseline;gap:8px;width:100%;text-align:left;cursor:pointer;
   background:none;border:1px solid transparent;border-radius:6px;padding:7px 8px;color:var(--ink-2);font-size:12.5px;
 }
-.conn:hover{background:var(--surface-2);border-color:var(--line);color:var(--ink)}
 .conn .arw{font-family:"IBM Plex Mono",monospace;color:var(--muted);font-size:11px}
 .conn b{font-weight:600;color:var(--ink)}
 .code{display:flex;flex-direction:column;gap:4px}
@@ -173,7 +167,6 @@ aside{background:var(--surface);border-left:1px solid var(--line);display:flex;f
   font:400 11.5px/1.5 "IBM Plex Mono",monospace;color:var(--accent);text-decoration:none;
   overflow-wrap:anywhere;
 }
-.code a:hover{text-decoration:underline}
 .sect{display:flex;flex-direction:column;gap:9px}
 hr{border:0;border-top:1px solid var(--line);margin:2px 0}
 
@@ -183,7 +176,6 @@ hr{border:0;border-top:1px solid var(--line);margin:2px 0}
 .zone.hard rect{fill:none;stroke:var(--line-2);stroke-width:1.5;stroke-dasharray:8 5}
 .zone text{fill:var(--muted);font:600 11px/1 "IBM Plex Mono",monospace;letter-spacing:.12em;text-transform:uppercase}
 .zone.clickable{cursor:pointer}
-.zone.clickable:hover rect{stroke:var(--accent)}
 .zone.sel > rect{stroke:var(--accent);stroke-width:2}
 .zone.sel text{fill:var(--accent)}
 .node{cursor:pointer}
@@ -193,7 +185,6 @@ hr{border:0;border-top:1px solid var(--line);margin:2px 0}
 .node .t{fill:var(--ink);font:600 13px/1 "IBM Plex Sans",sans-serif}
 .node .s{fill:var(--muted);font:400 10.5px/1 "IBM Plex Mono",monospace}
 .node .bar{fill:var(--kind);rx:2}
-.node:hover .box{stroke-width:2.5}
 .node.sel .box{stroke-width:3}
 .node.sel .t{fill:var(--accent)}
 /* Border style carries the plane, so ownership colour stays uncontested. */
@@ -205,8 +196,6 @@ hr{border:0;border-top:1px solid var(--line);margin:2px 0}
 .edge .lbl,.edgelbl .lbl{fill:var(--muted);font:400 10.5px/1 "IBM Plex Mono",monospace}
 .edge .lblbg,.edgelbl .lblbg{fill:var(--canvas)}
 .edge.dash .line{stroke-dasharray:5 4}
-.edge:hover .line{stroke:var(--accent);stroke-width:2.6}
-.edge:hover .lbl,.edgelbl:hover .lbl{fill:var(--accent)}
 .edge.sel .line{stroke:var(--accent);stroke-width:3}
 .edge.sel .lbl,.edgelbl.sel .lbl{fill:var(--accent);font-weight:600}
 .dim{opacity:.16}
@@ -217,7 +206,7 @@ hr{border:0;border-top:1px solid var(--line);margin:2px 0}
 .doc[hidden]{display:none}
 .doc{position:absolute;inset:0;overflow-y:auto;padding:26px 34px 80px;background:var(--canvas)}
 .doc-head{max-width:1000px;margin:0 0 22px}
-.doc-head h1{font-size:26px;font-weight:600;letter-spacing:-.02em;margin:0 0 7px;text-wrap:balance}
+.doc-head h2{font-size:26px;font-weight:600;letter-spacing:-.02em;margin:0 0 7px;text-wrap:balance}
 .doc-head p{margin:0;color:var(--muted);font-size:14px;max-width:70ch}
 .doc-note{margin-top:14px;padding:11px 14px;border-left:2px solid var(--accent);background:var(--accent-soft);
   border-radius:0 7px 7px 0;font-size:13px;color:var(--ink-2);max-width:80ch}
@@ -236,10 +225,9 @@ hr{border:0;border-top:1px solid var(--line);margin:2px 0}
 .pinchip button{font:500 10px/1 "IBM Plex Mono",monospace;letter-spacing:.08em;text-transform:uppercase;
   padding:4px 8px;border-radius:999px;cursor:pointer;color:var(--accent);
   background:var(--surface);border:1px solid var(--accent)}
-.pinchip button:hover{background:var(--accent);color:var(--surface)}
 .btn.wide{width:100%;margin-top:9px;justify-content:center;padding:8px 10px;font-size:11.5px}
 .grp{margin:0 0 30px;max-width:1180px}
-.grp > h2{
+.grp > h3{
   font:600 11px/1 "IBM Plex Mono",monospace;letter-spacing:.13em;text-transform:uppercase;color:var(--accent);
   margin:0 0 4px;padding-bottom:9px;border-bottom:1px solid var(--line)}
 .grp .gnote{margin:10px 0 0;font-size:12.5px;color:var(--muted);max-width:78ch}
@@ -252,7 +240,6 @@ hr{border:0;border-top:1px solid var(--line);margin:2px 0}
   display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr) auto;gap:14px;align-items:center;
   width:100%;text-align:left;cursor:pointer;padding:11px 14px;border:1px solid var(--line);border-radius:8px;
   background:var(--surface);color:var(--ink);font-family:inherit;font-size:13.5px}
-.row:hover{border-color:var(--accent);background:var(--accent-soft)}
 .row.sel{border-color:var(--accent);border-width:2px;padding:10px 13px;background:var(--accent-soft)}
 .row b{font-weight:600}
 .row .rcount{font:500 11.5px/1.4 "IBM Plex Mono",monospace;color:var(--ink-2)}
@@ -279,8 +266,7 @@ td code{font-size:11.5px}
   font:500 11.5px/1 "IBM Plex Sans",sans-serif;padding:8px 11px;border:0;border-right:1px solid var(--line-2);
   background:var(--surface);color:var(--ink-2);cursor:pointer;white-space:nowrap}
 .stagepick button:last-child{border-right:0}
-.stagepick button:hover{background:var(--surface-2)}
-.stagepick button[aria-pressed="true"]{background:var(--accent);color:#fff;font-weight:600}
+.stagepick button[aria-pressed="true"]{background:var(--accent);color:var(--on-accent);font-weight:600}
 .node .badge{fill:var(--surface);stroke:var(--line-2);stroke-width:1}
 .badge.partial{stroke-dasharray:3 2}
 .node .badge-t{fill:var(--ink-2);font:600 10px/1 "IBM Plex Mono",monospace;text-anchor:middle}
@@ -291,7 +277,6 @@ td code{font-size:11.5px}
 .resrow{
   display:flex;align-items:baseline;gap:9px;width:100%;text-align:left;cursor:pointer;
   background:none;border:1px solid transparent;border-radius:6px;padding:6px 8px;color:var(--ink-2);font-size:12.5px;font-family:inherit}
-.resrow:hover{background:var(--surface-2);border-color:var(--line);color:var(--ink)}
 .resrow .num{font:600 11.5px/1.4 "IBM Plex Mono",monospace;color:var(--accent);min-width:26px;text-align:right;flex:0 0 auto}
 .resrow .num.zero{color:var(--muted)}
 .resrow span:nth-child(2){flex:1;min-width:0}
@@ -299,16 +284,37 @@ td code{font-size:11.5px}
 .total b{font:600 22px/1 "IBM Plex Mono",monospace;color:var(--accent);font-variant-numeric:tabular-nums}
 .total span{font-size:12.5px;color:var(--muted)}
 .row.zero{opacity:.5}
-.row.zero:hover{opacity:1}
 .backlink{
   display:inline-flex;align-items:center;gap:7px;font:500 12px/1 "IBM Plex Sans",sans-serif;cursor:pointer;
   background:none;border:1px solid var(--line-2);border-radius:6px;padding:7px 10px;color:var(--ink-2);font-family:inherit}
-.backlink:hover{border-color:var(--accent);color:var(--accent)}
 
 @media (max-width:1080px){
   .stagepick .eyebrow{display:none}
-  .shell{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(340px,58vh) auto}
-  aside{border-left:0;border-top:1px solid var(--line)}
+  /*
+   * Below this the header cannot seat full stage names beside the controls: at 768px the
+   * row wanted 791px in 728 and wrapped to 136px, and the picker was 336px of it. The
+   * short form is each stage's id, which every project declares anyway.
+   */
+  .s-long{display:none}
+  .s-short{display:inline;text-transform:uppercase;letter-spacing:.04em}
+  .stagepick button{font-family:"IBM Plex Mono",monospace;font-weight:600}
+  /* Even then the row fits to the pixel, and text is wider on other platforms. The title
+     is the one thing here that can give, so let it truncate rather than push the row. */
+  .brand{min-width:0;flex:1 1 auto}
+  .brand h1{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
+  /* The strapline wrapped to two lines and took the header with it. It truncates
+     rather than being dropped, because there is room for most of it at these widths. */
+  .brand span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
+  /*
+   * Beside the canvas, not under it. Stacking bought the canvas the full width and cost
+   * the panel its place on the screen: at 917x544 the canvas took 340px, the panel began
+   * at 447px and had 97px left to be read through, which is not reading. The canvas pans
+   * and zooms and can afford to be narrower; the panel cannot afford to be off-screen.
+   */
+  .shell{grid-template-columns:minmax(0,1fr) 300px;grid-template-rows:minmax(0,1fr)}
+  aside{border-left:1px solid var(--line);border-top:0}
+  #viewhdr{padding:14px 16px 12px}
+  #insp{padding:16px 16px 28px}
 }
 
 /* ---------- tables under a diagram ---------- */
@@ -324,7 +330,6 @@ td code{font-size:11.5px}
   flex:0 0 auto;display:flex;align-items:center;gap:12px;width:100%;height:38px;padding:0 16px;
   background:none;border:0;border-bottom:1px solid transparent;cursor:pointer;color:var(--ink-2);
   font-family:inherit;text-align:left}
-.tbl-head:hover{background:var(--surface-2)}
 .stage.split .tbl-head{border-bottom-color:var(--line)}
 .caret{width:0;height:0;flex:0 0 auto;border-left:5px solid currentColor;border-top:4px solid transparent;
   border-bottom:4px solid transparent;transition:transform .15s ease}
@@ -348,3 +353,285 @@ td code{font-size:11.5px}
 .audience span{flex:0 0 auto;font:600 9.5px/1 "IBM Plex Mono",monospace;letter-spacing:.13em;text-transform:uppercase;
   color:var(--accent);border:1px solid var(--accent);border-radius:4px;padding:4px 6px}
 .doc-head .audience{max-width:70ch}
+
+
+/* ---------- phones ----------
+   Last in the file on purpose. These rules have to beat later sections written for the
+   wide layout — `.stage.has-tables .hint` outranks a bare `.hint` on specificity, so the
+   only way a narrow override wins is to come after it at equal weight.
+
+   The problem this solves: at 390px the header spent ~330px on a brand, a stage picker
+   and three control segments before a single box was drawn, and the details panel took
+   whatever the diagram did not. So the controls go behind a menu, the panel becomes a
+   sheet that stays out of the way until something is tapped, and the canvas gets the
+   screen. */
+@media (max-width:760px){
+  /* How much of the sheet stays above the fold. Everything that must not sit under it —
+     the pan hint, the last line of a reference view — measures from this. */
+  :root{--peek:50px}
+
+  /* The panel menu hangs off the header, so the header is the positioning context. */
+  header{position:relative;padding:10px 14px 8px;gap:9px}
+  .hrow{flex-wrap:wrap;gap:10px}
+  .brand{min-width:0;flex:1 1 auto}
+  /* Truncate rather than wrap: four lines of title is a third of the viewport. */
+  .brand h1{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
+  .brand span{display:none}
+  .spacer{display:none}
+  .hbtns{display:flex;align-items:center;gap:8px;flex:0 0 auto}
+  /* .btn.ico sizes it now; it only needs to stop being a 32px-min text button. */
+  .fitm{min-width:0}
+
+  /* The stage picker keeps its own row and is never hidden: it changes every number on
+     the page, so a reader who cannot see which stage they are looking at is misreading
+     the diagram rather than merely inconvenienced. */
+  .stagepick{margin-left:0;flex:1 1 100%}
+  .stagepick .eyebrow{display:none}
+  .stagepick > div{flex:1;min-width:0}
+  /* "Development" and "Ephemeral PR" set the width of the whole picker to say what
+     "dev" and "eph" say. Every project already declares the short form as the stage id. */
+  .s-long{display:none}
+  .s-short{display:inline;text-transform:uppercase;letter-spacing:.04em}
+  .stagepick button{flex:1;min-width:0;padding:8px 4px;font-size:12px;
+    font-family:"IBM Plex Mono",monospace;font-weight:600}
+  /* The handle says the panel can move; this says how to put it away. */
+  .panelclose{display:flex;position:absolute;top:9px;right:10px;z-index:3;
+    align-items:center;justify-content:center;width:30px;height:30px;padding:0;
+    border:1px solid var(--line-2);border-radius:7px;background:var(--surface);
+    color:var(--ink-2);cursor:pointer}
+  .panelclose svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.7;
+    stroke-linecap:round}
+  @media (hover:hover){.panelclose:hover{background:var(--surface-2);border-color:var(--accent);color:var(--accent)}}
+  body:not(.sheet-open) .panelclose{display:none}
+
+  /* Display and export are settings, reached once and then left alone, so they go behind
+     the menu button. Zoom goes with them and then hides: pinch is the gesture a phone
+     reader already has, and Fit — the way back from a pinch gone wrong — is promoted out
+     of the menu into the header instead. */
+  .ctrls{
+    display:none;position:absolute;right:14px;top:calc(100% + 6px);z-index:40;
+    width:auto;flex-direction:column;align-items:center;gap:9px;
+    padding:0;background:none;border:0;box-shadow:none}
+  header.menu-open .ctrls{display:flex}
+  /* The groups stop being boxes and let their buttons become direct children, so the
+     controls fall into one column under the button that opened them rather than sitting
+     in a card of segmented groups. `:not([hidden])` because that rule outranks the one
+     hiding a group on a view with no canvas, and a tie would be resolved the wrong way. */
+  .ctrls .seg:not([hidden]){display:contents}
+  .ctrls .seg[aria-label="Zoom"]{display:none}
+  .ctrls .btn{
+    display:flex;align-items:center;justify-content:center;
+    width:38px;height:38px;min-width:0;padding:0;
+    border:1px solid var(--line-2);border-radius:9px;background:var(--surface);
+    box-shadow:0 6px 18px rgba(0,0,0,.14)}
+  .ctrls .btn svg{width:16px;height:16px}
+  /* In the menu each control is its own bordered target, so the on state can say so
+     with its edge as well as its fill rather than a tint alone. */
+  .ctrls .btn[aria-pressed="true"]{border-color:var(--accent)}
+  /* Opened, the button that opened it becomes the way to shut it.
+     `.btn.menubtn` rather than `.menubtn`: `.btn.ico svg{display:block}` outranks a
+     single class plus an element, so the plain selector lost and the cross was painted
+     over the bars in every state. The open-state rules below carry a third class and an
+     element, so they still win from here. */
+  .btn.menubtn .i-close{display:none}
+  header.menu-open .menubtn .i-menu{display:none}
+  header.menu-open .menubtn .i-close{display:block}
+  header.menu-open .menubtn{border-color:var(--accent);color:var(--accent)}
+
+  .tabs{gap:2px}
+  .tab{padding:7px 10px;font-size:12.5px}
+  /* The group labels cost 273px of a 926px scroll strip to repeat what the tab beside
+     them already says. On a screen this narrow that is a tab and a half. */
+  .tabgroup{display:none}
+
+  /* One column, and the canvas takes what is left rather than a fixed slice: the sheet
+     is out of flow now, so there is no second row to leave room for. */
+  .shell{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr)}
+  .stage{min-height:0}
+  /* The sheet handle covers the stage floor, and everything anchored there is anchored
+     to a floor that is now 50px higher. The reference tables strip was left at bottom:0
+     and drawn entirely underneath the handle — not merely hard to see, but impossible to
+     tap, because the handle takes the pointer. */
+  .shell:not(.is-doc) .stage{padding-bottom:var(--peek)}
+  #tables{bottom:var(--peek)}
+  .hint{left:10px;bottom:calc(var(--peek) + 8px);gap:10px;font-size:10px}
+  .stage.has-tables .hint{bottom:calc(var(--peek) + 46px)}
+  /* Opened, the tables are what the reader came for, so they take the larger share here
+     rather than the smaller one a wide screen can afford to give them. */
+  .stage.split svg{height:38%}
+  .stage.split #tables{height:62%}
+  .stage.has-tables.split .hint{bottom:calc(var(--peek) + 62% + 10px)}
+  /* A phone shows the table one column at a time; the strip's own summary of which
+     tables it holds is a second line of text nobody can act on. */
+  .tbl-names{display:none}
+  .tbl-body{padding:14px 14px 20px}
+
+  /* The details panel as a bottom sheet. A phone has no room for a permanent 372px
+     column, and a reader who has not tapped anything has nothing to read in it. */
+  aside{
+    position:fixed;left:0;right:0;bottom:0;z-index:50;max-height:84vh;
+    border-left:0;border-top:1px solid var(--line);border-radius:14px 14px 0 0;
+    box-shadow:0 -10px 30px rgba(0,0,0,.16);
+    transform:translateY(calc(100% - var(--peek)));transition:transform .22s ease}
+  body.sheet-open aside{transform:translateY(0)}
+  .sheetgrip{
+    display:flex;flex-direction:column;align-items:center;gap:7px;flex:0 0 auto;
+    width:100%;height:var(--peek);padding:9px 14px 0;border:0;background:none;
+    color:var(--ink-2);font-family:inherit;font-size:13px;cursor:pointer}
+  .grip-bar{width:36px;height:4px;border-radius:2px;background:var(--line-2);flex:0 0 auto}
+  .grip-label{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+    font-weight:600;color:var(--ink)}
+  #viewhdr{padding:14px 14px 12px}
+  #insp{padding:14px 14px 26px}
+
+  /* Three columns on a 390px row leave the name about 18 characters, so
+     "Private-with-egress subnets" came out as four stacked words beside two tags with
+     room to spare. Name and count share the first line, the tags get the second. */
+  .row{grid-template-columns:minmax(0,1fr) auto;gap:8px 12px;align-items:baseline}
+  .row .rmeta{grid-column:1 / -1;justify-content:flex-start}
+
+  /* A reference view has nothing to pan, so trapping it in a fixed window just hides it
+     mid-sentence. Let it run to its natural height and let the page scroll — and keep
+     the last line clear of the sheet. */
+  .shell.is-doc{grid-template-rows:auto}
+  .shell.is-doc .stage{overflow:visible;height:auto;min-height:0}
+  /* .doc is absolutely positioned inside the stage, so height:auto alone left it
+     collapsed to nothing; it has to rejoin normal flow to give the stage a height. */
+  .shell.is-doc .doc{position:static;overflow:visible;height:auto;
+    padding:20px 14px calc(40px + var(--peek))}
+}
+
+/* ---------- landscape phones ----------
+   Short, not narrow, and the two need opposite answers. Everything above keys off width,
+   so a 844x390 phone was served the wide layout: the brand wrapped to seven lines, the
+   header took 202px of the 390 available, and the 1080px rule stacked the panel below a
+   canvas that already did not fit — putting it off the bottom of the screen entirely.
+
+   Height is the only scarce resource here, so the header collapses to one tight row and
+   nothing is allowed to claim vertical space it does not need. */
+@media (max-height:500px){
+  .s-long{display:none}
+  .s-short{display:inline;text-transform:uppercase;letter-spacing:.04em}
+  header{padding:6px 12px 5px;gap:5px}
+  .hrow{gap:12px}
+  .brand{min-width:0;flex:1 1 auto}
+  .brand h1{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;font-size:14px}
+  /* The strapline is the first thing to go: it names the project the title just named. */
+  .brand span{display:none}
+  .stagepick{gap:7px}
+  .stagepick .eyebrow{display:none}
+  .stagepick button{padding:7px 9px;font-size:12px}
+  .tabs{gap:2px}
+  .tab{padding:5px 9px;font-size:12px}
+  .tabgroup{display:none}
+  .hint{font-size:9.5px;gap:9px}
+  /* A handle worth 13% of the viewport is not a peek. */
+  :root{--peek:42px}
+}
+
+/* Wide enough to seat the panel beside the canvas — and that is the right trade here,
+   because a column costs width, of which a landscape phone has plenty, while a sheet
+   costs height, of which it has none. */
+/* Narrow as well as short — a small phone turned sideways. The sheet is right here (the
+   width will not seat a column), but the picker's own row is not: it costs 16% of the
+   height to say four words that fit beside the title. */
+@media (max-height:500px) and (max-width:760px){
+  .spacer{display:block;flex:1}
+  /* Reordered rather than moved, so the buttons stay top-right as they are in portrait
+     without a second copy of them in the markup. */
+  .hbtns{order:9}
+  .stagepick{flex:0 1 auto}
+  .stagepick > div{flex:0 1 auto}
+  .stagepick button{flex:0 1 auto;min-width:0;padding:6px 9px;font-size:11.5px}
+}
+
+@media (max-height:500px) and (min-width:761px){
+  /* Collapsed to its rail by default, and opened by the same events that raise the sheet
+     in portrait — so there is one behaviour and two ways of drawing it, not two
+     behaviours. Closed, the canvas and the reference tables get the full width. */
+  .shell{position:relative;grid-template-columns:minmax(0,1fr) 30px;
+    grid-template-rows:minmax(0,1fr);transition:grid-template-columns .2s ease}
+  body.sheet-open .shell{grid-template-columns:minmax(0,1fr) 320px}
+  /*
+   * The panel scrolls as one piece here, header and all. A pinned header costs the same
+   * 214px whatever the screen is, and of a 314px panel that is 68% spent on a legend and
+   * an audience line, leaving 100px to read 1000px of content through. On a tall screen
+   * pinning it is worth the space; on this one it is most of the space.
+   *
+   * Which means the panel is deliberately NOT the positioning context: the rail and the
+   * close button anchor to the shell, which does not scroll, so they stay put while
+   * everything between them moves.
+   */
+  aside{position:static;padding-left:30px;overflow-x:hidden;overflow-y:auto;
+    border-left:1px solid var(--line);border-top:0}
+  #viewhdr,#insp{flex:0 0 auto;overflow:visible;min-height:0}
+  /* Closed, the panel is 30px wide with 30px of padding: its contents would be zero
+     pixels across and a mile tall. Nothing to show, so show nothing. */
+  body:not(.sheet-open) #viewhdr,body:not(.sheet-open) #insp{display:none}
+  .sheetgrip{
+    display:flex;position:absolute;top:0;bottom:0;right:0;width:30px;z-index:4;
+    flex-direction:column;align-items:center;gap:10px;padding:11px 0 0;
+    border:0;border-left:1px solid var(--line);background:var(--surface);
+    color:var(--ink-2);font-family:inherit;font-size:12px;cursor:pointer}
+  body.sheet-open .sheetgrip{right:290px}
+  @media (hover:hover){.sheetgrip:hover{background:var(--surface-2)}}
+  .grip-bar{width:4px;height:26px;border-radius:2px;background:var(--line-2);flex:0 0 auto}
+  /* Turned on its side it reads as a tab down the edge, and it names the open thing for
+     the same reason the handle does in portrait. */
+  .grip-label{writing-mode:vertical-rl;max-height:calc(100% - 48px);
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+    font-weight:600;color:var(--ink)}
+  #viewhdr{padding:11px 14px 9px}
+  #insp{padding:12px 14px 22px}
+  /* Same control as portrait, same place on the panel; only the containing block differs */
+  .panelclose{display:flex;position:absolute;top:8px;right:10px;z-index:5;
+    align-items:center;justify-content:center;width:28px;height:28px;padding:0;
+    border:1px solid var(--line-2);border-radius:7px;background:var(--surface);
+    color:var(--ink-2);cursor:pointer}
+  .panelclose svg{width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:1.7;
+    stroke-linecap:round}
+  @media (hover:hover){.panelclose:hover{background:var(--surface-2);border-color:var(--accent);color:var(--accent)}}
+  body:not(.sheet-open) .panelclose{display:none}
+  /* Opened, the tables are what the reader came for. 40% of a 314px stage is 126px. */
+  .stage.split svg{height:38%}
+  .stage.split #tables{height:62%}
+  .stage.has-tables.split .hint{bottom:calc(62% + 10px)}
+}
+
+@media (prefers-reduced-motion:reduce){.shell{transition:none}}
+
+@media (prefers-reduced-motion:reduce){aside{transition:none}}
+
+/* Anything without a hover — the hover-to-isolate affordance does not exist there. */
+@media (pointer:coarse){
+  .hint span:last-child{display:none}
+}
+
+/* ---------- hover ----------
+   A touch screen has no pointer to move away, so :hover sticks to whatever was
+   tapped last. That mattered because these rules say what selection says: tapping
+   the AWS icons button off left it accent-coloured on a tinted background, which is
+   what that button looks like when the icons are on. Both readings said "on", so
+   the state could not be read off the control at all.
+
+   Hover styling now exists only where hovering does. Everything in here is emphasis
+   layered over a control that is already legible without it. */
+@media (hover:hover){
+  .home:hover{border-color:var(--line-2);color:var(--accent);background:var(--surface)}
+  .tab:hover{background:var(--surface-2)}
+  .seg .btn:hover{background:var(--surface-2);border-color:var(--line-2)}
+  .btn:hover{border-color:var(--accent);color:var(--accent)}
+  .conn:hover{background:var(--surface-2);border-color:var(--line);color:var(--ink)}
+  .code a:hover{text-decoration:underline}
+  .zone.clickable:hover rect{stroke:var(--accent)}
+  .node:hover .box{stroke-width:2.5}
+  .edge:hover .line{stroke:var(--accent);stroke-width:2.6}
+  .edge:hover .lbl,.edgelbl:hover .lbl{fill:var(--accent)}
+  .pinchip button:hover{background:var(--accent);color:var(--surface)}
+  .row:hover{border-color:var(--accent);background:var(--accent-soft)}
+  .stagepick button:hover{background:var(--surface-2)}
+  .resrow:hover{background:var(--surface-2);border-color:var(--line);color:var(--ink)}
+  .row.zero:hover{opacity:1}
+  .backlink:hover{border-color:var(--accent);color:var(--accent)}
+  .tbl-head:hover{background:var(--surface-2)}
+}

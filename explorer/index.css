@@ -1,0 +1,182 @@
+/*
+ * The index over the projects: one card per architecture. Colour and type are in
+ * theme.css, which the build inlines before this file.
+ *
+ * A card is the whole clickable target, not a link buried in one, because the card is
+ * what a reader is choosing between. A planned project gets the same card with no link
+ * and a plain statement that nothing has been read from its repository — the scope is
+ * worth showing, and a card that looked live would be a claim.
+ */
+body {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+/*
+ * width:100% is load-bearing on both wrappers. They are flex items of a column body, and
+ * an auto margin on the cross axis suppresses the default stretch — so without it each
+ * one shrinks to fit its own content and the footer sits centred under the grid.
+ */
+main {
+  width: 100%;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 56px 32px 72px;
+}
+.masthead {
+  display: flex;
+  align-items: flex-start;
+  gap: 24px;
+  padding-bottom: 28px;
+  border-bottom: 1px solid var(--line);
+}
+.masthead h1 {
+  margin: 0;
+  font-size: 27px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.masthead .eyebrow {
+  display: block;
+  margin-bottom: 7px;
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.masthead p {
+  margin: 12px 0 0;
+  max-width: 68ch;
+  color: var(--ink-2);
+}
+.masthead .spacer {
+  flex: 1;
+}
+
+#themetoggle {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 11px;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--ink-2);
+  background: var(--surface);
+  border: 1px solid var(--line-2);
+  border-radius: 7px;
+  cursor: pointer;
+}
+#themetoggle:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
+  gap: 18px;
+  margin-top: 32px;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 22px 22px 18px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  text-decoration: none;
+  color: inherit;
+}
+a.card:hover {
+  border-color: var(--accent);
+}
+a.card:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.card h2 {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+a.card:hover h2 {
+  color: var(--accent);
+}
+.card .tagline {
+  font-size: 11px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.card p {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--ink-2);
+}
+.card .meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  margin-top: auto;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.card .meta b {
+  font-weight: 500;
+  color: var(--ink-2);
+}
+
+/* Planned: the same card, visibly not a door. */
+.card.planned {
+  background: transparent;
+  border-style: dashed;
+  box-shadow: none;
+}
+.card.planned h2 {
+  color: var(--ink-2);
+}
+.badge {
+  align-self: flex-start;
+  padding: 2px 8px;
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+}
+
+footer {
+  width: 100%;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 0 32px 48px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+footer p {
+  max-width: 76ch;
+  margin: 0;
+}
+footer a {
+  color: inherit;
+}
+
+@media (max-width: 620px) {
+  main {
+    padding: 36px 20px 48px;
+  }
+  .masthead {
+    flex-direction: column;
+    gap: 14px;
+  }
+}

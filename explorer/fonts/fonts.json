@@ -1,0 +1,25 @@
+{
+  "charset": " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~—·…–→←↔▸✓×÷≥≤≠±°£€™®©’‘“”§¶†‡•∞≈¬⌀",
+  "faces": [
+    {
+      "family": "IBM Plex Sans",
+      "weight": "400 700",
+      "file": "plex-sans-400-700.woff2"
+    },
+    {
+      "family": "IBM Plex Mono",
+      "weight": "400",
+      "file": "plex-mono-400.woff2"
+    },
+    {
+      "family": "IBM Plex Mono",
+      "weight": "500",
+      "file": "plex-mono-500.woff2"
+    },
+    {
+      "family": "IBM Plex Mono",
+      "weight": "600",
+      "file": "plex-mono-600.woff2"
+    }
+  ]
+}

@@ -1,0 +1,32 @@
+{
+  "service": {
+    "Lambda": "lambda",
+    "ApiGateway": "apigateway",
+    "CloudFront": "cloudfront",
+    "S3": "s3",
+    "DynamoDB": "dynamodb",
+    "Cognito": "cognito",
+    "EC2": "vpc",
+    "Route53": "route53",
+    "CloudWatch": "cloudwatch",
+    "Logs": "cloudwatch",
+    "SSM": "ssm",
+    "Chatbot": "chatbot",
+    "IAM": "iam",
+    "KMS": "kms",
+    "SecretsManager": "secretsmanager",
+    "Shield": "shield",
+    "WAFv2": "waf",
+    "CertificateManager": "acm",
+    "Macie": "macie",
+    "SNS": "sns",
+    "Events": "eventbridge"
+  },
+  "type": {
+    "AWS::CloudFront::Function": "cloudfront-functions",
+    "AWS::EC2::NatGateway": "vpc-nat",
+    "AWS::EC2::InternetGateway": "vpc-igw",
+    "AWS::EC2::VPCEndpoint": "vpc-endpoint",
+    "AWS::EC2::FlowLog": "vpc-flowlogs"
+  }
+}

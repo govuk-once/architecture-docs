@@ -1,0 +1,9 @@
+// Shared by every view in this project. Element kinds carry ownership; `boundary` is a
+// zone. The two tags are the plane: on the request path, or off it.
+specification {
+  element actor    { style { shape person } }
+  element platform { style { shape rectangle } }
+  element boundary { style { shape rectangle opacity 10% } }
+  tag request-path
+  tag off-request-path
+}

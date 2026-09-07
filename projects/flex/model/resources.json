@@ -104,6 +104,7 @@
             "prod": 3,
             "eph": 0
           },
+          "from": "counts.natGateways",
           "meta": ["eu-west-2", "FlexCoreStack"],
           "d": {
             "type": "AWS::EC2::NatGateway",
@@ -238,6 +239,7 @@
             "prod": 1,
             "eph": 0
           },
+          "from": "counts.sgEgress",
           "meta": ["eu-west-2", "FlexCoreStack"],
           "d": {
             "type": "AWS::EC2::SecurityGroup",
@@ -256,6 +258,7 @@
             "prod": 1,
             "eph": 0
           },
+          "from": "counts.sgIsolated",
           "meta": ["eu-west-2", "FlexCoreStack"],
           "d": {
             "type": "AWS::EC2::SecurityGroup",
@@ -282,6 +285,7 @@
             "prod": 6,
             "eph": 0
           },
+          "from": "counts.sgEndpoints",
           "meta": ["eu-west-2", "FlexCoreStack"],
           "d": {
             "type": "AWS::EC2::SecurityGroup",
@@ -308,6 +312,7 @@
             "prod": 6,
             "eph": 0
           },
+          "from": "counts.vpcEndpoints",
           "meta": ["eu-west-2", "FlexCoreStack"],
           "d": {
             "type": "AWS::EC2::VPCEndpoint",
@@ -335,6 +340,7 @@
             "prod": 1,
             "eph": 0
           },
+          "from": "counts.flowLogs",
           "meta": ["eu-west-2", "FlexCoreStack"],
           "d": {
             "type": "AWS::EC2::FlowLog",
@@ -367,7 +373,7 @@
             "prod": 8,
             "eph": 8
           },
-          "from": "domains.dvla.perStage",
+          "from": "counts.domainFunctions.dvla",
           "meta": ["egress tier", "FlexDomainStack"],
           "d": {
             "type": "AWS::Lambda::Function",
@@ -391,7 +397,7 @@
             "prod": 8,
             "eph": 8
           },
-          "from": "domains.udp.perStage",
+          "from": "counts.domainFunctions.udp",
           "meta": ["isolated tier", "FlexDomainStack"],
           "d": {
             "type": "AWS::Lambda::Function",
@@ -414,7 +420,7 @@
             "prod": 4,
             "eph": 4
           },
-          "from": "domains.uns.perStage",
+          "from": "counts.domainFunctions.uns",
           "meta": ["isolated tier", "FlexDomainStack"],
           "d": {
             "type": "AWS::Lambda::Function",
@@ -437,7 +443,7 @@
             "prod": 0,
             "eph": 2
           },
-          "from": "domains.groups.perStage",
+          "from": "counts.domainFunctions.groups",
           "meta": ["isolated tier", "FlexDomainStack"],
           "d": {
             "type": "AWS::Lambda::Function",
@@ -463,7 +469,7 @@
             "prod": 0,
             "eph": 2
           },
-          "from": "domains.local-council.perStage",
+          "from": "counts.domainFunctions.local-council",
           "meta": ["isolated tier", "FlexDomainStack"],
           "d": {
             "type": "AWS::Lambda::Function",
@@ -490,7 +496,7 @@
             "prod": 0,
             "eph": 13
           },
-          "from": "domains.example.perStage",
+          "from": "counts.domainFunctions.example",
           "meta": ["isolated tier", "FlexDomainStack"],
           "d": {
             "type": "AWS::Lambda::Function",
@@ -517,7 +523,7 @@
             "prod": 0,
             "eph": 2
           },
-          "from": "domains.travel.perStage",
+          "from": "counts.domainFunctions.travel",
           "meta": ["isolated tier", "FlexDomainStack"],
           "d": {
             "type": "AWS::Lambda::Function",
@@ -736,7 +742,7 @@
             "tech": "CDK-generated",
             "role": "Backing functions for custom resources. Deploy machinery, not request path.",
             "facts": [
-              "An <code>AwsCustomResource</code> singleton per stack, used for cross-region SSM reads and the two API deployments. The Macie stack would add three more, but its import and its instantiation are both commented out in <code>app.ts</code> — it is disabled in code, not merely undeployed.",
+              "An <code>AwsCustomResource</code> singleton per stack, used for cross-region SSM reads and the two API deployments. The Macie stack adds four more on persistent stages: the session, the automated-discovery opt-out, the results export and the scheduled scan job.",
               "<code>CfnPause</code> adds an inline timeout function plus a Provider framework function.",
               "<code>BucketDeployment</code> adds an asset-copying handler that also invalidates CloudFront."
             ],
@@ -803,7 +809,7 @@
             "facts": [
               "endpointAccessMode BASIC; securityPolicy SecurityPolicy_TLS13_1_2_2021_06.",
               "<code>GET /health</code> as a mock integration, plus the <code>/app</code> root every domain extends.",
-              "Gateway responses UNAUTHORIZED → 401 and ACCESS_DENIED → 403 render the authorizer errorMessage.",
+              "Gateway responses UNAUTHORIZED → 401 and ACCESS_DENIED → 403 return one constant body, <code>{\"message\": \"Unauthorized\", \"type\": \"auth_error\"}</code>.",
               "Caching disabled with a recorded CKV_AWS_120 suppression."
             ],
             "code": [
@@ -903,7 +909,7 @@
             "prod": 3,
             "eph": 6
           },
-          "from": "totals.domainsWithPublicRoutes",
+          "from": "counts.domainsWithAuthorizer",
           "meta": ["eu-west-2", "FlexDomainStack"],
           "d": {
             "type": "AWS::ApiGateway::Authorizer",
@@ -928,7 +934,7 @@
             "prod": 17,
             "eph": 32
           },
-          "from": "totals.routeMethods.public",
+          "from": "counts.publicRoutes",
           "meta": ["eu-west-2", "FlexDomainStack"],
           "d": {
             "type": "AWS::ApiGateway::Method",
@@ -953,7 +959,7 @@
             "prod": 3,
             "eph": 7
           },
-          "from": "totals.routeMethods.private",
+          "from": "counts.privateRoutes",
           "meta": ["eu-west-2", "FlexDomainStack"],
           "d": {
             "type": "AWS::ApiGateway::Method",
@@ -1107,6 +1113,7 @@
           "id": "acm-cert",
           "name": "ACM certificate",
           "n": 1,
+          "from": "counts.certificates",
           "meta": ["us-east-1", "FlexGlobalStack"],
           "d": {
             "type": "AWS::CertificateManager::Certificate",
@@ -1146,13 +1153,14 @@
           "id": "waf-cf",
           "name": "Web ACL · CLOUDFRONT scope",
           "n": 1,
+          "from": "counts.wafCloudFront",
           "meta": ["us-east-1", "FlexGlobalStack"],
           "d": {
             "type": "AWS::WAFv2::WebACL",
             "tech": "5 rules · default allow",
             "role": "Edge filtering.",
             "facts": [
-              "0 CommonRuleSet · 1 KnownBadInputs · 2 BypassForE2ETests (allow) · 3 AmazonIpReputationList · 4 RateLimit block at 2000 per IP.",
+              "0 CommonRuleSet · 1 KnownBadInputs · 2 SQLiRuleSet · 3 BypassForE2ETests (allow) · 4 AmazonIpReputationList · 5 RateLimit block at 2000 per IP.",
               "Data protection: SUBSTITUTION on the authorization header.",
               "The bypass is an allow rule, so it terminates evaluation and skips rules 3 and 4 — but not 0 and 1."
             ],
@@ -1163,17 +1171,19 @@
         },
         {
           "id": "waf-regional",
-          "name": "Web ACL · REGIONAL scope + association",
-          "n": 2,
+          "name": "Web ACL · REGIONAL scope",
+          "n": 1,
+          "from": "counts.wafRegional",
           "meta": ["eu-west-2", "FlexPlatformStack"],
           "d": {
             "type": "AWS::WAFv2::WebACL + WebACLAssociation",
             "tech": "2 rules · default <b>BLOCK</b>",
             "role": "Origin lock on the public API stage.",
             "facts": [
-              "0 KnownBadInputs · 1 RequireOriginSecret, an exact byte match on <code>x-origin-verify</code>.",
+              "0 KnownBadInputs · 1 SQLiRuleSet · 2 RequireOriginSecret, an exact byte match on <code>x-origin-verify</code>.",
               "Default block is what makes the raw execute-api URL unusable.",
-              "sampledRequestsEnabled is false on the origin-secret rule, so the value is never sampled into logs."
+              "sampledRequestsEnabled is false on the origin-secret rule, so the value is never sampled into logs.",
+              "Attached to the public API stage by one <code>AWS::WAFv2::WebACLAssociation</code>, counted with the stage rather than here."
             ],
             "code": [
               [
@@ -1192,6 +1202,7 @@
             "prod": 1,
             "eph": 0
           },
+          "from": "counts.shieldProtections",
           "meta": ["us-east-1", "FlexGlobalStack"],
           "d": {
             "type": "AWS::Shield::Protection",
@@ -1210,16 +1221,17 @@
           "id": "iam-boundary",
           "name": "Permissions boundary policies",
           "n": {
-            "dev": 7,
-            "stg": 6,
+            "dev": 8,
+            "stg": 7,
             "prod": 4,
-            "eph": 7
+            "eph": 8
           },
+          "from": "counts.boundaryPolicies",
           "meta": ["eu-west-2", "platform + domain stacks"],
           "d": {
             "type": "AWS::IAM::ManagedPolicy",
             "tech": "PermissionsBoundary.of(stack).apply()",
-            "role": "A hard ceiling on every role in the stack.",
+            "role": "One permissions-boundary managed policy per stack that runs Lambda: the platform stack, and every domain stack deployed in the stage.",
             "facts": [
               "One in the platform stack, plus one per deployed domain stack.",
               "Allow: logs, X-Ray, ENI lifecycle, Secrets Manager read, SSM parameter operations, <code>kms:Decrypt</code>, <code>sts:AssumeRole</code>.",
@@ -1238,14 +1250,20 @@
         {
           "id": "iam-roles",
           "name": "IAM roles",
-          "n": null,
+          "n": {
+            "dev": 58,
+            "stg": 43,
+            "prod": 36,
+            "eph": 53
+          },
+          "from": "counts.iamRoles",
           "meta": ["both regions", "several stacks", "varies"],
           "d": {
             "type": "AWS::IAM::Role",
             "tech": "Generated and hand-written",
             "role": "Execution identities.",
             "facts": [
-              "One generated execution role per Lambda, all under the permissions boundary.",
+              "One generated execution role per Flex Lambda construct, each under the permissions boundary — 24 of 36 roles in production. The 12 outside it are roles CDK generates for its own providers (custom resources, the deploy gap, the bucket deployment handler), the API Gateway CloudWatch role, the Slack channel configuration role, the two alarm relay functions, the hand-written smoke-test role, and the Macie custom-resource role added with the stack in FLEX-491.",
               "Hand-written roles: the API Gateway CloudWatch role (auto-named — 'ApiGatewayCloudWatchRole' is only a construct id) and the smoke-test role, the only one with an explicit physical name <code>{env}-flex-smoke-test-role</code>.",
               "Also created by CDK: the Chatbot role, custom-resource roles and the BucketDeployment handler role.",
               "Per-route inline policies come from grantRouteResources and grantRoutePermissions."
@@ -1262,6 +1280,7 @@
           "id": "secrets",
           "name": "Secrets Manager secrets",
           "n": 2,
+          "from": "counts.secrets",
           "meta": ["both regions", "platform + global"],
           "d": {
             "type": "AWS::SecretsManager::Secret",
@@ -1290,6 +1309,7 @@
             "prod": 1,
             "eph": 0
           },
+          "from": "counts.kmsFlowLog",
           "meta": ["eu-west-2", "FlexCoreStack"],
           "d": {
             "type": "AWS::KMS::Key + Alias",
@@ -1316,6 +1336,7 @@
             "prod": 1,
             "eph": 0
           },
+          "from": "counts.kmsAlerts",
           "meta": ["eu-west-2", "FlexCoreStack"],
           "d": {
             "type": "AWS::KMS::Key + Alias",
@@ -1336,6 +1357,7 @@
           "id": "kms-relay",
           "name": "KMS key · relay topics",
           "n": 1,
+          "from": "counts.kmsRelay",
           "meta": ["us-east-1", "FlexGlobalStack"],
           "d": {
             "type": "AWS::KMS::Key + Alias",
@@ -1369,6 +1391,38 @@
               ["utils/lambda.ts", "platform/infra/flex/src/utils/lambda.ts"]
             ]
           }
+        },
+        {
+          "id": "macie",
+          "name": "Amazon Macie stack",
+          "n": {
+            "dev": 1,
+            "stg": 1,
+            "prod": 1,
+            "eph": 0
+          },
+          "meta": ["us-east-1", "FlexMacieStack", "persistent stages"],
+          "d": {
+            "type": "Custom::AWS x4, plus an IAM role, a Lambda, a KMS key and an S3 bucket",
+            "tech": "AwsCustomResource — neither a Macie session nor a classification job has a CloudFormation resource",
+            "role": "Scheduled sensitive-data discovery over the CloudFront access-log bucket.",
+            "facts": [
+              "Deployed since <b>FLEX-491</b>, which re-enabled the stack with an explicit custom-resource role. It was previously commented out in <code>app.ts</code>; these docs said so, and said it for three commits after it stopped being true.",
+              "<code>if (persistent)</code> in <code>app.ts</code> gates it, so it reaches development, staging and production and never an ephemeral PR stage.",
+              "Its <code>MacieCustomResourceRole</code> carries no permissions boundary, and is one of the 12 roles outside the boundary in production.",
+              "The session is enabled through a <code>macie2:enableMacie</code> call with FIFTEEN_MINUTES finding publication; automated discovery explicitly disabled to avoid rolling scans of public specs and log buckets.",
+              "A weekly SCHEDULED job every Monday at 100% sampling with RECOMMENDED managed identifiers.",
+              "Results export to a KMS-encrypted RETAIN bucket under <code>macie-results/</code>.",
+              "<code>macieCoverage.customDataIdentifiers</code> is an empty list, so no <code>AWS::Macie::CustomDataIdentifier</code> is synthesised — the config carries five covered domains and no custom patterns.",
+              "<code>validate:macie-coverage</code> runs in the Hygiene job on every pull request and posts a Slack notice for uncovered domains."
+            ],
+            "code": [
+              ["stacks/macie.ts", "platform/infra/flex/src/stacks/macie.ts"],
+              ["app.ts", "platform/infra/flex/src/app.ts"]
+            ],
+            "icon": "macie"
+          },
+          "from": "counts.macieStacks"
         }
       ]
     },
@@ -1832,18 +1886,19 @@
           "id": "loggroups",
           "name": "Log groups",
           "n": {
-            "dev": 44,
-            "stg": 31,
-            "prod": 27,
-            "eph": 43
+            "dev": 56,
+            "stg": 42,
+            "prod": 37,
+            "eph": 54
           },
+          "from": "counts.logGroups",
           "meta": ["both regions", "several stacks"],
           "d": {
             "type": "AWS::Logs::LogGroup",
-            "tech": "RetentionDays.ONE_YEAR",
-            "role": "One per Flex Lambda construct, plus one per API stage.",
+            "tech": "365 days on Flex constructs · 731 on CDK-managed",
+            "role": "Every log group the stacks create: one per Lambda construct, one per API stage for access and execution logs, and the groups CDK manages for its own functions.",
             "facts": [
-              "Created explicitly rather than left to Lambda's implicit default, so retention is guaranteed. The count excludes the auto-created groups in the table above.",
+              "Flex constructs set <code>RetentionDays.ONE_YEAR</code> explicitly (29 groups in production). The 8 groups CDK creates for its own functions — the deploy gap, the alarm relays, the bucket deployment handler, the Macie custom-resource function — take CDK's two-year default instead.",
               "Content is redacted at source by the <code>@flex/logging</code> sanitizer before it is ever written.",
               "<code>FlexLogger.setLogLevel</code> returns without doing anything when <code>FLEX_ENVIRONMENT</code> is production, so verbose logging cannot be turned on there at runtime."
             ],
@@ -1959,35 +2014,6 @@
                 "utils/resources.ts",
                 "platform/infra/flex/src/utils/resources.ts"
               ]
-            ]
-          }
-        }
-      ]
-    },
-    {
-      "name": "Disabled in code",
-      "note": null,
-      "table": null,
-      "items": [
-        {
-          "id": "macie",
-          "name": "Amazon Macie stack",
-          "n": 0,
-          "meta": ["us-east-1", "FlexMacieStack"],
-          "d": {
-            "type": "AWS::Macie::CustomDataIdentifier, plus custom resources",
-            "tech": "AwsCustomResource · CfnCustomDataIdentifier",
-            "role": "Scheduled sensitive-data discovery over the CloudFront access-log bucket.",
-            "facts": [
-              "Fully implemented, but its import and its instantiation are <b>commented out in <code>app.ts</code></b> — it is disabled in code, not merely undeployed. Uncommenting is not a one-line change: the commented block also references a <code>globalStack</code> variable that no longer exists.",
-              "The session is enabled through a <code>macie2:enableMacie</code> call with FIFTEEN_MINUTES finding publication; automated discovery explicitly disabled to avoid rolling scans of public specs and log buckets.",
-              "A weekly SCHEDULED job every Monday at 100% sampling with RECOMMENDED managed identifiers.",
-              "Results export to a KMS-encrypted RETAIN bucket under <code>macie-results/</code>.",
-              "The CI coverage check <b>is</b> live: <code>validate:macie-coverage</code> runs in the Hygiene job on every pull request and posts a Slack notice for uncovered domains — so coverage is reported against a stack that is not deployed."
-            ],
-            "code": [
-              ["stacks/macie.ts", "platform/infra/flex/src/stacks/macie.ts"],
-              ["app.ts", "platform/infra/flex/src/app.ts"]
             ]
           }
         }

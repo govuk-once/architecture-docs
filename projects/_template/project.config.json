@@ -1,0 +1,28 @@
+{
+  "name": "Template",
+  "title": "Template explorer",
+  "tagline": "Copy this directory to start a project",
+  "blurb": "Rewrite every field. Nothing here is true of any system.",
+  "repo": "https://github.com/ORG/REPO/blob/main/",
+  "inventoryView": "resources",
+  "inventoryLabel": "AWS resources",
+  "iconLabel": "AWS icons",
+  "filterHint": "Filter",
+  "kinds": [
+    { "id": "person", "label": "Person", "colour": "purple" },
+    { "id": "system", "label": "The system", "colour": "blue" }
+  ],
+  "stages": [
+    {
+      "id": "dev",
+      "label": "Development",
+      "facts": "development",
+      "synth": "development"
+    }
+  ],
+  "source": {
+    "repo": "git@github.com:ORG/REPO.git",
+    "ref": "main",
+    "root": ".sources/REPO"
+  }
+}

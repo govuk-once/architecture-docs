@@ -2,7 +2,8 @@
 const REPO=CONFIG.repo;
 const STAGES=CONFIG.stages;
 /* Named deployStage, not stage: `stage` is already the diagram canvas element. */
-let deployStage="dev";
+/* The first configured stage: a project need not have one called "dev". */
+let deployStage=STAGES[0].id;
 const stageLabel=()=>STAGES.find(s=>s.id===deployStage).label;
 
 /* RES is built once from the Resources view, so the inventory is the single
@@ -63,14 +64,21 @@ function exportBands(w,h){
         +t(x+18,y,"cap-lg",KIND_LABEL[k]);
     x+=18+KIND_LABEL[k].length*6.6+24;
   }
-  if(planes.length>1){
+  /* Plane is a property of a box, so its glyph is a box — the exported legend used to
+     draw it as a line, which pointed the reader at the edges instead. */
+  if(planes.includes("control")){
     x+=6;
     for(const pl of planes){
-      out+=`<line x1="${x}" y1="${y-4}" x2="${x+16}" y2="${y-4}" class="cap-pl"`
-          +(pl==="control"?` stroke-dasharray="5 3"`:``)+`/>`
-          +t(x+23,y,"cap-lg",PLANE_LABEL[pl]);
-      x+=23+PLANE_LABEL[pl].length*6.6+24;
+      out+=`<rect x="${x}" y="${y-9}" width="11" height="11" rx="2.5" class="cap-pl"`
+          +(pl==="control"?` stroke-dasharray="3 2"`:``)+`/>`
+          +t(x+18,y,"cap-lg",PLANE_LABEL[pl]);
+      x+=18+PLANE_LABEL[pl].length*6.6+24;
     }
+  }
+  if((view.edges||[]).some(e=>e.style==="dash")&&view.dashMeans){
+    x+=6;
+    out+=`<line x1="${x}" y1="${y-4}" x2="${x+17}" y2="${y-4}" class="cap-pl" stroke-dasharray="4 3"/>`
+        +t(x+24,y,"cap-lg",view.dashMeans);
   }
   return out+`</g>`;
 }
@@ -141,7 +149,7 @@ function exportPng(){
       const url=URL.createObjectURL(blob);
       const a=document.createElement("a");
       a.href=url;
-      a.download=`${CONFIG.slug}-${view.id}-${deployStage}.png`;
+      a.download=`${CONFIG.id}-${view.id}-${deployStage}.png`;
       document.body.appendChild(a); a.click(); a.remove();
       setTimeout(()=>URL.revokeObjectURL(url),1000);
     },"image/png");
@@ -172,13 +180,16 @@ const PLANE_ORDER=["request","control"];
 /* Not "control plane": that term means the management API layer, and this flag also
    covers source files, runbooks, observability and people. What it encodes is only
    whether a thing serves live traffic, so the labels say only that. */
-const PLANE_LABEL={request:"on the request path",control:"off the request path"};
+const PLANE_LABEL=CONFIG.planes;
 
 /* ============================ RENDER ============================ */
 const SVGNS="http://www.w3.org/2000/svg";
 const svg=document.getElementById("svg"), root=document.getElementById("root");
 const stage=document.getElementById("stage"), insp=document.getElementById("insp");
-const doc=document.getElementById("doc"), hint=document.getElementById("hint"), ctrls=document.querySelector(".ctrls");
+/* No pointer means no hover, so copy that offers hovering is describing a gesture
+   the reader does not have. Asked once, used by the hint and by the panel. */
+const COARSE=matchMedia("(pointer:coarse)").matches;
+const doc=document.getElementById("doc"), hint=document.getElementById("hint");
 let filter="";
 /* A set of resource ids carried over from a diagram box, so the Resources tab can show
    just that box's inventory. Cleared by the chip, or by switching tab. */
@@ -254,12 +265,57 @@ function clipCount(d,obstacles,probe){
   return hits;
 }
 
+/* ============================ PHONE CHROME ============================
+   Both of these are no-ops on a wide screen: the classes they toggle mean nothing
+   outside the narrow-screen block, so there is one code path and the stylesheet
+   decides whether it shows. */
+const grip=document.getElementById("sheetgrip"), gripLabel=document.getElementById("griplabel"),
+      menuBtn=document.getElementById("menubtn");
+/* The label is what a reader sees above the fold, so it names what is inside rather
+   than saying "Details" over a panel already describing a specific box. */
+function sheet(open,label){
+  document.body.classList.toggle("sheet-open",open);
+  grip.setAttribute("aria-expanded",String(open));
+  gripLabel.textContent=label||"Details";
+}
+const sheetTitle=()=>{const t=insp.querySelector(".insp-title");return t?t.textContent:"";};
+/* One line, not the whole panel. A screen reader user clicking through a diagram wants to
+   know what they landed on and that the details moved; they can read the panel when they
+   choose to, and having it recited in full every time makes that harder, not easier. */
+const statusEl=document.getElementById("status");
+function announce(what){
+  const t=sheetTitle();
+  statusEl.textContent=t?`${what}: ${t}. Details panel updated.`:"";
+}
+function menu(open){
+  document.querySelector("header").classList.toggle("menu-open",open);
+  menuBtn.setAttribute("aria-expanded",String(open));
+  /* The glyph changes to a cross, so the name has to change with it — a button that
+     shows one thing and announces another is worse than either alone. */
+  const name=open?"Close the options":"Display and export options";
+  menuBtn.setAttribute("aria-label",name); menuBtn.setAttribute("title",name);
+}
+grip.addEventListener("click",()=>sheet(!document.body.classList.contains("sheet-open"),gripLabel.textContent));
+menuBtn.addEventListener("click",ev=>{
+  ev.stopPropagation();
+  menu(!document.querySelector("header").classList.contains("menu-open"));
+});
+/* A menu that only closes by its own button is a menu people leave open over the
+   diagram they were trying to read. */
+document.addEventListener("click",ev=>{
+  if(!ev.target.closest(".ctrls")&&!ev.target.closest(".menubtn"))menu(false);
+});
+document.getElementById("fitm").addEventListener("click",()=>fit());
+document.getElementById("panelclose").addEventListener("click",()=>sheet(false,gripLabel.textContent));
+
 function build(){
   const isDoc=view.type==="doc";
+  sheet(false); menu(false);
+  document.querySelector(".shell").classList.toggle("is-doc",isDoc);
   svg.hidden=isDoc; doc.hidden=!isDoc; hint.hidden=isDoc; /* Only zoom and export depend on a canvas. Icons show on the inventory rows too, and
      the theme is page-wide — hiding those left a reader able to see icons on the
      Resources tab with no way to turn them off. */
-  ctrls.querySelectorAll(".canvas-only").forEach(g=>{g.hidden=isDoc;});
+  document.querySelectorAll(".canvas-only").forEach(g=>{g.hidden=isDoc;});
   svg.style.display=isDoc?"none":"block";
   /* The stage selector only means something where per-stage counts are shown. */
   const staged=isDoc?view.id===CONFIG.inventoryView:Object.keys(PLACEMENT[view.id]||{}).length>0;
@@ -438,7 +494,8 @@ function clearFocus(){
   edgeEls.forEach(v=>{v.g.classList.remove("dim");v.lg&&v.lg.classList.remove("dim");});
 }
 function clearSel(){
-  sel=null; clearFocus();
+  sel=null; clearFocus(); sheet(false);
+  if(statusEl)statusEl.textContent="Selection cleared.";
   nodeEls.forEach(v=>v.g.classList.remove("sel"));
   zoneEls.forEach(v=>v.g.classList.remove("sel"));
   edgeEls.forEach(v=>{v.g.classList.remove("sel");v.lg&&v.lg.classList.remove("sel");});
@@ -459,6 +516,8 @@ function select(s){
     focus(new Set([e.from,e.to]),new Set([s.id])); renderEdge(e);
   }
   insp.scrollTop=0;
+  sheet(true,sheetTitle());
+  announce(s.t==="edge"?"Line selected":s.t==="zone"?"Boundary selected":"Box selected");
 }
 
 /* ============================ INSPECTOR ============================ */
@@ -479,14 +538,14 @@ function renderIdle(){
     insp.innerHTML=`
       <div>
         <div class="eyebrow">${esc(view.name)} view</div>
-        <h1 class="insp-title">${esc(view.name)}</h1>
+        <h2 class="insp-title">${esc(view.name)}</h2>
         <p class="insp-sub">${esc(view.blurb)}</p>
       </div>
       <div class="card">
         <div class="eyebrow" style="margin-bottom:9px">How to read it</div>
         <ul class="facts">
           <li>Pick any row to open its full configuration here.</li>
-          <li>Filter matches names, counts, scope tags and every fact — so <code>isolated</code>, <code>us-east-1</code> or <code>365 days</code> all work.</li>
+          <li>Filter matches names, counts, scope tags and every fact. ${esc(CONFIG.filterHint)}.</li>
           <li>Tables are the reference data itself and need no clicking.</li>
         </ul>
       </div>
@@ -501,15 +560,15 @@ function renderIdle(){
   insp.innerHTML=`
     <div>
       <div class="eyebrow">${esc(view.name)} view</div>
-      <h1 class="insp-title">${esc(view.name)}</h1>
+      <h2 class="insp-title">${esc(view.name)}</h2>
       <p class="insp-sub">${esc(view.blurb)}</p>
     </div>
     <div class="card">
       <div class="eyebrow" style="margin-bottom:9px">How to read it</div>
       <ul class="facts">
-        <li>Click any box to see what it is and everything it connects to.</li>
-        <li>Click any line to see the protocol, the auth and what actually travels over it.</li>
-        <li>Hover to isolate one thing; press Escape to clear the selection.</li>
+        <li>${COARSE?"Tap":"Click"} any box to see what it is and everything it connects to.</li>
+        <li>${COARSE?"Tap":"Click"} any line to see the protocol, the auth and what actually travels over it.</li>
+        <li>${COARSE?"Tap the background to clear the selection.":"Hover to isolate one thing; press Escape to clear the selection."}</li>
       </ul>
     </div>
     <div class="sect">
@@ -524,7 +583,7 @@ function renderNode(n){
   insp.innerHTML=`
     <div>
       <span class="chip" style="color:${kindVar(n.kind)}"><i></i>${esc(KIND_LABEL[n.kind])}</span>
-      <h1 class="insp-title">${esc(n.label)}</h1>
+      <h2 class="insp-title">${esc(n.label)}</h2>
       ${n.sub?`<p class="insp-sub mono">${esc(n.sub)}</p>`:""}
     </div>
     <dl class="kv"><dt>Type</dt><dd>${esc(n.d.type)}</dd><dt>Technology</dt><dd>${iconTag(n.icon||iconForType(n.d.type))}${esc(n.d.tech)}</dd><dt>Plane</dt><dd>${esc(PLANE_LABEL[n.plane||"request"])}</dd></dl>
@@ -540,7 +599,7 @@ function renderZone(z){
   insp.innerHTML=`
     <div>
       <span class="chip" style="color:var(--accent)"><i></i>Boundary</span>
-      <h1 class="insp-title">${esc(z.label)}</h1>
+      <h2 class="insp-title">${esc(z.label)}</h2>
     </div>
     <dl class="kv"><dt>Type</dt><dd>${esc(z.d?.type||"Grouping")}</dd><dt>Technology</dt><dd>${esc(z.d?.tech||"—")}</dd></dl>
     ${z.d?.role?`<p style="margin:0;font-size:14px;color:var(--ink-2)">${esc(z.d.role)}</p>`:""}
@@ -557,13 +616,13 @@ function resourcesHere(nodeId){
     const c=countOf(it);
     return `<button class="resrow" data-res="${id}" data-from="${nodeId}">
       <span class="num${c===0?" zero":""}">${c===null?"~":c}</span>
-        ${iconTag(iconForType(it.d.type),"sm")}
+        ${iconTag(it.d.icon||iconForType(it.d.type),"sm")}
       <span>${esc(it.name)}</span></button>`;
   }).join("");
   return `<hr>
     <div class="sect">
       <div class="eyebrow">Resources in this box · ${esc(stageLabel())}</div>
-      <div class="total"><b>${sum}${varies?"+":""}</b><span>AWS resources across ${ids.length} entr${ids.length===1?"y":"ies"}${varies?", plus some that vary per stack":""}</span></div>
+      <div class="total"><b>${sum}${varies?"+":""}</b><span>${esc(CONFIG.inventoryLabel)} across ${ids.length} entr${ids.length===1?"y":"ies"}${varies?", plus some that vary per stack":""}</span></div>
       <div class="reslist">${rows}</div>
       <button class="btn wide" data-pin="${nodeId}" type="button">Open these in the Resources tab</button>
     </div>`;
@@ -596,7 +655,7 @@ function renderEdge(e){
   insp.innerHTML=`
     <div>
       <span class="chip" style="color:var(--accent)"><i></i>Relationship</span>
-      <h1 class="insp-title">${esc(e.label||`${a.label} → ${b.label}`)}</h1>
+      <h2 class="insp-title">${esc(e.label||`${a.label} → ${b.label}`)}</h2>
       <p class="insp-sub mono">${esc(a.label)} ${e.dir==="both"?"↔":"→"} ${esc(b.label)}</p>
     </div>
     <dl class="kv">
@@ -653,21 +712,29 @@ function renderTables(){
       <span class="tbl-hint">${tablesOpen?"hide":"show"}</span>
     </button>
     <div class="tbl-body" id="tbl-body">${
-      t.map(x=>`<section class="grp"><h2>${esc(x.name)}</h2>${x.note?`<p class="gnote">${rich(x.note)}</p>`:""}${tableHtml(x)}${codes(x.code)}</section>`).join("")
+      t.map(x=>`<section class="grp"><h3>${esc(x.name)}</h3>${x.note?`<p class="gnote">${rich(x.note)}</p>`:""}${tableHtml(x)}${codes(x.code)}</section>`).join("")
     }</div>`;
   box.querySelector("#tbl-toggle").addEventListener("click",()=>setTablesOpen(!tablesOpen));
 }
 
 /* Colour carries ownership, border carries plane. They are two axes, so the legend
    shows them as two groups rather than one flat list of peers. */
+/* A key explains what is marked, not what is ordinary. Solid is the unmarked state for
+   both channels, so the plane entries appear whenever any box is dashed — including a tab
+   where every box is, which the old `planes.length>1` test hid — and the edge entry
+   whenever any line is. Box properties get a box glyph, line properties a line glyph, so
+   the two dashed idioms can never be read for one another. */
 function legendHtml(){
   if(view.type==="doc"||!view.nodes)return "";
   const kinds=KIND_ORDER.filter(k=>view.nodes.some(n=>n.kind===k));
   const planes=PLANE_ORDER.filter(p=>view.nodes.some(n=>(n.plane||"request")===p));
+  const dashed=(view.edges||[]).some(e=>e.style==="dash");
+  const row=(cls,html)=>html?`<div class="lg-row ${cls}">${html}</div>`:"";
   return `<div class="legend">`
-    +kinds.map(k=>`<span class="lg-item" style="color:${kindVar(k)}"><i class="sw"></i>${esc(KIND_LABEL[k])}</span>`).join("")
-    +(planes.length>1?`<span class="lg-sep"></span>`+planes.map(p=>
+    +row("",kinds.map(k=>`<span class="lg-item" style="color:${kindVar(k)}"><i class="sw"></i>${esc(KIND_LABEL[k])}</span>`).join(""))
+    +row("",planes.includes("control")?planes.map(p=>
        `<span class="lg-item"><i class="sw pl-${p}"></i>${esc(PLANE_LABEL[p])}</span>`).join(""):"")
+    +row("dash",dashed&&view.dashMeans?`<span class="lg-item dash"><i class="ln"></i>${esc(view.dashMeans)}</span>`:"")
     +`</div>`;
 }
 
@@ -699,12 +766,12 @@ function buildDoc(){
     const rows=keep.map(it=>{
       const gi2=gi, ii=items.indexOf(it), c=countOf(it), note=!it.id;
       return `<button class="row${!note&&c===0?" zero":""}" data-g="${gi2}" data-i="${ii}">
-        <span>${iconTag(iconForType(it.d.type),"sm")}<b>${esc(it.name)}</b></span>
+        <span>${iconTag(it.d.icon||iconForType(it.d.type),"sm")}<b>${esc(it.name)}</b></span>
         <span class="rcount">${note?"design note":c===null?"varies":c===0?`none in ${esc(stageLabel().toLowerCase())}`:`${c}\u00d7`}</span>
         <span class="rmeta">${(it.meta||[]).map(m=>`<span class="tag">${esc(m)}</span>`).join("")}</span>
       </button>`;}).join("");
     return `<section class="grp">
-      <h2>${esc(g.name)}</h2>
+      <h3>${esc(g.name)}</h3>
       ${g.note?`<p class="gnote">${rich(g.note)}</p>`:""}
       ${g.table&&tableVisible?tableHtml(g.table):""}
       ${rows?`<div class="rows">${rows}</div>`:""}
@@ -712,7 +779,7 @@ function buildDoc(){
   }).join("");
   doc.innerHTML=`
     <div class="doc-head">
-      <h1>${esc(view.name)}</h1>
+      <h2>${esc(view.name)}</h2>
       <p>${esc(view.blurb)}</p>
       ${view.note?`<div class="doc-note">${rich(view.note)}</div>`:""}
     </div>
@@ -734,6 +801,8 @@ function buildDoc(){
     b.classList.add("sel");
     renderItem(view.groups[+b.dataset.g].items[+b.dataset.i],view.groups[+b.dataset.g].name);
     insp.scrollTop=0;
+    sheet(true,sheetTitle());
+    announce("Row selected");
   }));
 }
 function tableHtml(t){
@@ -754,10 +823,10 @@ function renderItem(it,groupName,ctx){
     ${ctx&&ctx.node?`<button class="backlink" data-back="${ctx.node}">← back to ${esc((view.nodes.find(x=>x.id===ctx.node)||{}).label||"the box")}</button>`:""}
     <div>
       <span class="chip" style="color:var(--accent)"><i></i>${esc(groupName)}</span>
-      <h1 class="insp-title">${esc(it.name)}</h1>
+      <h2 class="insp-title">${esc(it.name)}</h2>
     </div>
     ${it.id?`<div class="total"><b>${c===null?"~":c}</b><span>${c===null?"varies — counted per stack, not summed":`in ${esc(stageLabel())}${c===0?" this resource is not created":""}`}</span></div>`:""}
-    <dl class="kv"><dt>Resource</dt><dd class="mono" style="font-size:12px">${iconTag(iconForType(it.d.type))}${esc(it.d.type)}</dd><dt>Config</dt><dd>${rich(it.d.tech)}</dd></dl>
+    <dl class="kv"><dt>Resource</dt><dd class="mono" style="font-size:12px">${iconTag(it.d.icon||iconForType(it.d.type))}${esc(it.d.type)}</dd><dt>Config</dt><dd>${rich(it.d.tech)}</dd></dl>
     <p style="margin:0;font-size:14px;color:var(--ink-2)">${esc(it.d.role)}</p>
     ${facts(it.d.facts)}
     ${(it.meta||[]).length?`<div class="sect"><div class="eyebrow">Scope</div><div class="rmeta" style="justify-content:flex-start">${it.meta.map(m=>`<span class="tag">${esc(m)}</span>`).join("")}</div></div>`:""}
@@ -809,21 +878,43 @@ function zoomBy(f,cx,cy){
    that follows, so a drag never selects and a tap never pans. */
 const DRAG_SLOP=4;
 let drag=null; window.__panned=false;
+/* Every live pointer, so a second finger can turn a pan into a pinch mid-gesture. */
+const touches=new Map();
+let pinch=null;
+const span=()=>{const[a,b]=[...touches.values()];
+  return{d:Math.hypot(a.x-b.x,a.y-b.y),cx:(a.x+b.x)/2,cy:(a.y+b.y)/2};};
 /* Deliberately no setPointerCapture: capturing on the svg retargets the click that
    follows, which would swallow every box and line selection. Window listeners give
    the same "keep dragging outside the frame" behaviour without touching click targets. */
 svg.addEventListener("pointerdown",ev=>{
   if(ev.pointerType==="mouse"&&ev.button!==0)return;
+  if(ev.pointerType!=="mouse")touches.set(ev.pointerId,{x:ev.clientX,y:ev.clientY});
+  if(touches.size===2){
+    /* A second finger cancels the pan it interrupted, so the canvas does not lurch. */
+    drag=null; window.__panned=true; stage.classList.remove("dragging");
+    const s=span(); pinch={d:s.d,k:vp.k};
+    return;
+  }
   drag={sx:ev.clientX,sy:ev.clientY,ox:vp.x,oy:vp.y,u:pxPerUnit()}; window.__panned=false;
 });
 addEventListener("pointermove",ev=>{
+  if(touches.has(ev.pointerId))touches.set(ev.pointerId,{x:ev.clientX,y:ev.clientY});
+  if(pinch&&touches.size===2){
+    const s=span();
+    if(s.d>0){const p=screenToVB(s.cx,s.cy); zoomBy((s.d/pinch.d)*(pinch.k/vp.k),p.x,p.y);}
+    return;
+  }
   if(!drag)return;
   const dx=ev.clientX-drag.sx, dy=ev.clientY-drag.sy;
   if(!window.__panned&&Math.hypot(dx,dy)<DRAG_SLOP)return;
   if(!window.__panned){window.__panned=true;stage.classList.add("dragging");}
   vp.x=drag.ox+dx/drag.u; vp.y=drag.oy+dy/drag.u; apply();
 });
-["pointerup","pointercancel"].forEach(t=>addEventListener(t,()=>{drag=null;stage.classList.remove("dragging");}));
+["pointerup","pointercancel"].forEach(t=>addEventListener(t,ev=>{
+  touches.delete(ev.pointerId);
+  if(touches.size<2)pinch=null;
+  drag=null; stage.classList.remove("dragging");
+}));
 svg.addEventListener("wheel",ev=>{ev.preventDefault();const p=screenToVB(ev.clientX,ev.clientY);zoomBy(ev.deltaY<0?1.12:1/1.12,p.x,p.y);},{passive:false});
 svg.addEventListener("click",ev=>{
   if(window.__panned)return;
@@ -834,7 +925,7 @@ document.getElementById("zout").onclick=()=>zoomBy(1/1.25);
 document.getElementById("zfit").onclick=fit;
 addEventListener("keydown",ev=>{
   if(ev.target.matches("input,textarea,[type=search]"))return;
-  if(ev.key==="Escape")clearSel();
+  if(ev.key==="Escape"){clearSel();menu(false);}
   else if(ev.key==="+"||ev.key==="=")zoomBy(1.25);
   else if(ev.key==="-")zoomBy(1/1.25);
   else if(ev.key==="0")fit();
@@ -853,13 +944,47 @@ VIEWS.forEach((v,i)=>{
   }
   const b=document.createElement("button");
   b.className="tab"; b.textContent=v.name; b.setAttribute("role","tab");
+  b.id="tab-"+v.id; b.setAttribute("aria-controls","stage");
   b.setAttribute("aria-selected",i===0?"true":"false");
-  b.onclick=()=>{
-    view=v; sel=null; filter=""; pin=null;
-    [...tabs.children].forEach(c=>c.setAttribute("aria-selected",c===b?"true":"false"));
-    build(); fit(); renderIdle();
-  };
+  /* Roving tabindex, per the tab pattern: the strip is one stop in the tab order and the
+     arrow keys move within it. Eight stops for eight tabs is eight things to pass through
+     before reaching the diagram they label. */
+  b.tabIndex=i===0?0:-1;
+  b.onclick=()=>selectTab(v,b);
   tabs.appendChild(b);
+});
+
+/** Every element that is actually a tab. The group dividers are spans in the same strip. */
+const tabButtons=()=>[...tabs.querySelectorAll(".tab")];
+
+function selectTab(v,b){
+  view=v; sel=null; filter=""; pin=null;
+  /* Only the tabs — the earlier version set aria-selected on the group dividers too. */
+  tabButtons().forEach(c=>{
+    const on=c===b;
+    c.setAttribute("aria-selected",on?"true":"false");
+    c.tabIndex=on?0:-1;
+  });
+  /* The panel says which tab it belongs to, so a screen reader landing in it knows. */
+  document.getElementById("stage").setAttribute("aria-labelledby",b.id);
+  build(); fit(); renderIdle();
+}
+
+/*
+ * Manual activation: the arrows move focus and Enter or Space chooses. The pattern allows
+ * either, and following focus would rebuild the whole diagram on every arrow press.
+ */
+tabs.addEventListener("keydown",ev=>{
+  const list=tabButtons(), at=list.indexOf(document.activeElement);
+  if(at<0)return;
+  const go=i=>{const t=list[(i+list.length)%list.length];t.focus();};
+  if(ev.key==="ArrowRight")go(at+1);
+  else if(ev.key==="ArrowLeft")go(at-1);
+  else if(ev.key==="Home")go(0);
+  else if(ev.key==="End")go(list.length-1);
+  else if(ev.key==="Enter"||ev.key===" ")list[at].click();
+  else return;
+  ev.preventDefault();
 });
 
 function stageTotal(){
@@ -874,7 +999,10 @@ function stageTotal(){
 /* Three states, not two: someone who overrides the theme needs a way back to following
    the system. The CSS was written for this — :root[data-theme] blocks existed from the
    start — but nothing ever set the attribute, so the override half was never reachable. */
-const THEME_KEY=`${CONFIG.slug}-arch-theme`;
+/* THEME_KEY is injected above this file, site-wide rather than per project: the theme is
+   the reader's preference for the site, so choosing dark on the index or on one project's
+   page holds on every other. The index page's toggle is handed the same constant, from
+   the same place, so the two cannot disagree. */
 const THEMES=[
   {id:"system",label:"Match system",
    d:'<rect x="2" y="3" width="12" height="8" rx="1.5"/><path d="M6 14h4M8 11v3"/>'},
@@ -902,7 +1030,7 @@ const themeBtn=document.getElementById("themetoggle");
   });
 }
 
-const ICON_KEY=`${CONFIG.slug}-arch-icons`;
+const ICON_KEY="arch-icons";
 const iconBtn=document.getElementById("icontoggle");
 if(!ICON_IDS.length){ if(iconBtn)iconBtn.hidden=true; }
 else{
@@ -919,8 +1047,16 @@ else{
   });
 }
 
+/* "scroll to zoom" is a lie on a phone, where the wheel event never fires. */
+if(COARSE){
+  const h=document.getElementById("hint");
+  if(h)h.innerHTML='<span>drag to pan</span><span>pinch to zoom</span><span>tap a box or a line</span>';
+}
+/* The page's one h1. Everything else steps down from it: the panel and a reference
+   view's own title are h2, and a reference view's sections h3. Before this the page had
+   a single heading and nothing to navigate by. */
 document.getElementById("brand").innerHTML=
-  `<b>${esc(CONFIG.title)}</b><span>${esc(CONFIG.tagline)}</span>`;
+  `<h1>${esc(CONFIG.title)}</h1><span>${esc(CONFIG.tagline)}</span>`;
 iconBtn.setAttribute("aria-label",CONFIG.iconLabel);
 svg.setAttribute("aria-label",`Interactive ${CONFIG.title} diagram`);
 document.getElementById("savepng").addEventListener("click",exportPng);
@@ -928,7 +1064,9 @@ document.getElementById("savepng").addEventListener("click",exportPng);
 const stageBar=document.getElementById("stages");
 STAGES.forEach(st=>{
   const b=document.createElement("button");
-  b.textContent=st.label; b.setAttribute("aria-pressed",st.id===deployStage?"true":"false");
+  const long=document.createElement("span"); long.className="s-long"; long.textContent=st.label;
+  const short=document.createElement("span"); short.className="s-short"; short.textContent=st.id;
+  b.append(long,short); b.setAttribute("aria-pressed",st.id===deployStage?"true":"false");
   b.onclick=()=>{
     deployStage=st.id;
     [...stageBar.children].forEach(c=>c.setAttribute("aria-pressed",c===b?"true":"false"));
@@ -938,4 +1076,12 @@ STAGES.forEach(st=>{
 });
 
 indexResources(); indexPlaces();
+document.getElementById("stage").setAttribute("aria-labelledby","tab-"+VIEWS[0].id);
+
+/* The skip link lands on the panel. On a phone the panel is closed, so a reader who asks
+   for it should get it rather than a handle. */
+document.querySelector(".skip").addEventListener("click",()=>{
+  sheet(true,gripLabel.textContent);
+});
+
 build(); fit(); renderIdle();

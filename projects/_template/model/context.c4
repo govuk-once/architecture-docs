@@ -1,0 +1,35 @@
+// The smallest diagram that builds: two boxes, one line, every claim cited.
+// Identifiers are prefixed with the view id (context_) — see projects/README.md.
+model {
+  context_user = actor 'A user' {
+    #request-path
+    description 'who calls it'
+    link https://github.com/ORG/REPO/blob/main/README.md 'README.md'
+    metadata {
+      role 'Calls the system.'
+      facts [ 'Replace with a claim the linked file proves.' ]
+      sourceId 'user'
+      order '1'
+      x '40'  y '60'  w '200'  h '62'
+      ownership 'person'
+    }
+  }
+  context_sys = platform 'The system' {
+    #request-path
+    description 'what it is'
+    link https://github.com/ORG/REPO/blob/main/README.md 'README.md'
+    metadata {
+      role 'Does the work.'
+      facts [ 'Replace with a claim the linked file proves.' ]
+      sourceId 'sys'
+      order '2'
+      x '340' y '60'  w '200'  h '62'
+      ownership 'system'
+      resources [ 'one' ]
+    }
+  }
+  context_user -> context_sys 'calls' {
+    metadata { protocol 'HTTPS' order '1' }
+  }
+}
+views { view context { include * } }

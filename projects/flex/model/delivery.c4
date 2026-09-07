@@ -133,10 +133,10 @@ model {
         ]
         sourceId 'ghpr'
         order '4'
-        x '46'
-        y '371'
+        x '247'
+        y '348'
         w '240'
-        h '32'
+        h '54'
         ownership 'third'
       }
     }
@@ -185,7 +185,7 @@ model {
         order '6'
         x '267'
         y '443'
-        w '186'
+        w '200'
         h '62'
         ownership 'flex'
       }
@@ -232,10 +232,59 @@ model {
         sourceId 'sonar'
         order '8'
         x '46'
-        y '552'
+        y '647'
         w '177'
         h '62'
         ownership 'third'
+      }
+    }
+    delivery_unit = platform 'Unit tests' {
+      #off-request-path
+      description '117 files · vitest + v8'
+      technology 'nx run-many --target=test --all'
+      link https://github.com/govuk-once/flex/blob/main/.github/workflows/_quality-checks.yml '_quality-checks.yml'
+      link https://github.com/govuk-once/flex/blob/main/libs/config/src/vitest.ts 'config/vitest.ts'
+      metadata {
+        type 'GitHub Actions step'
+        tech 'vitest · v8 coverage provider'
+        role 'The only check that runs against every project, every time.'
+        facts [
+          '117 unit test files — 59 in <code>libs</code>, 43 in <code>domains</code>, 12 in <code>platform</code>, 3 in <code>scripts</code>. The six domain E2E suites and the three platform ones are separate from this count.',
+          'Run with <code>--all --skip-nx-cache</code> rather than <code>affected</code>, so a change anywhere runs every project\'s tests — unlike lint, tsc and checkov, which are all affected-only.',
+          'It is a step inside the SonarQube job rather than a job of its own, so a failing test surfaces as a SonarQube failure.',
+          'No coverage threshold is set in the shared vitest config: coverage is measured and handed to the quality gate, but nothing in the repository fails a build for coverage alone.'
+        ]
+        sourceId 'unit'
+        order '37'
+        x '46'
+        y '545'
+        w '177'
+        h '62'
+        ownership 'flex'
+      }
+    }
+    delivery_checkov = platform 'IaC scan · checkov' {
+      #off-request-path
+      description 'the templates, not the code'
+      technology 'cdk synth, then checkov'
+      link https://github.com/govuk-once/flex/blob/main/.github/workflows/_quality-checks.yml '_quality-checks.yml'
+      link https://github.com/govuk-once/flex/blob/main/platform/infra/flex/package.json 'infra package.json'
+      metadata {
+        type 'GitHub Actions step'
+        tech 'checkov --framework cloudformation'
+        role 'Static analysis of the CloudFormation the CDK app produces.'
+        facts [
+          'It runs <code>cdk synth</code> first and scans <code>cdk.out</code>, so it sees the same templates that deploy rather than the TypeScript that wrote them.',
+          'Invoked as <code>nx affected --target=checkov</code>, and only <code>platform/infra/flex</code> declares that target — so the scan runs only when the CDK app is in the affected set.',
+          'Suppressions are recorded in the code beside what they excuse: CKV_AWS_107/108/111 on the permissions boundary, CKV_AWS_149 on the replicated secrets, CKV_AWS_59 on the private API.'
+        ]
+        sourceId 'checkov'
+        order '38'
+        x '267'
+        y '545'
+        w '210'
+        h '62'
+        ownership 'flex'
       }
     }
 
@@ -250,14 +299,14 @@ model {
         tech '_moduleE2E.yml'
         role 'Runs each domain\'s own E2E suite against the ephemeral stage.'
         facts [
-          'Domains are discovered at runtime by scanning for a test:e2e script — five of six qualify; local-council declares none, so it is never covered.',
+          'Domains are discovered at runtime by scanning for a <code>test:e2e</code> script — six of the seven qualify; local-council declares none, so it is the one domain no E2E suite ever covers.',
           'fail-fast is off, so one domain failing does not mask the others.',
           'Suites read their URLs from the FlexPlatform and FlexGlobal stack outputs rather than hard-coding them.'
         ]
         sourceId 'me2e'
         order '9'
         x '488'
-        y '552'
+        y '545'
         w '177'
         h '62'
         ownership 'flex'
@@ -279,8 +328,8 @@ model {
         ]
         sourceId 'cleanup'
         order '10'
-        x '46'
-        y '661'
+        x '488'
+        y '647'
         w '200'
         h '62'
         ownership 'flex'
@@ -298,7 +347,7 @@ model {
       x '23'
       y '800'
       w '707'
-      h '197'
+      h '150'
       boundary 'soft'
     }
 
@@ -441,7 +490,7 @@ model {
         order '15'
         x '775'
         y '227'
-        w '177'
+        w '195'
         h '62'
         ownership 'flex'
         awsIcon 'iam'
@@ -490,7 +539,7 @@ model {
         facts [
           'Every import() records an edge and willCreateCycle rejects a cycle at synth; synth() then converts each edge into an addDependency call.',
           'That ordering is what makes cdk deploy --all --concurrency 4 safe.',
-          'Stacks per stage: FlexCore and FlexSmokeTest (persistent stages only), FlexPlatform, FlexGlobal in us-east-1, one stack per deployable domain, and FlexApiDeployment last. FlexMacie is commented out in app.ts.'
+          'Stacks per stage: FlexCore and FlexSmokeTest (persistent stages only), FlexPlatform, FlexGlobal in us-east-1, one stack per deployable domain, FlexMacie in us-east-1 on persistent stages, and FlexApiDeployment last.'
         ]
         sourceId 'ssmapp'
         order '17'
@@ -535,6 +584,32 @@ model {
         ]
       }
     }
+    delivery_plate2e = platform 'Platform E2E' {
+      #off-request-path
+      description '3 suites · in every deploy'
+      technology '@flex/e2e test:e2e:platform'
+      link https://github.com/govuk-once/flex/blob/main/.github/workflows/_build-deploy.yml '_build-deploy.yml'
+      link https://github.com/govuk-once/flex/blob/main/libs/testing/src/e2e/setup.global.ts 'e2e/setup.global.ts'
+      link https://github.com/govuk-once/flex/blob/main/libs/testing/src/extend/it.e2e.ts 'extend/it.e2e.ts'
+      metadata {
+        type 'GitHub Actions step'
+        tech 'vitest against a deployed stage'
+        role 'The only test that can stop a deployment.'
+        facts [
+          'Three suites — auth, security headers and the private gateway — run as a step <b>inside</b> the deploy job, after <code>cdk deploy</code> returns. A failure fails that job, and every later stage <code>needs</code> it: that is what the two <i>Platform E2E passed</i> arrows on the spine mean.',
+          '<b>Skipped in production.</b> The step carries <code>if: inputs.STAGE != "production"</code>, so the one test that gates a deploy never runs against the environment it is protecting.',
+          'The harness fetches <code>/{stage}/flex-secret/waf/e2e-bypass</code> and the suites send it as <code>x-flex-e2e-bypass</code> — the CloudFront Web ACL rule that terminates evaluation and skips IP reputation and the rate limit. See Security.',
+          'URLs come from the FlexPlatform and FlexGlobal stack outputs, so a suite follows the stage it was deployed to rather than a hard-coded host.'
+        ]
+        sourceId 'plate2e'
+        order '39'
+        x '775'
+        y '654'
+        w '220'
+        h '62'
+        ownership 'flex'
+      }
+    }
 
     delivery_deploydev = platform 'Deploy to Development' {
       #off-request-path
@@ -554,7 +629,7 @@ model {
         order '19'
         x '1003'
         y '227'
-        w '179'
+        w '199'
         h '66'
         ownership 'flex'
       }
@@ -799,7 +874,7 @@ model {
       x '1482'
       y '65'
       w '456'
-      h '933'
+      h '829'
       boundary 'soft'
     }
 
@@ -1127,15 +1202,6 @@ model {
       order '7'
     }
   }
-  delivery_qc -> delivery_sonar 'coverage + ESLint report' {
-    technology 'HTTPS'
-    metadata {
-      protocol 'HTTPS'
-      auth 'SONAR_TOKEN_FLEX'
-      carries 'Test coverage for every project and an ESLint report'
-      order '8'
-    }
-  }
   delivery_eph -> delivery_me2e 'target for domain suites' {
     technology 'HTTPS'
     metadata {
@@ -1222,13 +1288,14 @@ model {
       order '16'
     }
   }
-  delivery_deploydev -> delivery_e2edev 'non-gating' {
+  delivery_deploydev -> delivery_e2edev '' {
     technology 'GitHub Actions'
     metadata {
       protocol 'GitHub Actions'
       auth 'OIDC'
       carries 'Domain E2E suites'
       order '17'
+      edgeStyle 'dash'
     }
   }
   delivery_deploydev -> delivery_gatestg 'Platform E2E passed' {
@@ -1250,22 +1317,24 @@ model {
       order '19'
     }
   }
-  delivery_deploystg -> delivery_e2estg 'non-gating' {
+  delivery_deploystg -> delivery_e2estg '' {
     technology 'GitHub Actions'
     metadata {
       protocol 'GitHub Actions'
       auth 'OIDC'
       carries 'Domain E2E suites'
       order '20'
+      edgeStyle 'dash'
     }
   }
-  delivery_deploystg -> delivery_notifystg 'non-gating' {
+  delivery_deploystg -> delivery_notifystg '' {
     technology 'SNS'
     metadata {
       protocol 'SNS'
       auth 'Development-account role'
       carries 'Deployment notice'
       order '21'
+      edgeStyle 'dash'
     }
   }
   delivery_deploystg -> delivery_gateprod 'Platform E2E passed' {
@@ -1284,13 +1353,14 @@ model {
       order '23'
     }
   }
-  delivery_deployprod -> delivery_notifyprod 'non-gating' {
+  delivery_deployprod -> delivery_notifyprod '' {
     technology 'SNS'
     metadata {
       protocol 'SNS'
       auth 'Development-account role'
       carries 'Deployment notice'
       order '24'
+      edgeStyle 'dash'
     }
   }
   delivery_deployprod -> delivery_zap 'after the whole Continuous Deployment run succeeds' {
@@ -1303,6 +1373,7 @@ model {
         'The trigger is the workflow, not the staging deploy: the run has to clear the production gate first, so a rejected production deploy means no DAST at all.'
       ]
       order '25'
+      edgeStyle 'dash'
     }
   }
   delivery_notifyprod -> delivery_slack 'release + deploy notices' {
@@ -1407,6 +1478,43 @@ model {
       order '35'
     }
   }
+
+  delivery_qc -> delivery_unit 'runs every project\'s tests' {
+    link https://github.com/govuk-once/flex/blob/main/.github/workflows/_quality-checks.yml '_quality-checks.yml'
+    metadata {
+      protocol 'nx run-many --all --skip-nx-cache'
+      auth 'n/a'
+      carries '117 vitest files'
+      order '37'
+    }
+  }
+  delivery_unit -> delivery_sonar 'v8 lcov + the ESLint report' {
+    link https://github.com/govuk-once/flex/blob/main/.github/workflows/_quality-checks.yml '_quality-checks.yml'
+    metadata {
+      protocol 'lcov handed to the scanner'
+      auth 'n/a'
+      carries 'coverage for the quality gate'
+      order '38'
+    }
+  }
+  delivery_qc -> delivery_checkov 'scans the synthesised templates' {
+    link https://github.com/govuk-once/flex/blob/main/.github/workflows/_quality-checks.yml '_quality-checks.yml'
+    metadata {
+      protocol 'nx affected --target=checkov'
+      auth 'n/a'
+      carries 'cdk.out, when the CDK app is affected'
+      order '39'
+    }
+  }
+  delivery_apideploy -> delivery_plate2e 'then the platform suite' {
+    link https://github.com/govuk-once/flex/blob/main/.github/workflows/_build-deploy.yml '_build-deploy.yml'
+    metadata {
+      protocol 'a later step in the same job'
+      auth 'n/a'
+      carries 'auth, security headers, private gateway'
+      order '40'
+    }
+  }
 }
 
 views {
@@ -1416,5 +1524,8 @@ views {
     include delivery_zlocal, delivery_zlocal.**
     include delivery_zpromote, delivery_zpromote.**
     include delivery_zoperate, delivery_zoperate.**
+    include delivery_unit
+    include delivery_checkov
+    include delivery_plate2e
   }
 }
