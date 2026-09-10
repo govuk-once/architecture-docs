@@ -43,6 +43,21 @@ import { type Project, selectProjects } from "./lib/projects.js";
 const softBudget = (project: Project) => project.config.softBudget ?? 0;
 const placementBudget = (project: Project) =>
   project.config.placementBudget ?? 0;
+/* Planned states get their own two ratchets. Composed views are drawn from overlays, not
+   from the model, and they change for different reasons — folding them into the as-is
+   numbers would let a regression in one be paid for by an improvement in the other. */
+const stateSoftBudget = (project: Project) =>
+  project.config.stateSoftBudget ?? 0;
+const statePlacementBudget = (project: Project) =>
+  project.config.statePlacementBudget ?? 0;
+
+/**
+ * The introduction shows on a first visit and covers everything. Seeding its flag before the
+ * page loads is what a second visit does, and the second visit is the state every
+ * measurement here is about. `introChecks` opens it deliberately and tests it.
+ */
+const SEEN_INTRO = (id: string) =>
+  `try{localStorage.setItem(${JSON.stringify(id)}+":intro-seen","1")}catch{}`;
 
 /** Type-only, so it is erased at runtime and the import below stays optional. */
 type ChromiumLauncher = typeof import("playwright").chromium;
@@ -86,6 +101,11 @@ async function main() {
       budget: number;
       place: number;
       placeBudget: number;
+      /** Composed planned-state views, ratcheted apart so a regression in either stays visible. */
+      stateSoft: number;
+      stateSoftBudget: number;
+      statePlace: number;
+      statePlaceBudget: number;
     }
   >();
   const score = (id: string) => {
@@ -95,6 +115,10 @@ async function main() {
       budget: 0,
       place: 0,
       placeBudget: 0,
+      stateSoft: 0,
+      stateSoftBudget: 0,
+      statePlace: 0,
+      statePlaceBudget: 0,
     };
     scores.set(id, at);
     return at;
@@ -177,6 +201,7 @@ async function main() {
       hasTouch: true,
       deviceScaleFactor: 2,
     });
+    await page.addInitScript(SEEN_INTRO(project.id));
     const errors: string[] = [];
     page.on("pageerror", (e: Error) => errors.push(e.message));
     page.on("console", (m: ConsoleMessage) => {
@@ -282,6 +307,8 @@ async function main() {
     const tally = score(project.id);
     tally.budget = softBudget(project);
     tally.placeBudget = placementBudget(project);
+    tally.stateSoftBudget = stateSoftBudget(project);
+    tally.statePlaceBudget = statePlacementBudget(project);
     console.log(`\n${project.id}: ${path.relative(DOCS_ROOT, PAGE)}`);
     for (const colorScheme of ["light", "dark"] as const) {
       const page = await browser.newPage({
@@ -294,7 +321,9 @@ async function main() {
       await page.addInitScript(
         "globalThis.__name = globalThis.__name || ((f) => f);",
       );
+      await page.addInitScript(SEEN_INTRO(project.id));
       const errors: string[] = [];
+      const a11yOpen: string[] = [];
       page.on("pageerror", (e: Error) => errors.push(e.message));
       page.on("console", (m: ConsoleMessage) => {
         if (m.type() === "error") errors.push("console: " + m.text());
@@ -321,6 +350,10 @@ async function main() {
       const tabs: string[] = await page.locator(".tab").allTextContents();
       if (colorScheme === "light")
         console.log(`${String(tabs.length)} tabs: ${tabs.join(" · ")}\n`);
+      /* A composed view inherits every line the as-is already draws awkwardly. Counting
+         those again under the state budget would make it a second, worse measure of the
+         as-is; what the state ratchet is for is what the overlay itself adds. */
+      const asIs = new Map<string, { soft: number; place: number }>();
 
       for (const tab of tabs) {
         await page.click(`.tab:has-text("${tab}")`);
@@ -341,6 +374,10 @@ async function main() {
         if (fontsLoaded)
           tally.soft += r.cross.length + r.onBox.length + r.clash.length;
         tally.place += r.upward.length + r.diagonal.length + r.tail.length;
+        asIs.set(tab, {
+          soft: r.cross.length + r.onBox.length + r.clash.length,
+          place: r.upward.length + r.diagonal.length + r.tail.length,
+        });
         console.log(
           `  ${tab.padEnd(13)}${String(r.nodes).padStart(3)} boxes ${String(r.edges).padStart(3)} lines` +
             ` · overflow ${String(r.over.length)} · crossings ${String(r.cross.length)}` +
@@ -361,6 +398,103 @@ async function main() {
             console.log(`      ${label}: ${list.slice(0, 3).join(" | ")}`);
       }
 
+      /* Planned states are drawn by the same renderer from views the build composed, so
+         they can go wrong the same ways. Sweeping them here is what stops a future layout
+         being the one drawing nothing ever measures. Geometry does not change with the
+         palette, so once is enough. */
+      if (colorScheme === "light") {
+        const states: { id: string; name: string; views: string[] }[] =
+          await page.evaluate(() =>
+            typeof STATES === "undefined"
+              ? []
+              : STATES.map((st) => ({
+                  id: st.id,
+                  name: st.name,
+                  views: Object.keys(COMPOSED[st.id] ?? {}).map(
+                    (id) => VIEWS.find((v) => v.id === id)?.name ?? id,
+                  ),
+                })),
+          );
+        for (const st of states) {
+          for (const label of st.views) {
+            await page.click(`.tab:has-text("${label}")`);
+            await page.waitForTimeout(200);
+            await page.click(`#states button:has-text("${st.name}")`);
+            for (const mode of ["future", "changes"]) {
+              if (mode === "changes") await page.click("#changes");
+              await page.waitForTimeout(400);
+              const r = await page.evaluate(measure);
+              const row = `${label}@${st.id}·${mode}`;
+              const was = asIs.get(label) ?? { soft: 0, place: 0 };
+              const soft = Math.max(
+                0,
+                r.cross.length + r.onBox.length + r.clash.length - was.soft,
+              );
+              const place = Math.max(
+                0,
+                r.upward.length + r.diagonal.length + r.tail.length - was.place,
+              );
+              if (fontsLoaded) tally.hard += r.over.length;
+              if (fontsLoaded) tally.stateSoft += soft;
+              tally.statePlace += place;
+              console.log(
+                `  ${row.padEnd(26)}${String(r.nodes).padStart(3)} boxes ${String(r.edges).padStart(3)} lines` +
+                  ` · overflow ${String(r.over.length)} · crossings ${String(r.cross.length)}` +
+                  ` · label-on-box ${String(r.onBox.length)} · label-clash ${String(r.clash.length)}` +
+                  ` · up ${String(r.upward.length)} · diagonal ${String(r.diagonal.length)}` +
+                  ` · zone-tail ${String(r.tail.length)}` +
+                  ` · over the as-is: soft +${String(soft)} placement +${String(place)}`,
+              );
+              for (const [name, list] of [
+                ["overflow", fontsLoaded ? r.over : []],
+                ["crossing", r.cross],
+                ["on box", r.onBox],
+                ["clash", r.clash],
+                ["upward", r.upward],
+                ["diagonal", r.diagonal],
+                ["zone tail", r.tail],
+              ] as const)
+                if (list.length)
+                  console.log(`      ${name}: ${list.slice(0, 3).join(" | ")}`);
+            }
+            /* Back to the as-is before the next view, and not only for tidiness: a composed
+               view reached from another state measures a different soft count from the
+               same view reached from today's, so the path has to be the same every time. */
+            await page.click("#changes");
+            await page.click('#states button:has-text("As-is")');
+            await page.waitForTimeout(150);
+          }
+        }
+      }
+
+      if (colorScheme === "light") {
+        const linkBad = await deepLinkChecks(browser, PAGE, project);
+        console.log(
+          `  ${"deep links".padEnd(13)}    ` +
+            (linkBad.length
+              ? `${String(linkBad.length)} defect(s)`
+              : "the URL names the view, and a link to one opens it"),
+        );
+        for (const line of linkBad) console.log(`      ${line}`);
+        tally.hard += linkBad.length;
+
+        const introBad = await introChecks(page);
+        console.log(
+          `  ${"introduction".padEnd(13)}    ` +
+            (introBad.length
+              ? `${String(introBad.length)} defect(s)`
+              : "opens from help, takes focus, escape closes it and hands focus back"),
+        );
+        for (const line of introBad) console.log(`      ${line}`);
+        tally.hard += introBad.length;
+        /* Axe with it open: a modal is a different accessibility tree from the page. */
+        await page.click("#helpbtn");
+        await page.waitForTimeout(250);
+        for (const v of await axeViolations(page)) a11yOpen.push(`intro: ${v}`);
+        await page.keyboard.press("Escape");
+        await page.waitForTimeout(200);
+      }
+
       const audit = await page.evaluate(auditTargets);
       console.log(
         `[${colorScheme}] ${String(audit.n)} clickable targets · ` +
@@ -375,7 +509,7 @@ async function main() {
 
       /* Both schemes, because contrast is the failure axe finds most of and it is a
          property of the palette in use, not of the markup. */
-      const a11y: string[] = [];
+      const a11y: string[] = [...a11yOpen];
       /* The first and the last tab: between them a canvas view and a reference view,
          which are the two ways the stage renders. */
       const names: string[] = await page.locator(".tab").allTextContents();
@@ -419,12 +553,33 @@ async function main() {
 
   console.log("");
   let failed = 0;
-  for (const [id, { hard, soft, budget, place, placeBudget }] of scores) {
-    const over = soft > budget || place > placeBudget;
+  for (const [
+    id,
+    {
+      hard,
+      soft,
+      budget,
+      place,
+      placeBudget,
+      stateSoft,
+      stateSoftBudget,
+      statePlace,
+      statePlaceBudget,
+    },
+  ] of scores) {
+    const over =
+      soft > budget ||
+      place > placeBudget ||
+      stateSoft > stateSoftBudget ||
+      statePlace > statePlaceBudget;
     console.log(
       `${id.padEnd(12)} hard ${String(hard)} · soft ${String(soft)} of ${String(budget)}` +
         (placeBudget || place
           ? ` · placement ${String(place)} of ${String(placeBudget)}`
+          : "") +
+        (stateSoftBudget || stateSoft || statePlaceBudget || statePlace
+          ? ` · states: soft ${String(stateSoft)} of ${String(stateSoftBudget)}` +
+            ` · placement ${String(statePlace)} of ${String(statePlaceBudget)}`
           : ""),
     );
     if (hard)
@@ -444,6 +599,18 @@ async function main() {
           `ratchet. See projects/CANVAS.md rules 1, 3 and 5, or raise placementBudget in ` +
           `projects/${id}/project.config.json deliberately and say why.`,
       );
+    else if (stateSoft > stateSoftBudget)
+      console.log(
+        `  FAIL — soft geometry in the planned states rose to ${String(stateSoft)}, above ` +
+          `the ${String(stateSoftBudget)} ratchet. Fix the overlay layout, or raise ` +
+          `stateSoftBudget in projects/${id}/project.config.json deliberately and say why.`,
+      );
+    else if (statePlace > statePlaceBudget)
+      console.log(
+        `  FAIL — placement in the planned states rose to ${String(statePlace)}, above the ` +
+          `${String(statePlaceBudget)} ratchet. See projects/CANVAS.md, or raise ` +
+          `statePlacementBudget in projects/${id}/project.config.json deliberately and say why.`,
+      );
     else if (soft < budget)
       console.log(
         `  PASS — and soft geometry improved; lower softBudget to ${String(soft)} to lock it in.`,
@@ -457,6 +624,11 @@ async function main() {
   console.log(failed ? `\nFAIL — ${String(failed)} page(s)` : "\nPASS");
   process.exit(failed ? 1 : 0);
 }
+
+/** Globals the built page defines, as seen inside page.evaluate. */
+declare const STATES: { id: string; name: string }[];
+declare const COMPOSED: Record<string, Record<string, unknown>>;
+declare const VIEWS: { id: string; name: string }[];
 
 /** Runs inside the page. Geometry is measured, never eyeballed. */
 export function measure() {
@@ -672,19 +844,6 @@ export function measure() {
 }
 
 /**
- * Runs inside the page at a phone width. Returns a problem per defect, empty when clean.
- */
-/**
- * Works the two controls that only exist on a phone, and says what did not respond.
- *
- * Written as a sequence of real interactions rather than a look at the stylesheet
- * because what matters is whether a reader can get the panel open and shut again — a
- * rule that is present but outranked reads as correct and behaves as broken.
- *
- * Runs on the first tab only. These are page chrome, identical on every view, so
- * repeating it eight times would cost eight times as long to learn the same thing.
- */
-/**
  * Every control that shows only an icon has to carry its name somewhere a screen reader
  * can reach. This is the exact thing that breaks silently: swapping a word for a glyph
  * looks finished, and the button is simply unusable without sight of it.
@@ -771,6 +930,119 @@ async function axeViolations(page: Page): Promise<string[]> {
   );
 }
 
+/**
+ * A link that names a view has to land on it. This is the only thing on the page whose
+ * failure is silent — a stale or mistyped fragment falls back to the defaults, which looks
+ * exactly like a link that worked — so it is checked rather than trusted.
+ */
+async function deepLinkChecks(
+  browser: Awaited<ReturnType<ChromiumLauncher["launch"]>>,
+  page: string,
+  project: Project,
+): Promise<string[]> {
+  const bad: string[] = [];
+  const at = async (hash: string) => {
+    /* A fresh page per link: a fragment-only navigation is a same-document one, so the
+       script never re-runs and the check would pass without testing anything. */
+    const p = await browser.newPage({ viewport: { width: 1400, height: 900 } });
+    await p.addInitScript(SEEN_INTRO(project.id));
+    await p.goto("file://" + page + hash);
+    await p.waitForTimeout(500);
+    const got = await p.evaluate(() => {
+      const tab = [...document.querySelectorAll(".tab")].find(
+        (b) => b.getAttribute("aria-selected") === "true",
+      );
+      const st = [...document.querySelectorAll("#states button.st")].find(
+        (b) => b.getAttribute("aria-pressed") === "true",
+      );
+      return {
+        tab: tab?.id ?? "",
+        tabs: [...document.querySelectorAll(".tab")].map((b) => b.id),
+        state: st?.textContent ?? "as-is",
+        changes:
+          document.getElementById("changes")?.getAttribute("aria-pressed") ===
+          "true",
+        hash: location.hash,
+      };
+    });
+    await p.close();
+    return got;
+  };
+
+  const plain = await at("");
+  if (!plain.hash.startsWith("#tab="))
+    bad.push("the page does not name the view it is showing in its URL");
+
+  /* Any tab but the default, read off the page: a link to the default would pass
+     without the fragment having done anything. */
+  const other = plain.tabs.find((id) => id !== plain.tab) ?? plain.tab;
+  const view = other.replace(/^tab-/, "");
+  const target = await at(`#tab=${view}`);
+  if (target.tab !== `tab-${view}`)
+    bad.push(`#tab=${view} opened ${target.tab || "nothing"}`);
+
+  const junk = await at("#tab=nonsense&state=nonsense");
+  if (junk.tab !== plain.tab)
+    bad.push("a fragment naming nothing did not fall back to the default view");
+  return bad;
+}
+
+/**
+ * The introduction is the only thing on the page that explains the page, and it is shown
+ * once — so a reader who dismissed it and a reader who never saw it both depend on the help
+ * button working. It is also a modal, which is the control easiest to get wrong: focus has
+ * to go into it, Escape has to close it, and focus has to come back.
+ */
+async function introChecks(page: Page): Promise<string[]> {
+  const bad: string[] = [];
+  const open = () =>
+    page.evaluate(
+      () =>
+        (document.getElementById("intro") as HTMLDialogElement | null)?.open ??
+        false,
+    );
+
+  if (await open()) bad.push("the introduction is showing on a return visit");
+  await page.click("#helpbtn");
+  await page.waitForTimeout(250);
+  if (!(await open()))
+    return ["the help button does not open the introduction"];
+  const inside = await page.evaluate(
+    () => !!document.getElementById("intro")?.contains(document.activeElement),
+  );
+  if (!inside) bad.push("focus does not move into the introduction");
+  if (
+    !(await page.evaluate(
+      () => (document.getElementById("introlist")?.children.length ?? 0) > 2,
+    ))
+  )
+    bad.push("the introduction explains nothing");
+
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(250);
+  if (await open()) bad.push("escape does not close the introduction");
+  if ((await page.evaluate(() => document.activeElement?.id)) !== "helpbtn")
+    bad.push("closing the introduction does not give focus back");
+
+  await page.click("#helpbtn");
+  await page.waitForTimeout(200);
+  await page.click("#introdone");
+  await page.waitForTimeout(250);
+  if (await open())
+    bad.push("the Got it button does not close the introduction");
+  return bad;
+}
+
+/**
+ * Works the two controls that only exist on a phone, and says what did not respond.
+ *
+ * Written as a sequence of real interactions rather than a look at the stylesheet
+ * because what matters is whether a reader can get the panel open and shut again — a
+ * rule that is present but outranked reads as correct and behaves as broken.
+ *
+ * Runs on the first tab only. These are page chrome, identical on every view, so
+ * repeating it eight times would cost eight times as long to learn the same thing.
+ */
 async function panelChecks(page: Page): Promise<string[]> {
   const bad: string[] = [];
   const open = () =>
@@ -948,6 +1220,9 @@ async function menuChecks(page: Page): Promise<string[]> {
   return bad;
 }
 
+/**
+ * Runs inside the page at a phone width. Returns a problem per defect, empty when clean.
+ */
 export function measureNarrow(): string[] {
   const out: string[] = [];
   const doc = document.documentElement;

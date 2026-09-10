@@ -1,39 +1,59 @@
 /* Everything project-specific comes from explorer.config.json, injected as CONFIG. */
-const REPO=CONFIG.repo;
-const STAGES=CONFIG.stages;
+const REPO = CONFIG.repo;
+const STAGES = CONFIG.stages;
+const LC_LABEL = {
+  new: "planned — new in this state",
+  changed: "exists today, changes shape",
+  retired: "retired in this state",
+};
 /* Named deployStage, not stage: `stage` is already the diagram canvas element. */
 /* The first configured stage: a project need not have one called "dev". */
-let deployStage=STAGES[0].id;
-const stageLabel=()=>STAGES.find(s=>s.id===deployStage).label;
+/* Captured before anything renders: the first paint writes the hash, and would otherwise
+   erase the link that was followed to get here. */
+const ENTRY_HASH = location.hash;
+let deployStage = STAGES[0].id;
+const stageLabel = () => STAGES.find((s) => s.id === deployStage).label;
 
 /* RES is built once from the Resources view, so the inventory is the single
    source of truth for both the table and every badge. */
-const RES=new Map(), RES_GROUP=new Map();
-function indexResources(){
-  const rv=VIEWS.find(v=>v.id===CONFIG.inventoryView);
-  rv.groups.forEach(g=>(g.items||[]).forEach(it=>{RES.set(it.id,it);RES_GROUP.set(it.id,g.name);}));
+const RES = new Map(),
+  RES_GROUP = new Map();
+function indexResources() {
+  const rv = VIEWS.find((v) => v.id === CONFIG.inventoryView);
+  rv.groups.forEach((g) =>
+    (g.items || []).forEach((it) => {
+      RES.set(it.id, it);
+      RES_GROUP.set(it.id, g.name);
+    }),
+  );
 }
-function countOf(item){
-  if(item.n===null||item.n===undefined)return null;      // varies — never summed
-  return typeof item.n==="number"?item.n:(item.n[deployStage]??0);
+function countOf(item) {
+  if (item.n === null || item.n === undefined) return null; // varies — never summed
+  return typeof item.n === "number" ? item.n : (item.n[deployStage] ?? 0);
 }
-function boxTotal(ids){
-  let sum=0,varies=false;
-  (ids||[]).forEach(id=>{const it=RES.get(id);if(!it)return;const c=countOf(it);c===null?varies=true:sum+=c;});
-  return {sum,varies};
+function boxTotal(ids) {
+  let sum = 0,
+    varies = false;
+  (ids || []).forEach((id) => {
+    const it = RES.get(id);
+    if (!it) return;
+    const c = countOf(it);
+    c === null ? (varies = true) : (sum += c);
+  });
+  return { sum, varies };
 }
 /* The icon a CloudFormation type implies. Nothing outside the diagram boxes is tagged
    by hand — the type string already says which service it is. */
-function iconForType(t){
-  if(!t)return null;
-  if(TYPE_ICON[t])return TYPE_ICON[t];
-  const m=/^AWS::([A-Za-z0-9]+)::/.exec(t);
-  return m&&SERVICE_ICON[m[1]]?SERVICE_ICON[m[1]]:null;
+function iconForType(t) {
+  if (!t) return null;
+  if (TYPE_ICON[t]) return TYPE_ICON[t];
+  const m = /^AWS::([A-Za-z0-9]+)::/.exec(t);
+  return m && SERVICE_ICON[m[1]] ? SERVICE_ICON[m[1]] : null;
 }
 /* Inline markup, so it drops straight into the strings the inspector already builds. */
-function iconTag(id,cls){
-  if(!id||!ICON_IDS.includes(id))return "";
-  return `<svg class="ic ${cls||""}" viewBox="0 0 64 64" aria-hidden="true"><use href="#i-${id}"/></svg>`;
+function iconTag(id, cls) {
+  if (!id || !ICON_IDS.includes(id)) return "";
+  return `<svg class="ic ${cls || ""}" viewBox="0 0 64 64" aria-hidden="true"><use href="#i-${id}"/></svg>`;
 }
 
 /* ---- Export the canvas as an image -------------------------------------------------
@@ -45,73 +65,100 @@ function iconTag(id,cls){
    they cost no diagram space — an earlier version put the legend on the canvas and it
    collided with boxes. A PNG has no panel, though, so a bare drawing leaves the reader
    with no idea which view, which stage, or what the colours mean. */
-const CAP_TOP=64, CAP_BOT=44, CAP_PAD=26;
+const CAP_TOP = 64,
+  CAP_BOT = 44,
+  CAP_PAD = 26;
 
-function exportBands(w,h){
-  const kinds=KIND_ORDER.filter(k=>view.nodes.some(n=>n.kind===k));
-  const planes=PLANE_ORDER.filter(p=>view.nodes.some(n=>(n.plane||"request")===p));
-  const t=(x,y,cls,txt)=>`<text x="${x}" y="${y}" class="${cls}">${esc(txt)}</text>`;
-  let out=`<g class="cap">`
-    +`<rect x="0" y="0" width="${w}" height="${CAP_TOP}" class="cap-bg"/>`
-    +t(CAP_PAD,27,"cap-title",`${CONFIG.title} · ${view.name}`)
-    +t(CAP_PAD,46,"cap-sub",`${view.audience} — ${stageLabel()} stage`)
-    +`<line x1="0" y1="${CAP_TOP}" x2="${w}" y2="${CAP_TOP}" class="cap-rule"/>`
-    +`<rect x="0" y="${h-CAP_BOT}" width="${w}" height="${CAP_BOT}" class="cap-bg"/>`
-    +`<line x1="0" y1="${h-CAP_BOT}" x2="${w}" y2="${h-CAP_BOT}" class="cap-rule"/>`;
-  let x=CAP_PAD, y=h-CAP_BOT+27;
-  for(const k of kinds){
-    out+=`<rect x="${x}" y="${y-9}" width="11" height="11" rx="2.5" fill="${kindVar(k)}"/>`
-        +t(x+18,y,"cap-lg",KIND_LABEL[k]);
-    x+=18+KIND_LABEL[k].length*6.6+24;
+function exportBands(w, h) {
+  const kinds = KIND_ORDER.filter((k) => view.nodes.some((n) => n.kind === k));
+  const planes = PLANE_ORDER.filter((p) =>
+    view.nodes.some((n) => (n.plane || "request") === p),
+  );
+  const t = (x, y, cls, txt) =>
+    `<text x="${x}" y="${y}" class="${cls}">${esc(txt)}</text>`;
+  let out =
+    `<g class="cap">` +
+    `<rect x="0" y="0" width="${w}" height="${CAP_TOP}" class="cap-bg"/>` +
+    t(CAP_PAD, 27, "cap-title", `${CONFIG.title} · ${view.name}`) +
+    t(CAP_PAD, 46, "cap-sub", `${view.audience} — ${stageLabel()} stage`) +
+    `<line x1="0" y1="${CAP_TOP}" x2="${w}" y2="${CAP_TOP}" class="cap-rule"/>` +
+    `<rect x="0" y="${h - CAP_BOT}" width="${w}" height="${CAP_BOT}" class="cap-bg"/>` +
+    `<line x1="0" y1="${h - CAP_BOT}" x2="${w}" y2="${h - CAP_BOT}" class="cap-rule"/>`;
+  let x = CAP_PAD,
+    y = h - CAP_BOT + 27;
+  for (const k of kinds) {
+    out +=
+      `<rect x="${x}" y="${y - 9}" width="11" height="11" rx="2.5" fill="${kindVar(k)}"/>` +
+      t(x + 18, y, "cap-lg", KIND_LABEL[k]);
+    x += 18 + KIND_LABEL[k].length * 6.6 + 24;
   }
   /* Plane is a property of a box, so its glyph is a box — the exported legend used to
      draw it as a line, which pointed the reader at the edges instead. */
-  if(planes.includes("control")){
-    x+=6;
-    for(const pl of planes){
-      out+=`<rect x="${x}" y="${y-9}" width="11" height="11" rx="2.5" class="cap-pl"`
-          +(pl==="control"?` stroke-dasharray="3 2"`:``)+`/>`
-          +t(x+18,y,"cap-lg",PLANE_LABEL[pl]);
-      x+=18+PLANE_LABEL[pl].length*6.6+24;
+  if (planes.includes("control")) {
+    x += 6;
+    for (const pl of planes) {
+      out +=
+        `<rect x="${x}" y="${y - 9}" width="11" height="11" rx="2.5" class="cap-pl"` +
+        (pl === "control" ? ` stroke-dasharray="3 2"` : ``) +
+        `/>` +
+        t(x + 18, y, "cap-lg", PLANE_LABEL[pl]);
+      x += 18 + PLANE_LABEL[pl].length * 6.6 + 24;
     }
   }
-  if((view.edges||[]).some(e=>e.style==="dash")&&view.dashMeans){
-    x+=6;
-    out+=`<line x1="${x}" y1="${y-4}" x2="${x+17}" y2="${y-4}" class="cap-pl" stroke-dasharray="4 3"/>`
-        +t(x+24,y,"cap-lg",view.dashMeans);
+  if ((view.edges || []).some((e) => e.style === "dash") && view.dashMeans) {
+    x += 6;
+    out +=
+      `<line x1="${x}" y1="${y - 4}" x2="${x + 17}" y2="${y - 4}" class="cap-pl" stroke-dasharray="4 3"/>` +
+      t(x + 24, y, "cap-lg", view.dashMeans);
   }
-  return out+`</g>`;
+  return out + `</g>`;
 }
 
-function standaloneSvg(){
-  const src=document.getElementById("svg");
-  const svg=src.cloneNode(true);
-  const [,,w,vh]=(src.getAttribute("viewBox")||"0 0 1400 900").split(/\s+/).map(Number);
-  const h=vh+CAP_TOP+CAP_BOT;
-  svg.setAttribute("width",w); svg.setAttribute("height",h);
-  svg.setAttribute("viewBox",`0 0 ${w} ${h}`);
-  svg.removeAttribute("style");   /* re-set below, with the resolved theme */
+function standaloneSvg() {
+  const src = document.getElementById("svg");
+  const svg = src.cloneNode(true);
+  const [, , w, vh] = (src.getAttribute("viewBox") || "0 0 1400 900")
+    .split(/\s+/)
+    .map(Number);
+  const h = vh + CAP_TOP + CAP_BOT;
+  svg.setAttribute("width", w);
+  svg.setAttribute("height", h);
+  svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
+  svg.removeAttribute("style"); /* re-set below, with the resolved theme */
   /* The live canvas is panned and zoomed by a transform; the export is the whole thing. */
-  const root=svg.querySelector("#root");
-  if(root)root.setAttribute("transform",`translate(0 ${CAP_TOP})`);
+  const root = svg.querySelector("#root");
+  if (root) root.setAttribute("transform", `translate(0 ${CAP_TOP})`);
 
   /* Only the symbols this view actually references. */
-  const used=[...new Set([...svg.querySelectorAll("use")]
-    .map(u=>(u.getAttribute("href")||"").replace("#","")).filter(Boolean))];
-  if(used.length){
-    const defs=document.createElementNS("http://www.w3.org/2000/svg","defs");
-    used.forEach(id=>{const sym=document.getElementById(id); if(sym)defs.appendChild(sym.cloneNode(true));});
-    svg.insertBefore(defs,svg.firstChild);
+  const used = [
+    ...new Set(
+      [...svg.querySelectorAll("use")]
+        .map((u) => (u.getAttribute("href") || "").replace("#", ""))
+        .filter(Boolean),
+    ),
+  ];
+  if (used.length) {
+    const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
+    used.forEach((id) => {
+      const sym = document.getElementById(id);
+      if (sym) defs.appendChild(sym.cloneNode(true));
+    });
+    svg.insertBefore(defs, svg.firstChild);
   }
 
   /* Paint a ground: the page background is on <body>, which is not coming along. */
-  const bg=document.createElementNS("http://www.w3.org/2000/svg","rect");
-  bg.setAttribute("width",w); bg.setAttribute("height",h);
-  bg.setAttribute("fill",getComputedStyle(document.body).getPropertyValue("--canvas").trim()||"#fff");
-  svg.insertBefore(bg,svg.firstChild);
+  const bg = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+  bg.setAttribute("width", w);
+  bg.setAttribute("height", h);
+  bg.setAttribute(
+    "fill",
+    getComputedStyle(document.body).getPropertyValue("--canvas").trim() ||
+      "#fff",
+  );
+  svg.insertBefore(bg, svg.firstChild);
 
-  const bands=document.createElementNS("http://www.w3.org/2000/svg","g");
-  bands.innerHTML=exportBands(w,h);
+  const bands = document.createElementNS("http://www.w3.org/2000/svg", "g");
+  bands.innerHTML = exportBands(w, h);
   svg.appendChild(bands);
 
   /* Freeze the theme. The exported SVG carries the page stylesheet, but its :root is the
@@ -119,102 +166,143 @@ function standaloneSvg(){
      prefers-color-scheme query is re-evaluated by whatever renders the image. Forcing
      light on a dark machine therefore produced a light canvas with dark boxes. Resolving
      every custom property here and pinning it inline settles it before it leaves. */
-  const names=new Set();
-  for(const el of document.querySelectorAll("style"))
-    for(const m of el.textContent.matchAll(/(--[a-z0-9-]+)\s*:/g))names.add(m[1]);
-  const live=getComputedStyle(document.documentElement);
-  svg.setAttribute("style",[...names]
-    .map(n=>`${n}:${live.getPropertyValue(n).trim()}`)
-    .filter(d=>!d.endsWith(":")).join(";"));
+  const names = new Set();
+  for (const el of document.querySelectorAll("style"))
+    for (const m of el.textContent.matchAll(/(--[a-z0-9-]+)\s*:/g))
+      names.add(m[1]);
+  const live = getComputedStyle(document.documentElement);
+  svg.setAttribute(
+    "style",
+    [...names]
+      .map((n) => `${n}:${live.getPropertyValue(n).trim()}`)
+      .filter((d) => !d.endsWith(":"))
+      .join(";"),
+  );
 
-  const style=document.createElementNS("http://www.w3.org/2000/svg","style");
-  style.textContent=[...document.querySelectorAll("style")].map(s2=>s2.textContent).join("\n");
-  svg.insertBefore(style,svg.firstChild);
-  if(document.body.classList.contains("icons-on"))svg.classList.add("icons-on");
-  return {markup:new XMLSerializer().serializeToString(svg),w,h};
+  const style = document.createElementNS("http://www.w3.org/2000/svg", "style");
+  style.textContent = [...document.querySelectorAll("style")]
+    .map((s2) => s2.textContent)
+    .join("\n");
+  svg.insertBefore(style, svg.firstChild);
+  if (document.body.classList.contains("icons-on"))
+    svg.classList.add("icons-on");
+  return { markup: new XMLSerializer().serializeToString(svg), w, h };
 }
 
-function exportPng(){
-  const {markup,w,h}=standaloneSvg();
-  const SCALE=2;
-  const img=new Image();
-  img.onload=()=>{
-    const c=document.createElement("canvas");
-    c.width=w*SCALE; c.height=h*SCALE;
-    const ctx=c.getContext("2d");
-    ctx.scale(SCALE,SCALE);
-    ctx.drawImage(img,0,0);
-    c.toBlob(blob=>{
-      if(!blob)return;
-      const url=URL.createObjectURL(blob);
-      const a=document.createElement("a");
-      a.href=url;
-      a.download=`${CONFIG.id}-${view.id}-${deployStage}.png`;
-      document.body.appendChild(a); a.click(); a.remove();
-      setTimeout(()=>URL.revokeObjectURL(url),1000);
-    },"image/png");
+function exportPng() {
+  const { markup, w, h } = standaloneSvg();
+  const SCALE = 2;
+  const img = new Image();
+  img.onload = () => {
+    const c = document.createElement("canvas");
+    c.width = w * SCALE;
+    c.height = h * SCALE;
+    const ctx = c.getContext("2d");
+    ctx.scale(SCALE, SCALE);
+    ctx.drawImage(img, 0, 0);
+    c.toBlob((blob) => {
+      if (!blob) return;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${CONFIG.id}-${view.id}-${deployStage}.png`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }, "image/png");
   };
-  img.src="data:image/svg+xml;charset=utf-8,"+encodeURIComponent(markup);
+  img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(markup);
 }
 
 /* Reverse index: which boxes, in which views, a resource appears in. */
-const RES_PLACES=new Map();
-function indexPlaces(){
-  for(const vid in PLACEMENT) for(const nid in PLACEMENT[vid])
-    PLACEMENT[vid][nid].forEach(rid=>{
-      if(!RES_PLACES.has(rid))RES_PLACES.set(rid,[]);
-      RES_PLACES.get(rid).push({view:vid,node:nid});
-    });
+const RES_PLACES = new Map();
+function indexPlaces() {
+  for (const vid in PLACEMENT)
+    for (const nid in PLACEMENT[vid])
+      PLACEMENT[vid][nid].forEach((rid) => {
+        if (!RES_PLACES.has(rid)) RES_PLACES.set(rid, []);
+        RES_PLACES.get(rid).push({ view: vid, node: nid });
+      });
 }
 
 /* Four ownership kinds, not nine mixed categories: who owns a box is the thing a
    reader must not get wrong. Plane (request vs control) rides on the border. */
-const KIND_LABEL=Object.fromEntries(CONFIG.kinds.map(k=>[k.id,k.label]));
+const KIND_LABEL = Object.fromEntries(CONFIG.kinds.map((k) => [k.id, k.label]));
 /* Fixed order. Insertion order put the same swatch in a different slot on every tab,
    which makes a legend unscannable — you cannot learn where to look. */
-const KIND_ORDER=CONFIG.kinds.map(k=>k.id);
+const KIND_ORDER = CONFIG.kinds.map((k) => k.id);
 /* kind id -> palette colour, so nothing but the config knows which is which. */
-const KIND_COLOUR=Object.fromEntries(CONFIG.kinds.map(k=>[k.id,k.colour]));
-const kindVar=k=>`var(--legend-${KIND_COLOUR[k]})`;
-const PLANE_ORDER=["request","control"];
+const KIND_COLOUR = Object.fromEntries(
+  CONFIG.kinds.map((k) => [k.id, k.colour]),
+);
+const kindVar = (k) => `var(--legend-${KIND_COLOUR[k]})`;
+const PLANE_ORDER = ["request", "control"];
 /* Not "control plane": that term means the management API layer, and this flag also
    covers source files, runbooks, observability and people. What it encodes is only
    whether a thing serves live traffic, so the labels say only that. */
-const PLANE_LABEL=CONFIG.planes;
+const PLANE_LABEL = CONFIG.planes;
 
 /* ============================ RENDER ============================ */
-const SVGNS="http://www.w3.org/2000/svg";
-const svg=document.getElementById("svg"), root=document.getElementById("root");
-const stage=document.getElementById("stage"), insp=document.getElementById("insp");
+const SVGNS = "http://www.w3.org/2000/svg";
+const svg = document.getElementById("svg"),
+  root = document.getElementById("root");
+const stage = document.getElementById("stage"),
+  insp = document.getElementById("insp");
 /* No pointer means no hover, so copy that offers hovering is describing a gesture
    the reader does not have. Asked once, used by the hint and by the panel. */
-const COARSE=matchMedia("(pointer:coarse)").matches;
-const doc=document.getElementById("doc"), hint=document.getElementById("hint");
-let filter="";
+const COARSE = matchMedia("(pointer:coarse)").matches;
+const doc = document.getElementById("doc"),
+  hint = document.getElementById("hint");
+let filter = "";
 /* A set of resource ids carried over from a diagram box, so the Resources tab can show
    just that box's inventory. Cleared by the chip, or by switching tab. */
-let pin=null;
-let view=VIEWS[0], sel=null, nodeById=new Map(), edgeEls=new Map(), nodeEls=new Map(), zoneEls=new Map(), adj=new Map();
-let vp={x:0,y:0,k:1};
+let pin = null;
+let baseView = VIEWS[0],
+  view = baseView,
+  sel = null,
+  nodeById = new Map(),
+  edgeEls = new Map(),
+  nodeEls = new Map(),
+  zoneEls = new Map(),
+  adj = new Map();
+let vp = { x: 0, y: 0, k: 1 };
 
-const el=(n,a={})=>{const e=document.createElementNS(SVGNS,n);for(const k in a)e.setAttribute(k,a[k]);return e;};
+const el = (n, a = {}) => {
+  const e = document.createElementNS(SVGNS, n);
+  for (const k in a) e.setAttribute(k, a[k]);
+  return e;
+};
 
-function anchors(n){return{
-  t:{x:n.x+n.w/2,y:n.y,nx:0,ny:-1}, b:{x:n.x+n.w/2,y:n.y+n.h,nx:0,ny:1},
-  l:{x:n.x,y:n.y+n.h/2,nx:-1,ny:0}, r:{x:n.x+n.w,y:n.y+n.h/2,nx:1,ny:0}};}
-
-function pickSides(a,b){
-  const ac={x:a.x+a.w/2,y:a.y+a.h/2}, bc={x:b.x+b.w/2,y:b.y+b.h/2};
-  const dx=bc.x-ac.x, dy=bc.y-ac.y;
-  if(Math.abs(dx)>Math.abs(dy)*1.15) return dx>0?["r","l"]:["l","r"];
-  return dy>0?["b","t"]:["t","b"];
+function anchors(n) {
+  return {
+    t: { x: n.x + n.w / 2, y: n.y, nx: 0, ny: -1 },
+    b: { x: n.x + n.w / 2, y: n.y + n.h, nx: 0, ny: 1 },
+    l: { x: n.x, y: n.y + n.h / 2, nx: -1, ny: 0 },
+    r: { x: n.x + n.w, y: n.y + n.h / 2, nx: 1, ny: 0 },
+  };
 }
 
-function curve(a,b,sa,sb,mult){
-  const p=anchors(a)[sa], q=anchors(b)[sb];
-  const d=Math.hypot(q.x-p.x,q.y-p.y);
-  const o=Math.max(34,Math.min(190,d*mult));
-  return {d:`M ${p.x} ${p.y} C ${p.x+p.nx*o} ${p.y+p.ny*o}, ${q.x+q.nx*o} ${q.y+q.ny*o}, ${q.x} ${q.y}`,p,q};
+function pickSides(a, b) {
+  const ac = { x: a.x + a.w / 2, y: a.y + a.h / 2 },
+    bc = { x: b.x + b.w / 2, y: b.y + b.h / 2 };
+  const dx = bc.x - ac.x,
+    dy = bc.y - ac.y;
+  if (Math.abs(dx) > Math.abs(dy) * 1.15)
+    return dx > 0 ? ["r", "l"] : ["l", "r"];
+  return dy > 0 ? ["b", "t"] : ["t", "b"];
+}
+
+function curve(a, b, sa, sb, mult) {
+  const p = anchors(a)[sa],
+    q = anchors(b)[sb];
+  const d = Math.hypot(q.x - p.x, q.y - p.y);
+  const o = Math.max(34, Math.min(190, d * mult));
+  return {
+    d: `M ${p.x} ${p.y} C ${p.x + p.nx * o} ${p.y + p.ny * o}, ${q.x + q.nx * o} ${q.y + q.ny * o}, ${q.x} ${q.y}`,
+    p,
+    q,
+  };
 }
 
 /* A straight bezier between two boxes in the same column runs straight through
@@ -222,45 +310,65 @@ function curve(a,b,sa,sb,mult){
    relationship with. So each edge is routed by trying the natural anchor pair,
    the perpendicular pair, and a wider bow of each, then keeping whichever
    sampled path clips the fewest unrelated boxes. */
-function routeEdge(a,b,obstacles,probe){
-  const [s1,t1]=pickSides(a,b);
-  const horizontal=s1==="r"||s1==="l";
-  const perp=horizontal
-    ? (b.y+b.h/2>a.y+a.h/2?["b","t"]:["t","b"])
-    : (b.x+b.w/2>a.x+a.w/2?["r","l"]:["l","r"]);
+function routeEdge(a, b, obstacles, probe) {
+  const [s1, t1] = pickSides(a, b);
+  const horizontal = s1 === "r" || s1 === "l";
+  const perp = horizontal
+    ? b.y + b.h / 2 > a.y + a.h / 2
+      ? ["b", "t"]
+      : ["t", "b"]
+    : b.x + b.w / 2 > a.x + a.w / 2
+      ? ["r", "l"]
+      : ["l", "r"];
   /* Candidate order matters: direct routes are tried first so a tie always keeps
      the natural shape. The same-side pairs at the end leave from and arrive at
      the same face, which bows the line right around whatever sits between the
      two boxes — the only way past an obstacle directly in the way. */
-  const direct=[[s1,t1],perp];
-  const detour=horizontal?[["t","t"],["b","b"]]:[["l","l"],["r","r"]];
-  let best=null;
-  for(const [sa,sb] of direct)
-    for(const mult of [0.42,0.85]){
-      const cand=curve(a,b,sa,sb,mult);
-      const score=clipCount(cand.d,obstacles,probe);
-      if(!best||score<best.score)best={...cand,score};
-      if(score===0)return best;
+  const direct = [[s1, t1], perp];
+  const detour = horizontal
+    ? [
+        ["t", "t"],
+        ["b", "b"],
+      ]
+    : [
+        ["l", "l"],
+        ["r", "r"],
+      ];
+  let best = null;
+  for (const [sa, sb] of direct)
+    for (const mult of [0.42, 0.85]) {
+      const cand = curve(a, b, sa, sb, mult);
+      const score = clipCount(cand.d, obstacles, probe);
+      if (!best || score < best.score) best = { ...cand, score };
+      if (score === 0) return best;
     }
-  if(best.score>0)
-    for(const [sa,sb] of detour)
-      for(const mult of [0.55,1.0]){
-        const cand=curve(a,b,sa,sb,mult);
-        const score=clipCount(cand.d,obstacles,probe);
-        if(score<best.score)best={...cand,score};
-        if(score===0)return best;
+  if (best.score > 0)
+    for (const [sa, sb] of detour)
+      for (const mult of [0.55, 1.0]) {
+        const cand = curve(a, b, sa, sb, mult);
+        const score = clipCount(cand.d, obstacles, probe);
+        if (score < best.score) best = { ...cand, score };
+        if (score === 0) return best;
       }
   return best;
 }
-function clipCount(d,obstacles,probe){
-  probe.setAttribute("d",d);
-  const L=probe.getTotalLength();
-  if(!L)return 0;
-  let hits=0;
-  for(let i=1;i<L;i+=8){
-    const pt=probe.getPointAtLength(i);
-    for(const o of obstacles)
-      if(pt.x>o.x+2&&pt.x<o.x+o.w-2&&pt.y>o.y+2&&pt.y<o.y+o.h-2){hits++;break;}
+function clipCount(d, obstacles, probe) {
+  probe.setAttribute("d", d);
+  const L = probe.getTotalLength();
+  if (!L) return 0;
+  let hits = 0;
+  for (let i = 1; i < L; i += 8) {
+    const pt = probe.getPointAtLength(i);
+    for (const o of obstacles)
+      if (
+        pt.x > o.x + 2 &&
+        pt.x < o.x + o.w - 2 &&
+        pt.y > o.y + 2 &&
+        pt.y < o.y + o.h - 2
+      ) {
+        hits++;
+        break;
+      }
   }
   return hits;
 }
@@ -269,74 +377,233 @@ function clipCount(d,obstacles,probe){
    Both of these are no-ops on a wide screen: the classes they toggle mean nothing
    outside the narrow-screen block, so there is one code path and the stylesheet
    decides whether it shows. */
-const grip=document.getElementById("sheetgrip"), gripLabel=document.getElementById("griplabel"),
-      menuBtn=document.getElementById("menubtn");
+const grip = document.getElementById("sheetgrip"),
+  gripLabel = document.getElementById("griplabel"),
+  menuBtn = document.getElementById("menubtn");
 /* The label is what a reader sees above the fold, so it names what is inside rather
    than saying "Details" over a panel already describing a specific box. */
-function sheet(open,label){
-  document.body.classList.toggle("sheet-open",open);
-  grip.setAttribute("aria-expanded",String(open));
-  gripLabel.textContent=label||"Details";
+function sheet(open, label) {
+  document.body.classList.toggle("sheet-open", open);
+  grip.setAttribute("aria-expanded", String(open));
+  gripLabel.textContent = label || "Details";
 }
-const sheetTitle=()=>{const t=insp.querySelector(".insp-title");return t?t.textContent:"";};
+const sheetTitle = () => {
+  const t = insp.querySelector(".insp-title");
+  return t ? t.textContent : "";
+};
 /* One line, not the whole panel. A screen reader user clicking through a diagram wants to
    know what they landed on and that the details moved; they can read the panel when they
    choose to, and having it recited in full every time makes that harder, not easier. */
-const statusEl=document.getElementById("status");
-function announce(what){
-  const t=sheetTitle();
-  statusEl.textContent=t?`${what}: ${t}. Details panel updated.`:"";
+const statusEl = document.getElementById("status");
+function announce(what) {
+  const t = sheetTitle();
+  statusEl.textContent = t ? `${what}: ${t}. Details panel updated.` : "";
 }
-function menu(open){
-  document.querySelector("header").classList.toggle("menu-open",open);
-  menuBtn.setAttribute("aria-expanded",String(open));
+function menu(open) {
+  document.querySelector("header").classList.toggle("menu-open", open);
+  menuBtn.setAttribute("aria-expanded", String(open));
   /* The glyph changes to a cross, so the name has to change with it — a button that
      shows one thing and announces another is worse than either alone. */
-  const name=open?"Close the options":"Display and export options";
-  menuBtn.setAttribute("aria-label",name); menuBtn.setAttribute("title",name);
+  const name = open ? "Close the options" : "Display and export options";
+  menuBtn.setAttribute("aria-label", name);
+  menuBtn.setAttribute("title", name);
 }
-grip.addEventListener("click",()=>sheet(!document.body.classList.contains("sheet-open"),gripLabel.textContent));
-menuBtn.addEventListener("click",ev=>{
+grip.addEventListener("click", () =>
+  sheet(!document.body.classList.contains("sheet-open"), gripLabel.textContent),
+);
+menuBtn.addEventListener("click", (ev) => {
   ev.stopPropagation();
   menu(!document.querySelector("header").classList.contains("menu-open"));
 });
 /* A menu that only closes by its own button is a menu people leave open over the
    diagram they were trying to read. */
-document.addEventListener("click",ev=>{
-  if(!ev.target.closest(".ctrls")&&!ev.target.closest(".menubtn"))menu(false);
+document.addEventListener("click", (ev) => {
+  if (!ev.target.closest(".ctrls") && !ev.target.closest(".menubtn"))
+    menu(false);
 });
-document.getElementById("fitm").addEventListener("click",()=>fit());
-document.getElementById("panelclose").addEventListener("click",()=>sheet(false,gripLabel.textContent));
+document.getElementById("fitm").addEventListener("click", () => fit());
+document
+  .getElementById("panelclose")
+  .addEventListener("click", () => sheet(false, gripLabel.textContent));
 
-function build(){
-  const isDoc=view.type==="doc";
-  sheet(false); menu(false);
-  document.querySelector(".shell").classList.toggle("is-doc",isDoc);
-  svg.hidden=isDoc; doc.hidden=!isDoc; hint.hidden=isDoc; /* Only zoom and export depend on a canvas. Icons show on the inventory rows too, and
+/* ============================ STATES ============================
+   A state is a proposal laid over the as-is. The page shows as-is on load and nothing
+   changes for a reader who never touches the selector. Picking a state composes base +
+   overlay for the current tab: cleanly (the future, as if it existed) or marked up
+   (Changes on: retired kept and struck, new dashed, changed heavy). One overlay, both
+   pictures — a second copy of the model would be a second thing to keep true. */
+let state = "asis",
+  showChanges = false;
+/* The composed views are built and gated at build time — see scripts/lib/composeStates.ts.
+   The renderer only chooses between them, so what a reviewer sees is what the geometry
+   rules were run against. A view with no overlay for this state says so rather than
+   implying the state leaves it alone. */
+/* A composed view drops the badges of boxes it retires; the as-is keeps the build's table. */
+function places() {
+  return view.placement || PLACEMENT[view.id] || {};
+}
+function compose(b) {
+  if (state === "asis" || b.type === "doc") return b;
+  const c = COMPOSED[state] && COMPOSED[state][b.id];
+  if (c) return c[showChanges ? "changes" : "future"];
+  /* Two different facts, and a reviewer has to be able to tell them apart: the state was
+     considered here and changes nothing, or nobody has modelled this view for it yet. */
+  const st = STATES.find((s) => s.id === state);
+  const declared = (UNCHANGED[state] || []).indexOf(b.id) >= 0;
+  return Object.assign({}, b, {
+    stateNote: declared
+      ? `Unchanged in ${st.label} — declared the same as today.`
+      : `Not yet modelled in ${st.label} — shown as today.`,
+    stateQuiet: true,
+  });
+}
+/**
+ * Which states have anything to say about each view, marked on the tab that opens it.
+ *
+ * The first version marked only the state you had chosen, which answered the wrong
+ * question: to learn where S2 had content you had to select S2 and read the whole strip,
+ * and at As-is the marks vanished. Each tab now carries the number of every state that
+ * touches it — solid where that state changes the view, outlined where it declares it
+ * unchanged, nothing at all where no state has reached it yet.
+ *
+ * Nothing is disabled. Today's view is the context a reviewer compares against, and a tab
+ * that cannot be opened cannot say whether it is unchanged or merely unwritten.
+ */
+/* The badge is the state's number alone: S2 is drawn as 2, and the legend says which is which. */
+const badgeNum = (st) => st.name.replace(/^S/, "");
+function markTabs() {
+  tabButtons().forEach((b) => {
+    const v = VIEWS.find((x) => "tab-" + x.id === b.id);
+    const box = b.querySelector(".cov");
+    box.textContent = "";
+    if (!v || v.type === "doc" || !STATES.length) {
+      b.removeAttribute("aria-label");
+      b.removeAttribute("title");
+      return;
+    }
+    const changes = [],
+      same = [];
+    for (const st of STATES) {
+      /* Composed means some step up to this state moved this view, so at this state it is
+         no longer today's picture. Declared-unchanged only counts where nothing composed. */
+      const how = (COMPOSED[st.id] || {})[v.id]
+        ? "changes"
+        : (UNCHANGED[st.id] || []).indexOf(v.id) >= 0
+          ? "same"
+          : null;
+      if (!how) continue;
+      (how === "changes" ? changes : same).push(st.name);
+      const m = document.createElement("i");
+      m.className = "m m-" + how + (st.id === state ? " cur" : "");
+      /* The number is drawn by CSS, not written into the tab. It is decorative — the tab's
+         accessible name says the same thing in words — and anything that reads a tab by its
+         text, the render checks included, must keep seeing just the view name. */
+      m.dataset.n = badgeNum(st);
+      m.setAttribute("aria-hidden", "true");
+      box.appendChild(m);
+    }
+    /* The visible name is the whole of the first half, per Label in Name. */
+    const said = [
+      changes.length ? `differs from today in ${changes.join(", ")}` : "",
+      same.length ? `unchanged in ${same.join(", ")}` : "",
+    ]
+      .filter(Boolean)
+      .join("; ");
+    const name = `${v.name} — ${said || "no state models this view yet"}`;
+    /* Sighted readers get the same sentence on hover: two small numbers cannot carry it. */
+    b.setAttribute("aria-label", name);
+    b.setAttribute("title", name);
+  });
+}
+
+function applyState() {
+  view = compose(baseView);
+  sel = null;
+  /* The toggle survives a move from one state to another — a reader comparing S2 and S3
+     wants to stay in the diff. Returning to the as-is turns it off, because a disabled
+     control that still reads as switched on says something untrue. */
+  if (state === "asis" && showChanges) {
+    showChanges = false;
+    view = compose(baseView);
+  }
+  changesBtn.disabled = state === "asis";
+  changesBtn.setAttribute("aria-pressed", String(showChanges));
+  markTabs();
+  writeHash();
+  build();
+  fit();
+  renderIdle();
+}
+
+function build() {
+  const isDoc = view.type === "doc";
+  sheet(false);
+  menu(false);
+  document.querySelector(".shell").classList.toggle("is-doc", isDoc);
+  svg.hidden = isDoc;
+  doc.hidden = !isDoc;
+  hint.hidden =
+    isDoc; /* Only zoom and export depend on a canvas. Icons show on the inventory rows too, and
      the theme is page-wide — hiding those left a reader able to see icons on the
      Resources tab with no way to turn them off. */
-  document.querySelectorAll(".canvas-only").forEach(g=>{g.hidden=isDoc;});
-  svg.style.display=isDoc?"none":"block";
+  document.querySelectorAll(".canvas-only").forEach((g) => {
+    g.hidden = isDoc;
+  });
+  svg.style.display = isDoc ? "none" : "block";
   /* The stage selector only means something where per-stage counts are shown. */
-  const staged=isDoc?view.id===CONFIG.inventoryView:Object.keys(PLACEMENT[view.id]||{}).length>0;
-  document.querySelector(".stagepick").hidden=!staged;
-  renderTables(); renderViewHeader();
+  const staged = isDoc
+    ? view.id === CONFIG.inventoryView
+    : Object.keys(places()).length > 0;
+  document.querySelector(".stagepick").hidden = !staged;
+  document.getElementById("statepick").hidden = !STATES.length || isDoc;
+  renderTables();
+  renderViewHeader();
   /* Clear whichever pane is not in use. A hidden pane that keeps its DOM leaves
      stale rows addressable — they index into a view that no longer has groups. */
-  if(isDoc){root.textContent="";nodeEls=new Map();edgeEls=new Map();zoneEls=new Map();buildDoc();return;}
-  doc.textContent="";
-  root.textContent=""; nodeById=new Map(); edgeEls=new Map(); nodeEls=new Map(); zoneEls=new Map(); adj=new Map();
-  svg.setAttribute("viewBox",`0 0 ${view.w} ${view.h}`);
-  view.nodes.forEach(n=>{nodeById.set(n.id,n);adj.set(n.id,[]);});
+  if (isDoc) {
+    root.textContent = "";
+    nodeEls = new Map();
+    edgeEls = new Map();
+    zoneEls = new Map();
+    buildDoc();
+    return;
+  }
+  doc.textContent = "";
+  root.textContent = "";
+  nodeById = new Map();
+  edgeEls = new Map();
+  nodeEls = new Map();
+  zoneEls = new Map();
+  adj = new Map();
+  svg.setAttribute("viewBox", `0 0 ${view.w} ${view.h}`);
+  view.nodes.forEach((n) => {
+    nodeById.set(n.id, n);
+    adj.set(n.id, []);
+  });
 
   /* Detached measuring path — never rendered, removed once routing is done. */
-  const probe=el("path"); probe.setAttribute("fill","none"); probe.setAttribute("stroke","none");
+  const probe = el("path");
+  probe.setAttribute("fill", "none");
+  probe.setAttribute("stroke", "none");
   root.appendChild(probe);
 
-  const defs=el("defs");
-  ["arrow","arrowsel"].forEach(id=>{
-    const m=el("marker",{id,viewBox:"0 0 10 10",refX:"9",refY:"5",markerWidth:"6",markerHeight:"6",orient:"auto-start-reverse"});
-    m.appendChild(el("path",{d:"M 0 0 L 10 5 L 0 10 z",fill:id==="arrow"?"var(--line-strong)":"var(--accent)"}));
+  const defs = el("defs");
+  ["arrow", "arrowsel"].forEach((id) => {
+    const m = el("marker", {
+      id,
+      viewBox: "0 0 10 10",
+      refX: "9",
+      refY: "5",
+      markerWidth: "6",
+      markerHeight: "6",
+      orient: "auto-start-reverse",
+    });
+    m.appendChild(
+      el("path", {
+        d: "M 0 0 L 10 5 L 0 10 z",
+        fill: id === "arrow" ? "var(--line-strong)" : "var(--accent)",
+      }),
+    );
     defs.appendChild(m);
   });
   root.appendChild(defs);
@@ -344,198 +611,409 @@ function build(){
   /* Four layers: zones, edge lines, nodes, then edge labels on top. Labels are
      drawn last because a label hidden behind a box is worse than one that clips
      a box edge — the line itself still sits under the nodes. */
-  const gz=el("g"), ge=el("g"), gn=el("g"), gl=el("g");
-  root.append(gz,ge,gn,gl);
+  const gz = el("g"),
+    ge = el("g"),
+    gn = el("g"),
+    gl = el("g");
+  root.append(gz, ge, gn, gl);
 
-  view.zones.forEach(z=>{
-    const zres=z.id&&PLACEMENT[view.id]?.[z.id];
-    const g=el("g",{class:`zone ${z.hard?"hard":"soft"}`+(zres?" clickable":"")});
-    g.appendChild(el("rect",{x:z.x,y:z.y,width:z.w,height:z.h,rx:12}));
-    const t=el("text",{x:z.x+16,y:z.y+24}); t.textContent=z.label; g.appendChild(t);
-    if(zres){
-      g.setAttribute("tabindex","0"); g.setAttribute("role","button"); g.setAttribute("aria-label",z.label);
-      const {sum,varies}=boxTotal(zres);
-      const txt=varies&&!sum?"~":String(sum)+(varies?"+":"");
-      const w=Math.max(22,txt.length*7+14);
-      g.appendChild(el("rect",{class:"badge",x:z.x+z.w-w/2-6,y:z.y-8,width:w,height:17,rx:8.5}));
-      const bt=el("text",{class:"badge-t",x:z.x+z.w-6,y:z.y+4}); bt.textContent=txt; g.appendChild(bt);
-      const pick=ev=>{if(window.__panned)return;ev.stopPropagation();select({t:"zone",id:z.id});};
-      g.addEventListener("click",pick);
-      g.addEventListener("keydown",ev=>{if(ev.key==="Enter"||ev.key===" "){ev.preventDefault();pick(ev);}});
-      zoneEls.set(z.id,{g,z});
+  view.zones.forEach((z) => {
+    const zres = z.id && places()[z.id];
+    const g = el("g", {
+      class:
+        `zone ${z.hard ? "hard" : "soft"}` +
+        (zres ? " clickable" : "") +
+        (z.d && z.d.lifecycle ? " lc-" + z.d.lifecycle : ""),
+    });
+    g.appendChild(
+      el("rect", { x: z.x, y: z.y, width: z.w, height: z.h, rx: 12 }),
+    );
+    const t = el("text", { x: z.x + 16, y: z.y + 24 });
+    t.textContent = z.label;
+    g.appendChild(t);
+    if (zres) {
+      g.setAttribute("tabindex", "0");
+      g.setAttribute("role", "button");
+      g.setAttribute("aria-label", z.label);
+      const { sum, varies } = boxTotal(zres);
+      const txt = varies && !sum ? "~" : String(sum) + (varies ? "+" : "");
+      const w = Math.max(22, txt.length * 7 + 14);
+      g.appendChild(
+        el("rect", {
+          class: "badge",
+          x: z.x + z.w - w / 2 - 6,
+          y: z.y - 8,
+          width: w,
+          height: 17,
+          rx: 8.5,
+        }),
+      );
+      const bt = el("text", { class: "badge-t", x: z.x + z.w - 6, y: z.y + 4 });
+      bt.textContent = txt;
+      g.appendChild(bt);
+      const pick = (ev) => {
+        if (window.__panned) return;
+        ev.stopPropagation();
+        select({ t: "zone", id: z.id });
+      };
+      g.addEventListener("click", pick);
+      g.addEventListener("keydown", (ev) => {
+        if (ev.key === "Enter" || ev.key === " ") {
+          ev.preventDefault();
+          pick(ev);
+        }
+      });
+      zoneEls.set(z.id, { g, z });
     }
     gz.appendChild(g);
   });
 
-  const placedLabels=[];
-  const obstacles=view.nodes.map(n=>({x:n.x,y:n.y,w:n.w,h:n.h}));
-  view.edges.forEach((e,i)=>{
-    const a=nodeById.get(e.from), b=nodeById.get(e.to);
-    if(!a||!b) return;
-    const id=`e${i}`; e._id=id;
-    const {d}=routeEdge(a,b,view.nodes.filter(n=>n.id!==a.id&&n.id!==b.id),probe);
-    const g=el("g",{class:`edge ${e.style||""}`,tabindex:"0",role:"button","aria-label":`${a.label} to ${b.label}${e.label?": "+e.label:""}`});
-    const line=el("path",{d,class:"line","marker-end":"url(#arrow)"});
-    if(e.dir==="both") line.setAttribute("marker-start","url(#arrow)");
-    g.appendChild(el("path",{d,class:"hit"}));
+  const placedLabels = [];
+  const obstacles = view.nodes.map((n) => ({ x: n.x, y: n.y, w: n.w, h: n.h }));
+  view.edges.forEach((e, i) => {
+    const a = nodeById.get(e.from),
+      b = nodeById.get(e.to);
+    if (!a || !b) return;
+    const id = `e${i}`;
+    e._id = id;
+    const { d } = routeEdge(
+      a,
+      b,
+      view.nodes.filter((n) => n.id !== a.id && n.id !== b.id),
+      probe,
+    );
+    const g = el("g", {
+      class: `edge ${e.style || ""}`,
+      tabindex: "0",
+      role: "button",
+      "aria-label": `${a.label} to ${b.label}${e.label ? ": " + e.label : ""}`,
+    });
+    const line = el("path", { d, class: "line", "marker-end": "url(#arrow)" });
+    if (e.dir === "both") line.setAttribute("marker-start", "url(#arrow)");
+    g.appendChild(el("path", { d, class: "hit" }));
     g.appendChild(line);
     ge.appendChild(g);
 
     /* A bundled edge deliberately carries no label — one label speaks for the whole
        trunk. It still gets a hit area, a name and an inspector entry. */
-    let lg=null;
-    if(e.label){
-      const L=line.getTotalLength();
-      lg=el("g",{class:`edgelbl ${e.style||""}`});
-      const bg=el("rect",{class:"lblbg",rx:3}), tx=el("text",{class:"lbl","text-anchor":"middle"});
-      tx.textContent=e.label; lg.append(bg,tx);
+    let lg = null;
+    if (e.label) {
+      const L = line.getTotalLength();
+      lg = el("g", { class: `edgelbl ${e.style || ""}` });
+      const bg = el("rect", { class: "lblbg", rx: 3 }),
+        tx = el("text", { class: "lbl", "text-anchor": "middle" });
+      tx.textContent = e.label;
+      lg.append(bg, tx);
       gl.appendChild(lg);
       /* Slide the label along its own path until it stops colliding with one already
          placed. Two labels sitting on top of each other is unreadable in a way that a
          label 15% off-centre never is. */
-      let best=null,bestScore=Infinity;
-      for(const t of [0.5,0.4,0.6,0.3,0.7,0.22,0.78,0.15,0.85]){
-        const pt=line.getPointAtLength(L*t);
-        tx.setAttribute("x",pt.x); tx.setAttribute("y",pt.y+3.5);
-        const b=tx.getBBox();
-        const box={x:b.x-4,y:b.y-2,w:b.width+8,h:b.height+4};
-        const overlap=o=>Math.max(0,Math.min(box.x+box.w,o.x+o.w)-Math.max(box.x,o.x))
-                        *Math.max(0,Math.min(box.y+box.h,o.y+o.h)-Math.max(box.y,o.y));
+      let best = null,
+        bestScore = Infinity;
+      for (const t of [0.5, 0.4, 0.6, 0.3, 0.7, 0.22, 0.78, 0.15, 0.85]) {
+        const pt = line.getPointAtLength(L * t);
+        tx.setAttribute("x", pt.x);
+        tx.setAttribute("y", pt.y + 3.5);
+        const b = tx.getBBox();
+        const box = { x: b.x - 4, y: b.y - 2, w: b.width + 8, h: b.height + 4 };
+        const overlap = (o) =>
+          Math.max(
+            0,
+            Math.min(box.x + box.w, o.x + o.w) - Math.max(box.x, o.x),
+          ) *
+          Math.max(
+            0,
+            Math.min(box.y + box.h, o.y + o.h) - Math.max(box.y, o.y),
+          );
         // A label on another label is worse than a label clipping a box corner.
-        let score=0;
-        placedLabels.forEach(o=>{score+=overlap(o)*3;});
-        obstacles.forEach(o=>{score+=overlap(o);});
-        if(score<bestScore){bestScore=score;best=box;}
-        if(score===0)break;
+        let score = 0;
+        placedLabels.forEach((o) => {
+          score += overlap(o) * 3;
+        });
+        obstacles.forEach((o) => {
+          score += overlap(o);
+        });
+        if (score < bestScore) {
+          bestScore = score;
+          best = box;
+        }
+        if (score === 0) break;
       }
       /* If the best position still buries the label under something, do not draw it.
          An unreadable label is worse than none: the edge stays clickable and the
          inspector carries the protocol, the auth and what travels over it. */
-      if(bestScore>best.w*best.h*0.25){
-        lg.remove(); lg=null;
-        g.setAttribute("aria-label",`${a.label} to ${b.label}: ${e.label}`);
+      if (bestScore > best.w * best.h * 0.25) {
+        lg.remove();
+        lg = null;
+        g.setAttribute("aria-label", `${a.label} to ${b.label}: ${e.label}`);
       }
-      if(lg){
-        tx.setAttribute("x",best.x+best.w/2); tx.setAttribute("y",best.y+best.h-4);
-        bg.setAttribute("x",best.x);bg.setAttribute("y",best.y);
-        bg.setAttribute("width",best.w);bg.setAttribute("height",best.h);
+      if (lg) {
+        tx.setAttribute("x", best.x + best.w / 2);
+        tx.setAttribute("y", best.y + best.h - 4);
+        bg.setAttribute("x", best.x);
+        bg.setAttribute("y", best.y);
+        bg.setAttribute("width", best.w);
+        bg.setAttribute("height", best.h);
         placedLabels.push(best);
       }
-      if(lg){
-        lg.addEventListener("click",ev=>{if(window.__panned)return;ev.stopPropagation();select({t:"edge",id});});
-        lg.addEventListener("mouseenter",()=>{if(!sel)focus(new Set([a.id,b.id]),new Set([id]));});
-        lg.addEventListener("mouseleave",()=>{if(!sel)clearFocus();});
+      if (lg) {
+        lg.addEventListener("click", (ev) => {
+          if (window.__panned) return;
+          ev.stopPropagation();
+          select({ t: "edge", id });
+        });
+        lg.addEventListener("mouseenter", () => {
+          if (!sel) focus(new Set([a.id, b.id]), new Set([id]));
+        });
+        lg.addEventListener("mouseleave", () => {
+          if (!sel) clearFocus();
+        });
       }
     }
 
-    edgeEls.set(id,{g,lg,e});
-    adj.get(a.id).push({e,other:b,out:true});
-    adj.get(b.id).push({e,other:a,out:false});
-    g.addEventListener("click",ev=>{if(window.__panned)return;ev.stopPropagation();select({t:"edge",id});});
-    g.addEventListener("keydown",ev=>{if(ev.key==="Enter"||ev.key===" "){ev.preventDefault();select({t:"edge",id});}});
-    g.addEventListener("mouseenter",()=>{if(!sel)focus(new Set([a.id,b.id]),new Set([id]));});
-    g.addEventListener("mouseleave",()=>{if(!sel)clearFocus();});
+    edgeEls.set(id, { g, lg, e });
+    if (e.d && e.d.lifecycle) {
+      g.classList.add("lc-" + e.d.lifecycle);
+      lg && lg.classList.add("lc-" + e.d.lifecycle);
+    }
+    adj.get(a.id).push({ e, other: b, out: true });
+    adj.get(b.id).push({ e, other: a, out: false });
+    g.addEventListener("click", (ev) => {
+      if (window.__panned) return;
+      ev.stopPropagation();
+      select({ t: "edge", id });
+    });
+    g.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter" || ev.key === " ") {
+        ev.preventDefault();
+        select({ t: "edge", id });
+      }
+    });
+    g.addEventListener("mouseenter", () => {
+      if (!sel) focus(new Set([a.id, b.id]), new Set([id]));
+    });
+    g.addEventListener("mouseleave", () => {
+      if (!sel) clearFocus();
+    });
   });
 
   probe.remove();
 
-  view.nodes.forEach(n=>{
-    const g=el("g",{class:`node n-${n.kind} p-${n.plane||"request"}`,tabindex:"0",role:"button",
-      "aria-label":n.label,style:`--kind:${kindVar(n.kind)}`});
-    g.appendChild(el("rect",{class:"box",x:n.x,y:n.y,width:n.w,height:n.h,rx:8}));
-    g.appendChild(el("rect",{class:"bar",x:n.x,y:n.y,width:4,height:n.h,rx:2}));
-    const hasSub=!!n.sub;
-    const t=el("text",{class:"t",x:n.x+16,y:n.y+(hasSub?n.h/2-2:n.h/2+5)}); t.textContent=n.label; g.appendChild(t);
-    if(hasSub){const s=el("text",{class:"s",x:n.x+16,y:n.y+n.h/2+15}); s.textContent=n.sub; g.appendChild(s);}
+  view.nodes.forEach((n) => {
+    const g = el("g", {
+      class: `node n-${n.kind} p-${n.plane || "request"}`,
+      tabindex: "0",
+      role: "button",
+      "aria-label": n.label,
+      style: `--kind:${kindVar(n.kind)}`,
+    });
+    g.appendChild(
+      el("rect", {
+        class: "box",
+        x: n.x,
+        y: n.y,
+        width: n.w,
+        height: n.h,
+        rx: 8,
+      }),
+    );
+    g.appendChild(
+      el("rect", {
+        class: "bar",
+        x: n.x,
+        y: n.y,
+        width: 4,
+        height: n.h,
+        rx: 2,
+      }),
+    );
+    const hasSub = !!n.sub;
+    const t = el("text", {
+      class: "t",
+      x: n.x + 16,
+      y: n.y + (hasSub ? n.h / 2 - 2 : n.h / 2 + 5),
+    });
+    t.textContent = n.label;
+    g.appendChild(t);
+    if (hasSub) {
+      const s = el("text", { class: "s", x: n.x + 16, y: n.y + n.h / 2 + 15 });
+      s.textContent = n.sub;
+      g.appendChild(s);
+    }
 
     /* Service icon on the top-left corner, mirroring the count badge opposite. Riding
        the corner keeps it clear of the label, so turning icons on never reflows text
        and the box widths stay valid either way. */
     /* An explicit icon wins; otherwise the CloudFormation type says which service it is. */
-    const nicon=n.icon||iconForType(n.d.type);
-    if(nicon&&ICON_IDS.includes(nicon)){
-      const ic=el("g",{class:"icon"});
-      ic.appendChild(el("rect",{class:"icon-bg",x:n.x+8,y:n.y-11,width:22,height:22,rx:5}));
-      const u=el("use",{x:n.x+11,y:n.y-8,width:16,height:16});
-      u.setAttribute("href","#i-"+nicon);
-      ic.appendChild(u); g.appendChild(ic);
+    const nicon = n.icon || iconForType(n.d.type);
+    if (nicon && ICON_IDS.includes(nicon)) {
+      const ic = el("g", { class: "icon" });
+      ic.appendChild(
+        el("rect", {
+          class: "icon-bg",
+          x: n.x + 8,
+          y: n.y - 11,
+          width: 22,
+          height: 22,
+          rx: 5,
+        }),
+      );
+      const u = el("use", { x: n.x + 11, y: n.y - 8, width: 16, height: 16 });
+      u.setAttribute("href", "#i-" + nicon);
+      ic.appendChild(u);
+      g.appendChild(ic);
     }
 
     /* Count badge, centred on the top-right corner so it can never collide with
        the label text no matter how wide that label is. */
-    const ids=PLACEMENT[view.id]?.[n.id];
-    if(ids&&ids.length){
-      const {sum,varies}=boxTotal(ids);
-      const txt=varies&&!sum?"~":String(sum)+(varies?"+":"");
-      const w=Math.max(22,txt.length*7+14);
-      g.appendChild(el("rect",{class:"badge"+(varies?" partial":""),x:n.x+n.w-w/2-6,y:n.y-8,width:w,height:17,rx:8.5}));
-      const bt=el("text",{class:"badge-t",x:n.x+n.w-6,y:n.y+4}); bt.textContent=txt; g.appendChild(bt);
-      if(sum===0&&!varies)g.classList.add("absent");
+    const ids = places()[n.id];
+    if (ids && ids.length) {
+      const { sum, varies } = boxTotal(ids);
+      const txt = varies && !sum ? "~" : String(sum) + (varies ? "+" : "");
+      const w = Math.max(22, txt.length * 7 + 14);
+      g.appendChild(
+        el("rect", {
+          class: "badge" + (varies ? " partial" : ""),
+          x: n.x + n.w - w / 2 - 6,
+          y: n.y - 8,
+          width: w,
+          height: 17,
+          rx: 8.5,
+        }),
+      );
+      const bt = el("text", { class: "badge-t", x: n.x + n.w - 6, y: n.y + 4 });
+      bt.textContent = txt;
+      g.appendChild(bt);
+      if (sum === 0 && !varies) g.classList.add("absent");
     }
-    gn.appendChild(g); nodeEls.set(n.id,{g,n});
-    g.addEventListener("click",ev=>{if(window.__panned)return;ev.stopPropagation();select({t:"node",id:n.id});});
-    g.addEventListener("keydown",ev=>{if(ev.key==="Enter"||ev.key===" "){ev.preventDefault();select({t:"node",id:n.id});}});
-    g.addEventListener("mouseenter",()=>{if(!sel)focusNode(n.id);});
-    g.addEventListener("mouseleave",()=>{if(!sel)clearFocus();});
+    gn.appendChild(g);
+    nodeEls.set(n.id, { g, n });
+    if (n.d.lifecycle) g.classList.add("lc-" + n.d.lifecycle);
+    g.addEventListener("click", (ev) => {
+      if (window.__panned) return;
+      ev.stopPropagation();
+      select({ t: "node", id: n.id });
+    });
+    g.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter" || ev.key === " ") {
+        ev.preventDefault();
+        select({ t: "node", id: n.id });
+      }
+    });
+    g.addEventListener("mouseenter", () => {
+      if (!sel) focusNode(n.id);
+    });
+    g.addEventListener("mouseleave", () => {
+      if (!sel) clearFocus();
+    });
   });
 }
 
-function focus(nodeIds,edgeIds){
-  nodeEls.forEach((v,id)=>v.g.classList.toggle("dim",!nodeIds.has(id)));
-  edgeEls.forEach((v,id)=>{const d=!edgeIds.has(id);v.g.classList.toggle("dim",d);v.lg&&v.lg.classList.toggle("dim",d);});
+function focus(nodeIds, edgeIds) {
+  nodeEls.forEach((v, id) => v.g.classList.toggle("dim", !nodeIds.has(id)));
+  edgeEls.forEach((v, id) => {
+    const d = !edgeIds.has(id);
+    v.g.classList.toggle("dim", d);
+    v.lg && v.lg.classList.toggle("dim", d);
+  });
 }
-function focusNode(id){
-  const ns=new Set([id]), es=new Set();
-  (adj.get(id)||[]).forEach(({e,other})=>{ns.add(other.id);es.add(e._id);});
-  focus(ns,es);
+function focusNode(id) {
+  const ns = new Set([id]),
+    es = new Set();
+  (adj.get(id) || []).forEach(({ e, other }) => {
+    ns.add(other.id);
+    es.add(e._id);
+  });
+  focus(ns, es);
 }
-function clearFocus(){
-  nodeEls.forEach(v=>v.g.classList.remove("dim"));
-  edgeEls.forEach(v=>{v.g.classList.remove("dim");v.lg&&v.lg.classList.remove("dim");});
+function clearFocus() {
+  nodeEls.forEach((v) => v.g.classList.remove("dim"));
+  edgeEls.forEach((v) => {
+    v.g.classList.remove("dim");
+    v.lg && v.lg.classList.remove("dim");
+  });
 }
-function clearSel(){
-  sel=null; clearFocus(); sheet(false);
-  if(statusEl)statusEl.textContent="Selection cleared.";
-  nodeEls.forEach(v=>v.g.classList.remove("sel"));
-  zoneEls.forEach(v=>v.g.classList.remove("sel"));
-  edgeEls.forEach(v=>{v.g.classList.remove("sel");v.lg&&v.lg.classList.remove("sel");});
+function clearSel() {
+  sel = null;
+  clearFocus();
+  sheet(false);
+  if (statusEl) statusEl.textContent = "Selection cleared.";
+  nodeEls.forEach((v) => v.g.classList.remove("sel"));
+  zoneEls.forEach((v) => v.g.classList.remove("sel"));
+  edgeEls.forEach((v) => {
+    v.g.classList.remove("sel");
+    v.lg && v.lg.classList.remove("sel");
+  });
   renderIdle();
 }
 
-function select(s){
-  sel=s;
-  nodeEls.forEach(v=>v.g.classList.remove("sel"));
-  edgeEls.forEach(v=>{v.g.classList.remove("sel");v.lg&&v.lg.classList.remove("sel");});
-  zoneEls.forEach(v=>v.g.classList.remove("sel"));
-  if(s.t==="zone"){
-    const {g,z}=zoneEls.get(s.id); g.classList.add("sel"); clearFocus(); renderZone(z);
+function select(s) {
+  sel = s;
+  nodeEls.forEach((v) => v.g.classList.remove("sel"));
+  edgeEls.forEach((v) => {
+    v.g.classList.remove("sel");
+    v.lg && v.lg.classList.remove("sel");
+  });
+  zoneEls.forEach((v) => v.g.classList.remove("sel"));
+  if (s.t === "zone") {
+    const { g, z } = zoneEls.get(s.id);
+    g.classList.add("sel");
+    clearFocus();
+    renderZone(z);
+  } else if (s.t === "node") {
+    nodeEls.get(s.id).g.classList.add("sel");
+    focusNode(s.id);
+    renderNode(nodeById.get(s.id));
+  } else {
+    const { g, lg, e } = edgeEls.get(s.id);
+    g.classList.add("sel");
+    lg && lg.classList.add("sel");
+    focus(new Set([e.from, e.to]), new Set([s.id]));
+    renderEdge(e);
   }
-  else if(s.t==="node"){nodeEls.get(s.id).g.classList.add("sel");focusNode(s.id);renderNode(nodeById.get(s.id));}
-  else{
-    const {g,lg,e}=edgeEls.get(s.id); g.classList.add("sel"); lg&&lg.classList.add("sel");
-    focus(new Set([e.from,e.to]),new Set([s.id])); renderEdge(e);
-  }
-  insp.scrollTop=0;
-  sheet(true,sheetTitle());
-  announce(s.t==="edge"?"Line selected":s.t==="zone"?"Boundary selected":"Box selected");
+  insp.scrollTop = 0;
+  sheet(true, sheetTitle());
+  announce(
+    s.t === "edge"
+      ? "Line selected"
+      : s.t === "zone"
+        ? "Boundary selected"
+        : "Box selected",
+  );
 }
 
 /* ============================ INSPECTOR ============================ */
-const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const esc = (s) =>
+  String(s).replace(
+    /[&<>"]/g,
+    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c],
+  );
 /* Authored copy is full of literal angle brackets — /gateways/<name>/{proxy+},
    /<env>/<service>/…, <stage>.<zone> — so everything is escaped first and only the three
    inline tags this file actually uses are restored. Escaping alone would show the
    markup; not escaping would silently swallow <name> as an unknown element. */
-const RICH_TAGS=/&lt;(\/?)(b|code|i)&gt;/g;
-const rich=t=>esc(t).replace(RICH_TAGS,"<$1$2>");
-const facts=a=>a&&a.length?`<ul class="facts">${a.map(f=>`<li>${rich(f)}</li>`).join("")}</ul>`:"";
-const codes=a=>a&&a.length?`<div class="sect"><div class="eyebrow">In the repo</div><div class="code">${a.map(([l,p])=>`<a href="${REPO}${p}" target="_blank" rel="noopener">${esc(l)}</a>`).join("")}</div></div>`:"";
+const RICH_TAGS = /&lt;(\/?)(b|code|i)&gt;/g;
+const rich = (t) => esc(t).replace(RICH_TAGS, "<$1$2>");
+const facts = (a) =>
+  a && a.length
+    ? `<ul class="facts">${a.map((f) => `<li>${rich(f)}</li>`).join("")}</ul>`
+    : "";
+/* Links that leave the repo — a decision record, a board. Kept apart from `codes`, which
+   prefixes the repo URL and would mangle an absolute one. */
+const links = (a) =>
+  a && a.length
+    ? `<div class="sect"><div class="eyebrow">Where it was decided</div><div class="code">${a.map(([l, u]) => `<a href="${esc(u)}" target="_blank" rel="noreferrer">${esc(l)}</a>`).join("")}</div></div>`
+    : "";
+const codes = (a) =>
+  a && a.length
+    ? `<div class="sect"><div class="eyebrow">In the repo</div><div class="code">${a.map(([l, p]) => `<a href="${REPO}${p}" target="_blank" rel="noopener">${esc(l)}</a>`).join("")}</div></div>`
+    : "";
 
-function renderIdle(){
-  if(view.type==="doc"){
-    const n=view.groups.reduce((a,g)=>a+(g.items||[]).length,0);
-    const t=view.groups.filter(g=>g.table).length;
-    insp.innerHTML=`
+function renderIdle() {
+  if (view.type === "doc") {
+    const n = view.groups.reduce((a, g) => a + (g.items || []).length, 0);
+    const t = view.groups.filter((g) => g.table).length;
+    insp.innerHTML = `
       <div>
         <div class="eyebrow">${esc(view.name)} view</div>
         <h2 class="insp-title">${esc(view.name)}</h2>
@@ -555,9 +1033,9 @@ function renderIdle(){
       </div>`;
     return;
   }
-  const kinds=[...new Set(view.nodes.map(n=>n.kind))];
-  const planes=[...new Set(view.nodes.map(n=>n.plane||"request"))];
-  insp.innerHTML=`
+  const kinds = [...new Set(view.nodes.map((n) => n.kind))];
+  const planes = [...new Set(view.nodes.map((n) => n.plane || "request"))];
+  insp.innerHTML = `
     <div>
       <div class="eyebrow">${esc(view.name)} view</div>
       <h2 class="insp-title">${esc(view.name)}</h2>
@@ -566,9 +1044,9 @@ function renderIdle(){
     <div class="card">
       <div class="eyebrow" style="margin-bottom:9px">How to read it</div>
       <ul class="facts">
-        <li>${COARSE?"Tap":"Click"} any box to see what it is and everything it connects to.</li>
-        <li>${COARSE?"Tap":"Click"} any line to see the protocol, the auth and what actually travels over it.</li>
-        <li>${COARSE?"Tap the background to clear the selection.":"Hover to isolate one thing; press Escape to clear the selection."}</li>
+        <li>${COARSE ? "Tap" : "Click"} any box to see what it is and everything it connects to.</li>
+        <li>${COARSE ? "Tap" : "Click"} any line to see the protocol, the auth and what actually travels over it.</li>
+        <li>${COARSE ? "Tap the background to clear the selection." : "Hover to isolate one thing; press Escape to clear the selection."}</li>
       </ul>
     </div>
     <div class="sect">
@@ -577,91 +1055,118 @@ function renderIdle(){
     </div>`;
 }
 
-function renderNode(n){
-  const links=(adj.get(n.id)||[]).map(({e,other,out})=>
-    `<button class="conn" data-edge="${e._id}"><span class="arw">${out?"→":"←"}</span><span><b>${esc(other.label)}</b> · ${esc(e.label)}</span></button>`).join("");
-  insp.innerHTML=`
+function renderNode(n) {
+  const links = (adj.get(n.id) || [])
+    .map(
+      ({ e, other, out }) =>
+        `<button class="conn" data-edge="${e._id}"><span class="arw">${out ? "→" : "←"}</span><span><b>${esc(other.label)}</b> · ${esc(e.label)}</span></button>`,
+    )
+    .join("");
+  insp.innerHTML = `
     <div>
       <span class="chip" style="color:${kindVar(n.kind)}"><i></i>${esc(KIND_LABEL[n.kind])}</span>
       <h2 class="insp-title">${esc(n.label)}</h2>
-      ${n.sub?`<p class="insp-sub mono">${esc(n.sub)}</p>`:""}
+      ${n.sub ? `<p class="insp-sub mono">${esc(n.sub)}</p>` : ""}
     </div>
-    <dl class="kv"><dt>Type</dt><dd>${esc(n.d.type)}</dd><dt>Technology</dt><dd>${iconTag(n.icon||iconForType(n.d.type))}${esc(n.d.tech)}</dd><dt>Plane</dt><dd>${esc(PLANE_LABEL[n.plane||"request"])}</dd></dl>
-    <p style="margin:0;font-size:14px;color:var(--ink-2)">${esc(n.d.role)}</p>
+    <dl class="kv"><dt>Type</dt><dd>${esc(n.d.type || "—")}</dd><dt>Technology</dt><dd>${iconTag(n.icon || iconForType(n.d.type))}${esc(n.d.tech || "—")}</dd><dt>Plane</dt><dd>${esc(PLANE_LABEL[n.plane || "request"])}</dd></dl>
+    ${n.d.lifecycle ? `<dl class="kv lc-kv lc-${n.d.lifecycle}"><dt>Status</dt><dd>${esc(LC_LABEL[n.d.lifecycle])}</dd>${whyHtml(n.d.why)}</dl>` : ""}
+    ${n.d.role ? `<p style="margin:0;font-size:14px;color:var(--ink-2)">${esc(n.d.role)}</p>` : ""}
     ${facts(n.d.facts)}
     ${resourcesHere(n.id)}
-    ${links?`<hr><div class="sect"><div class="eyebrow">Connections · ${(adj.get(n.id)||[]).length}</div><div class="conns">${links}</div></div>`:""}
+    ${links ? `<hr><div class="sect"><div class="eyebrow">Connections · ${(adj.get(n.id) || []).length}</div><div class="conns">${links}</div></div>` : ""}
     ${codes(n.d.code)}`;
-  wireConns(); wireRes();
+  wireConns();
+  wireRes();
 }
 
-function renderZone(z){
-  insp.innerHTML=`
+function renderZone(z) {
+  insp.innerHTML = `
     <div>
       <span class="chip" style="color:var(--accent)"><i></i>Boundary</span>
       <h2 class="insp-title">${esc(z.label)}</h2>
     </div>
-    <dl class="kv"><dt>Type</dt><dd>${esc(z.d?.type||"Grouping")}</dd><dt>Technology</dt><dd>${esc(z.d?.tech||"—")}</dd></dl>
-    ${z.d?.role?`<p style="margin:0;font-size:14px;color:var(--ink-2)">${esc(z.d.role)}</p>`:""}
+    <dl class="kv"><dt>Type</dt><dd>${esc(z.d?.type || "Grouping")}</dd><dt>Technology</dt><dd>${esc(z.d?.tech || "—")}</dd></dl>
+    ${z.d?.role ? `<p style="margin:0;font-size:14px;color:var(--ink-2)">${esc(z.d.role)}</p>` : ""}
     ${facts(z.d?.facts)}
     ${resourcesHere(z.id)}`;
   wireRes();
 }
-function resourcesHere(nodeId){
-  const ids=PLACEMENT[view.id]?.[nodeId];
-  if(!ids||!ids.length)return "";
-  const {sum,varies}=boxTotal(ids);
-  const rows=ids.map(id=>{
-    const it=RES.get(id); if(!it)return "";
-    const c=countOf(it);
-    return `<button class="resrow" data-res="${id}" data-from="${nodeId}">
-      <span class="num${c===0?" zero":""}">${c===null?"~":c}</span>
-        ${iconTag(it.d.icon||iconForType(it.d.type),"sm")}
+function resourcesHere(nodeId) {
+  const ids = places()[nodeId];
+  if (!ids || !ids.length) return "";
+  const { sum, varies } = boxTotal(ids);
+  const rows = ids
+    .map((id) => {
+      const it = RES.get(id);
+      if (!it) return "";
+      const c = countOf(it);
+      return `<button class="resrow" data-res="${id}" data-from="${nodeId}">
+      <span class="num${c === 0 ? " zero" : ""}">${c === null ? "~" : c}</span>
+        ${iconTag(it.d.icon || iconForType(it.d.type), "sm")}
       <span>${esc(it.name)}</span></button>`;
-  }).join("");
+    })
+    .join("");
   return `<hr>
     <div class="sect">
       <div class="eyebrow">Resources in this box · ${esc(stageLabel())}</div>
-      <div class="total"><b>${sum}${varies?"+":""}</b><span>${esc(CONFIG.inventoryLabel)} across ${ids.length} entr${ids.length===1?"y":"ies"}${varies?", plus some that vary per stack":""}</span></div>
+      <div class="total"><b>${sum}${varies ? "+" : ""}</b><span>${esc(CONFIG.inventoryLabel)} across ${ids.length} entr${ids.length === 1 ? "y" : "ies"}${varies ? ", plus some that vary per stack" : ""}</span></div>
       <div class="reslist">${rows}</div>
       <button class="btn wide" data-pin="${nodeId}" type="button">Open these in the Resources tab</button>
     </div>`;
 }
-function wireRes(){
-  insp.querySelectorAll("[data-res]").forEach(b=>b.addEventListener("click",()=>{
-    renderItem(RES.get(b.dataset.res),RES_GROUP.get(b.dataset.res),{node:b.dataset.from});
-    insp.scrollTop=0;
-  }));
-  insp.querySelectorAll("[data-pin]").forEach(b=>b.addEventListener("click",()=>{
-    const nodeId=b.dataset.pin;
-    const ids=PLACEMENT[view.id]?.[nodeId]||[];
-    const label=nodeById.get(nodeId)?.label||nodeId;
-    const rv=VIEWS.find(v=>v.id===CONFIG.inventoryView);
-    const tab=[...tabs.children].find(c=>c.textContent===rv.name);
-    if(tab)tab.click();                       /* resets view, filter and pin */
-    pin={ids:new Set(ids),label};
-    buildDoc();
-  }));
-  insp.querySelectorAll("[data-back]").forEach(b=>b.addEventListener("click",()=>select({t:"node",id:b.dataset.back})));
-  insp.querySelectorAll("[data-goto]").forEach(b=>b.addEventListener("click",()=>{
-    const [vid,nid]=b.dataset.goto.split("|");
-    const tab=[...tabs.children].find(c=>c.textContent===VIEWS.find(v=>v.id===vid).name);
-    if(tab&&view.id!==vid)tab.click();
-    select({t:"node",id:nid});
-  }));
+function wireRes() {
+  insp.querySelectorAll("[data-res]").forEach((b) =>
+    b.addEventListener("click", () => {
+      renderItem(RES.get(b.dataset.res), RES_GROUP.get(b.dataset.res), {
+        node: b.dataset.from,
+      });
+      insp.scrollTop = 0;
+    }),
+  );
+  insp.querySelectorAll("[data-pin]").forEach((b) =>
+    b.addEventListener("click", () => {
+      const nodeId = b.dataset.pin;
+      const ids = places()[nodeId] || [];
+      const label = nodeById.get(nodeId)?.label || nodeId;
+      const rv = VIEWS.find((v) => v.id === CONFIG.inventoryView);
+      const tab = [...tabs.children].find((c) => c.textContent === rv.name);
+      if (tab) tab.click(); /* resets view, filter and pin */
+      pin = { ids: new Set(ids), label };
+      buildDoc();
+    }),
+  );
+  insp
+    .querySelectorAll("[data-back]")
+    .forEach((b) =>
+      b.addEventListener("click", () =>
+        select({ t: "node", id: b.dataset.back }),
+      ),
+    );
+  insp.querySelectorAll("[data-goto]").forEach((b) =>
+    b.addEventListener("click", () => {
+      const [vid, nid] = b.dataset.goto.split("|");
+      const tab = [...tabs.children].find(
+        (c) => c.textContent === VIEWS.find((v) => v.id === vid).name,
+      );
+      if (tab && view.id !== vid) tab.click();
+      select({ t: "node", id: nid });
+    }),
+  );
 }
-function renderEdge(e){
-  const a=nodeById.get(e.from), b=nodeById.get(e.to);
-  insp.innerHTML=`
+function renderEdge(e) {
+  const a = nodeById.get(e.from),
+    b = nodeById.get(e.to);
+  insp.innerHTML = `
     <div>
       <span class="chip" style="color:var(--accent)"><i></i>Relationship</span>
-      <h2 class="insp-title">${esc(e.label||`${a.label} → ${b.label}`)}</h2>
-      <p class="insp-sub mono">${esc(a.label)} ${e.dir==="both"?"↔":"→"} ${esc(b.label)}</p>
+      <h2 class="insp-title">${esc(e.label || `${a.label} → ${b.label}`)}</h2>
+      <p class="insp-sub mono">${esc(a.label)} ${e.dir === "both" ? "↔" : "→"} ${esc(b.label)}</p>
     </div>
+    ${e.d.lifecycle ? `<dl class="kv lc-kv lc-${e.d.lifecycle}"><dt>Status</dt><dd>${esc(LC_LABEL[e.d.lifecycle])}</dd>${whyHtml(e.d.why)}</dl>` : ""}
     <dl class="kv">
-      <dt>Protocol</dt><dd>${esc(e.d.protocol)}</dd>
-      <dt>Auth</dt><dd>${esc(e.d.auth)}</dd>
-      <dt>Carries</dt><dd>${esc(e.d.carries)}</dd>
+      <dt>Protocol</dt><dd>${esc(e.d.protocol || "—")}</dd>
+      <dt>Auth</dt><dd>${esc(e.d.auth || "—")}</dd>
+      <dt>Carries</dt><dd>${esc(e.d.carries || "—")}</dd>
     </dl>
     ${facts(e.d.facts)}
     <hr>
@@ -673,48 +1178,72 @@ function renderEdge(e){
   wireConns();
 }
 
-function wireConns(){
-  insp.querySelectorAll("[data-edge]").forEach(b=>b.addEventListener("click",()=>select({t:"edge",id:b.dataset.edge})));
-  insp.querySelectorAll("[data-node]").forEach(b=>b.addEventListener("click",()=>select({t:"node",id:b.dataset.node})));
+function wireConns() {
+  insp
+    .querySelectorAll("[data-edge]")
+    .forEach((b) =>
+      b.addEventListener("click", () =>
+        select({ t: "edge", id: b.dataset.edge }),
+      ),
+    );
+  insp
+    .querySelectorAll("[data-node]")
+    .forEach((b) =>
+      b.addEventListener("click", () =>
+        select({ t: "node", id: b.dataset.node }),
+      ),
+    );
 }
 
 /* A merged diagram + reference tab (Network) keeps its tables under the drawing
    rather than in the 372px inspector, where a six-column table is unreadable. */
 /* Collapsed by default: the drawing is the point, the tables are the drill-down.
    The choice persists across tabs so someone reading tables is not re-opening them. */
-let tablesOpen=false;
+let tablesOpen = false;
 /* Mutates state in place rather than re-rendering. Rebuilding the strip destroyed the
    button holding focus, so a keyboard user could open the tables but never close them. */
-function setTablesOpen(open){
-  tablesOpen=open;
-  const head=document.querySelector("#tbl-toggle");
-  stage.classList.toggle("split",open);
-  if(head){
-    head.setAttribute("aria-expanded",String(open));
-    head.querySelector(".tbl-hint").textContent=open?"hide":"show";
+function setTablesOpen(open) {
+  tablesOpen = open;
+  const head = document.querySelector("#tbl-toggle");
+  stage.classList.toggle("split", open);
+  if (head) {
+    head.setAttribute("aria-expanded", String(open));
+    head.querySelector(".tbl-hint").textContent = open ? "hide" : "show";
   }
-  fit();                                   // the canvas just changed size
-  if(open){const body=document.getElementById("tbl-body"); if(body)body.scrollTop=0;}
+  fit(); // the canvas just changed size
+  if (open) {
+    const body = document.getElementById("tbl-body");
+    if (body) body.scrollTop = 0;
+  }
 }
-function renderTables(){
-  const box=document.getElementById("tables");
-  const t=view.type!=="doc"&&Array.isArray(view.tables)?view.tables:[];
-  box.hidden=!t.length;
-  stage.classList.toggle("has-tables",!!t.length);
-  stage.classList.toggle("split",!!t.length&&tablesOpen);
-  if(!t.length){box.textContent="";return;}
-  const names=t.map(x=>x.name).join(" · ");
-  box.innerHTML=`
+function renderTables() {
+  const box = document.getElementById("tables");
+  const t =
+    view.type !== "doc" && Array.isArray(view.tables) ? view.tables : [];
+  box.hidden = !t.length;
+  stage.classList.toggle("has-tables", !!t.length);
+  stage.classList.toggle("split", !!t.length && tablesOpen);
+  if (!t.length) {
+    box.textContent = "";
+    return;
+  }
+  const names = t.map((x) => x.name).join(" · ");
+  box.innerHTML = `
     <button class="tbl-head" id="tbl-toggle" aria-expanded="${tablesOpen}" aria-controls="tbl-body">
       <span class="caret" aria-hidden="true"></span>
       <span class="tbl-title">Reference tables</span>
       <span class="tbl-names">${esc(names)}</span>
-      <span class="tbl-hint">${tablesOpen?"hide":"show"}</span>
+      <span class="tbl-hint">${tablesOpen ? "hide" : "show"}</span>
     </button>
-    <div class="tbl-body" id="tbl-body">${
-      t.map(x=>`<section class="grp"><h3>${esc(x.name)}</h3>${x.note?`<p class="gnote">${rich(x.note)}</p>`:""}${tableHtml(x)}${codes(x.code)}</section>`).join("")
-    }</div>`;
-  box.querySelector("#tbl-toggle").addEventListener("click",()=>setTablesOpen(!tablesOpen));
+    <div class="tbl-body" id="tbl-body">${t
+      .map(
+        (x) =>
+          `<section class="grp"><h3>${esc(x.name)}</h3>${x.note ? `<p class="gnote">${rich(x.note)}</p>` : ""}${tableHtml(x)}${codes(x.code)}</section>`,
+      )
+      .join("")}</div>`;
+  box
+    .querySelector("#tbl-toggle")
+    .addEventListener("click", () => setTablesOpen(!tablesOpen));
 }
 
 /* Colour carries ownership, border carries plane. They are two axes, so the legend
@@ -724,272 +1253,484 @@ function renderTables(){
    where every box is, which the old `planes.length>1` test hid — and the edge entry
    whenever any line is. Box properties get a box glyph, line properties a line glyph, so
    the two dashed idioms can never be read for one another. */
-function legendHtml(){
-  if(view.type==="doc"||!view.nodes)return "";
-  const kinds=KIND_ORDER.filter(k=>view.nodes.some(n=>n.kind===k));
-  const planes=PLANE_ORDER.filter(p=>view.nodes.some(n=>(n.plane||"request")===p));
-  const dashed=(view.edges||[]).some(e=>e.style==="dash");
-  const row=(cls,html)=>html?`<div class="lg-row ${cls}">${html}</div>`:"";
-  return `<div class="legend">`
-    +row("",kinds.map(k=>`<span class="lg-item" style="color:${kindVar(k)}"><i class="sw"></i>${esc(KIND_LABEL[k])}</span>`).join(""))
-    +row("",planes.includes("control")?planes.map(p=>
-       `<span class="lg-item"><i class="sw pl-${p}"></i>${esc(PLANE_LABEL[p])}</span>`).join(""):"")
-    +row("dash",dashed&&view.dashMeans?`<span class="lg-item dash"><i class="ln"></i>${esc(view.dashMeans)}</span>`:"")
-    +`</div>`;
+function legendHtml() {
+  if (view.type === "doc" || !view.nodes) return "";
+  const kinds = KIND_ORDER.filter((k) => view.nodes.some((n) => n.kind === k));
+  const planes = PLANE_ORDER.filter((p) =>
+    view.nodes.some((n) => (n.plane || "request") === p),
+  );
+  const dashed = (view.edges || []).some((e) => e.style === "dash");
+  const row = (cls, html) =>
+    html ? `<div class="lg-row ${cls}">${html}</div>` : "";
+  /* A second channel, orthogonal to ownership: what this state does to a box. */
+  const all = [...view.nodes, ...(view.zones || []), ...(view.edges || [])];
+  const lcs = ["new", "changed", "retired"].filter((l) =>
+    all.some((x) => x.d && x.d.lifecycle === l),
+  );
+  /* The tab badges are the only mark on this page whose key is not on the canvas. They are
+     explained here because this is where a reader already looks for one. */
+  const badges = STATES.length
+    ? `<span class="lg-item"><i class="tabm m-changes" data-n="${esc(badgeNum(STATES[0]))}"></i>a state where this view differs from today</span>` +
+      `<span class="lg-item"><i class="tabm m-same" data-n="${esc(badgeNum(STATES[0]))}"></i>a state that declares it unchanged</span>`
+    : "";
+  return (
+    `<div class="legend">` +
+    row("tabkey", badges) +
+    row(
+      "",
+      lcs.length
+        ? lcs
+            .map(
+              (l) =>
+                `<span class="lg-item"><i class="sw lc-sw lc-${l}"></i>${esc(LC_LABEL[l])}</span>`,
+            )
+            .join("")
+        : "",
+    ) +
+    row(
+      "",
+      kinds
+        .map(
+          (k) =>
+            `<span class="lg-item" style="color:${kindVar(k)}"><i class="sw"></i>${esc(KIND_LABEL[k])}</span>`,
+        )
+        .join(""),
+    ) +
+    row(
+      "",
+      planes.includes("control")
+        ? planes
+            .map(
+              (p) =>
+                `<span class="lg-item"><i class="sw pl-${p}"></i>${esc(PLANE_LABEL[p])}</span>`,
+            )
+            .join("")
+        : "",
+    ) +
+    row(
+      "dash",
+      dashed && view.dashMeans
+        ? `<span class="lg-item dash"><i class="ln"></i>${esc(view.dashMeans)}</span>`
+        : "",
+    ) +
+    `</div>`
+  );
 }
 
 /* Pinned to the top of the panel, so it is still there once something is selected. */
-function renderViewHeader(){
-  document.getElementById("viewhdr").innerHTML=`
+function renderViewHeader() {
+  document.getElementById("viewhdr").innerHTML = `
     <div class="eyebrow">${esc(view.name)}</div>
-    ${view.audience?`<p class="audience"><span>For</span>${esc(view.audience)}</p>`:""}
+    ${view.audience ? `<p class="audience"><span>For</span>${esc(view.audience)}</p>` : ""}
+    ${view.stateNote ? `<p class="statenote${view.stateQuiet ? " quiet" : ""}">${esc(view.stateNote)}</p>` : ""}
     ${legendHtml()}`;
 }
 
-/* ============================ DOC VIEWS ============================ */
-function matches(item,q){
-  if(pin&&!pin.ids.has(item.id))return false;
-  if(!q)return true;
-  const hay=[item.id,item.name,(item.meta||[]).join(" "),item.d.type,item.d.tech,item.d.role,(item.d.facts||[]).join(" ")].join(" ").toLowerCase();
-  return q.split(/\s+/).filter(Boolean).every(t=>hay.includes(t));
+/* Where a planned change was argued. A state is a proposal, so the citation is the only
+   thing that makes a box on it reviewable rather than an assertion — it is rendered as a
+   link when the register has one, and as plain text when the decision lives somewhere with
+   no URL, which a board sticky often does. */
+function whyHtml(why) {
+  if (!why || !why.length) return "";
+  const one = (id) => {
+    const d = DECISIONS[id];
+    if (!d) return `<span class="cite missing">${esc(id)}</span>`;
+    const label = `<span class="citekind">${esc(d.kind)}</span>${esc(d.title)}`;
+    const url = d.links && d.links[0] && d.links[0].url;
+    return url
+      ? `<a class="cite" href="${esc(url)}" target="_blank" rel="noreferrer">${label}</a>`
+      : `<span class="cite">${label}</span>`;
+  };
+  return `<dt>Why</dt><dd class="cites">${why.map(one).join("")}</dd>`;
 }
-function buildDoc(){
-  const q=filter.trim().toLowerCase();
-  let shown=0,total=0;
-  const groups=view.groups.map((g,gi)=>{
-    const items=(g.items||[]);
-    total+=items.length;
-    const keep=items.filter(it=>matches(it,q));
-    shown+=keep.length;
-    const tableVisible=!pin&&(!q||g.name.toLowerCase().includes(q));
-    if(!keep.length&&!(g.table&&tableVisible))return "";
-    const rows=keep.map(it=>{
-      const gi2=gi, ii=items.indexOf(it), c=countOf(it), note=!it.id;
-      return `<button class="row${!note&&c===0?" zero":""}" data-g="${gi2}" data-i="${ii}">
-        <span>${iconTag(it.d.icon||iconForType(it.d.type),"sm")}<b>${esc(it.name)}</b></span>
-        <span class="rcount">${note?"design note":c===null?"varies":c===0?`none in ${esc(stageLabel().toLowerCase())}`:`${c}\u00d7`}</span>
-        <span class="rmeta">${(it.meta||[]).map(m=>`<span class="tag">${esc(m)}</span>`).join("")}</span>
-      </button>`;}).join("");
-    return `<section class="grp">
+
+/* ============================ DOC VIEWS ============================ */
+function matches(item, q) {
+  if (pin && !pin.ids.has(item.id)) return false;
+  if (!q) return true;
+  const hay = [
+    item.id,
+    item.name,
+    (item.meta || []).join(" "),
+    item.d.type,
+    item.d.tech,
+    item.d.role,
+    (item.d.facts || []).join(" "),
+  ]
+    .join(" ")
+    .toLowerCase();
+  return q
+    .split(/\s+/)
+    .filter(Boolean)
+    .every((t) => hay.includes(t));
+}
+function buildDoc() {
+  const q = filter.trim().toLowerCase();
+  let shown = 0,
+    total = 0;
+  const groups = view.groups
+    .map((g, gi) => {
+      const items = g.items || [];
+      total += items.length;
+      const keep = items.filter((it) => matches(it, q));
+      shown += keep.length;
+      const tableVisible = !pin && (!q || g.name.toLowerCase().includes(q));
+      if (!keep.length && !(g.table && tableVisible)) return "";
+      const rows = keep
+        .map((it) => {
+          const gi2 = gi,
+            ii = items.indexOf(it),
+            c = countOf(it),
+            note = !it.id;
+          return `<button class="row${!note && c === 0 ? " zero" : ""}" data-g="${gi2}" data-i="${ii}">
+        <span>${iconTag(it.d.icon || iconForType(it.d.type), "sm")}<b>${esc(it.name)}</b></span>
+        <span class="rcount">${note ? "design note" : c === null ? "varies" : c === 0 ? `none in ${esc(stageLabel().toLowerCase())}` : `${c}\u00d7`}</span>
+        <span class="rmeta">${(it.meta || []).map((m) => `<span class="tag">${esc(m)}</span>`).join("")}</span>
+      </button>`;
+        })
+        .join("");
+      return `<section class="grp">
       <h3>${esc(g.name)}</h3>
-      ${g.note?`<p class="gnote">${rich(g.note)}</p>`:""}
-      ${g.table&&tableVisible?tableHtml(g.table):""}
-      ${rows?`<div class="rows">${rows}</div>`:""}
+      ${g.note ? `<p class="gnote">${rich(g.note)}</p>` : ""}
+      ${g.table && tableVisible ? tableHtml(g.table) : ""}
+      ${rows ? `<div class="rows">${rows}</div>` : ""}
     </section>`;
-  }).join("");
-  doc.innerHTML=`
+    })
+    .join("");
+  doc.innerHTML = `
     <div class="doc-head">
       <h2>${esc(view.name)}</h2>
       <p>${esc(view.blurb)}</p>
-      ${view.note?`<div class="doc-note">${rich(view.note)}</div>`:""}
+      ${view.note ? `<div class="doc-note">${rich(view.note)}</div>` : ""}
     </div>
     <div class="filterbar">
       <input id="q" type="search" placeholder="${esc(CONFIG.filterHint)}" value="${esc(filter)}" aria-label="Filter resources">
-      <span class="count">${shown} of ${total} entries${view.id===CONFIG.inventoryView&&!pin?` · ${stageTotal()} resources in ${esc(stageLabel().toLowerCase())}`:""}</span>
-        ${pin?`<span class="pinchip">Showing only what is in <b>${esc(pin.label)}</b><button id="unpin" type="button" aria-label="Show all resources">Clear</button></span>`:""}
+      <span class="count">${shown} of ${total} entries${view.id === CONFIG.inventoryView && !pin ? ` · ${stageTotal()} resources in ${esc(stageLabel().toLowerCase())}` : ""}</span>
+        ${pin ? `<span class="pinchip">Showing only what is in <b>${esc(pin.label)}</b><button id="unpin" type="button" aria-label="Show all resources">Clear</button></span>` : ""}
     </div>
-    ${groups||`<p class="empty">Nothing matches “${esc(filter)}”.</p>`}`;
-  const qi=doc.querySelector("#q");
-  qi.addEventListener("input",()=>{
-    const pos=qi.selectionStart; filter=qi.value; buildDoc();
-    const nq=doc.querySelector("#q"); nq.focus(); nq.setSelectionRange(pos,pos);
+    ${groups || `<p class="empty">Nothing matches “${esc(filter)}”.</p>`}`;
+  const qi = doc.querySelector("#q");
+  qi.addEventListener("input", () => {
+    const pos = qi.selectionStart;
+    filter = qi.value;
+    buildDoc();
+    const nq = doc.querySelector("#q");
+    nq.focus();
+    nq.setSelectionRange(pos, pos);
   });
-  const un=doc.querySelector("#unpin");
-  if(un)un.addEventListener("click",()=>{pin=null;buildDoc();});
-  doc.querySelectorAll(".row").forEach(b=>b.addEventListener("click",()=>{
-    doc.querySelectorAll(".row").forEach(r=>r.classList.remove("sel"));
-    b.classList.add("sel");
-    renderItem(view.groups[+b.dataset.g].items[+b.dataset.i],view.groups[+b.dataset.g].name);
-    insp.scrollTop=0;
-    sheet(true,sheetTitle());
-    announce("Row selected");
-  }));
+  const un = doc.querySelector("#unpin");
+  if (un)
+    un.addEventListener("click", () => {
+      pin = null;
+      buildDoc();
+    });
+  doc.querySelectorAll(".row").forEach((b) =>
+    b.addEventListener("click", () => {
+      doc.querySelectorAll(".row").forEach((r) => r.classList.remove("sel"));
+      b.classList.add("sel");
+      renderItem(
+        view.groups[+b.dataset.g].items[+b.dataset.i],
+        view.groups[+b.dataset.g].name,
+      );
+      insp.scrollTop = 0;
+      sheet(true, sheetTitle());
+      announce("Row selected");
+    }),
+  );
 }
-function tableHtml(t){
+function tableHtml(t) {
   return `<div class="tbl-wrap"><table>
-    <thead><tr>${t.cols.map(c=>`<th>${rich(c)}</th>`).join("")}</tr></thead>
-    <tbody>${t.rows.map(r=>`<tr>${r.map(c=>`<td>${rich(c)}</td>`).join("")}</tr>`).join("")}</tbody>
+    <thead><tr>${t.cols.map((c) => `<th>${rich(c)}</th>`).join("")}</tr></thead>
+    <tbody>${t.rows.map((r) => `<tr>${r.map((c) => `<td>${rich(c)}</td>`).join("")}</tr>`).join("")}</tbody>
   </table></div>`;
 }
-function renderItem(it,groupName,ctx){
-  const c=countOf(it);
-  const places=(RES_PLACES.get(it.id)||[]).filter(pl=>!(ctx&&ctx.node===pl.node&&view.id===pl.view));
-  const placeRows=places.map(pl=>{
-    const v=VIEWS.find(x=>x.id===pl.view);
-    const nd=v.nodes.find(x=>x.id===pl.node);
-    return nd?`<button class="resrow" data-goto="${pl.view}|${pl.node}"><span>${esc(v.name)} → <b>${esc(nd.label)}</b></span></button>`:"";
-  }).join("");
-  insp.innerHTML=`
-    ${ctx&&ctx.node?`<button class="backlink" data-back="${ctx.node}">← back to ${esc((view.nodes.find(x=>x.id===ctx.node)||{}).label||"the box")}</button>`:""}
+function renderItem(it, groupName, ctx) {
+  const c = countOf(it);
+  const places = (RES_PLACES.get(it.id) || []).filter(
+    (pl) => !(ctx && ctx.node === pl.node && view.id === pl.view),
+  );
+  const placeRows = places
+    .map((pl) => {
+      const v = VIEWS.find((x) => x.id === pl.view);
+      const nd = v.nodes.find((x) => x.id === pl.node);
+      return nd
+        ? `<button class="resrow" data-goto="${pl.view}|${pl.node}"><span>${esc(v.name)} → <b>${esc(nd.label)}</b></span></button>`
+        : "";
+    })
+    .join("");
+  insp.innerHTML = `
+    ${ctx && ctx.node ? `<button class="backlink" data-back="${ctx.node}">← back to ${esc((view.nodes.find((x) => x.id === ctx.node) || {}).label || "the box")}</button>` : ""}
     <div>
       <span class="chip" style="color:var(--accent)"><i></i>${esc(groupName)}</span>
       <h2 class="insp-title">${esc(it.name)}</h2>
     </div>
-    ${it.id?`<div class="total"><b>${c===null?"~":c}</b><span>${c===null?"varies — counted per stack, not summed":`in ${esc(stageLabel())}${c===0?" this resource is not created":""}`}</span></div>`:""}
-    <dl class="kv"><dt>Resource</dt><dd class="mono" style="font-size:12px">${iconTag(it.d.icon||iconForType(it.d.type))}${esc(it.d.type)}</dd><dt>Config</dt><dd>${rich(it.d.tech)}</dd></dl>
+    ${it.id ? `<div class="total"><b>${c === null ? "~" : c}</b><span>${c === null ? "varies — counted per stack, not summed" : view.itemUnit ? esc(view.itemUnit) : `in ${esc(stageLabel())}${c === 0 ? " this resource is not created" : ""}`}</span></div>` : ""}
+    <dl class="kv"><dt>${esc((view.itemTerms || {}).type || "Resource")}</dt><dd class="mono" style="font-size:12px">${iconTag(it.d.icon || iconForType(it.d.type))}${esc(it.d.type)}</dd>${it.d.tech ? `<dt>${esc((view.itemTerms || {}).tech || "Config")}</dt><dd>${rich(it.d.tech)}</dd>` : ""}</dl>
     <p style="margin:0;font-size:14px;color:var(--ink-2)">${esc(it.d.role)}</p>
     ${facts(it.d.facts)}
-    ${(it.meta||[]).length?`<div class="sect"><div class="eyebrow">Scope</div><div class="rmeta" style="justify-content:flex-start">${it.meta.map(m=>`<span class="tag">${esc(m)}</span>`).join("")}</div></div>`:""}
-    ${placeRows?`<hr><div class="sect"><div class="eyebrow">Also shown in</div><div class="reslist">${placeRows}</div></div>`:""}
-    ${it.id&&!places.length&&!(ctx&&ctx.node)?`<div class="sect"><div class="eyebrow">Placement</div><p class="insp-sub">Not drawn as its own box in any diagram — it is cross-cutting.</p></div>`:""}
+    ${(it.meta || []).length ? `<div class="sect"><div class="eyebrow">Scope</div><div class="rmeta" style="justify-content:flex-start">${it.meta.map((m) => `<span class="tag">${esc(m)}</span>`).join("")}</div></div>` : ""}
+    ${placeRows ? `<hr><div class="sect"><div class="eyebrow">Also shown in</div><div class="reslist">${placeRows}</div></div>` : ""}
+    ${it.id && !places.length && !(ctx && ctx.node) ? `<div class="sect"><div class="eyebrow">Placement</div><p class="insp-sub">Not drawn as its own box in any diagram — it is cross-cutting.</p></div>` : ""}
+    ${links(it.d.links)}
     ${codes(it.d.code)}`;
   wireRes();
 }
 
-
 /* ============================ PAN / ZOOM ============================ */
-let fitK=1;
-function apply(){root.setAttribute("transform",`translate(${vp.x} ${vp.y}) scale(${vp.k})`);
-  document.getElementById("zval").textContent=Math.round(vp.k/fitK*100)+"%";}
+let fitK = 1;
+function apply() {
+  root.setAttribute("transform", `translate(${vp.x} ${vp.y}) scale(${vp.k})`);
+  document.getElementById("zval").textContent =
+    Math.round((vp.k / fitK) * 100) + "%";
+}
 
 /* The viewBox maps to the stage with the default xMidYMid meet, so viewBox units and
    the root transform share one coordinate space and the stage centre is always the
    viewBox centre. Fit therefore measures the real content bounds and scales them to
    fill the stage — content pushed into the letterbox bands still renders, so the
    drawing can use the whole frame instead of just the viewBox's aspect-matched part. */
-function fit(){
-  if(view.type==="doc")return;
-  const r=stage.getBoundingClientRect();
-  const prev=root.getAttribute("transform"); root.removeAttribute("transform");
-  const bb=root.getBBox();
-  if(prev)root.setAttribute("transform",prev);
-  if(!bb.width||!bb.height||!r.width){vp={k:1,x:0,y:0};fitK=1;return apply();}
-  const m=Math.min(r.width/view.w,r.height/view.h);        // viewBox units -> css px
-  const stageW=r.width/m, stageH=r.height/m;               // stage size in viewBox units
-  const k=Math.min(stageW/bb.width,stageH/bb.height)*0.95;
-  fitK=k;
-  vp={k,x:view.w/2-(bb.x+bb.width/2)*k,y:view.h/2-(bb.y+bb.height/2)*k};
+function fit() {
+  if (view.type === "doc") return;
+  const r = stage.getBoundingClientRect();
+  const prev = root.getAttribute("transform");
+  root.removeAttribute("transform");
+  const bb = root.getBBox();
+  if (prev) root.setAttribute("transform", prev);
+  if (!bb.width || !bb.height || !r.width) {
+    vp = { k: 1, x: 0, y: 0 };
+    fitK = 1;
+    return apply();
+  }
+  const m = Math.min(r.width / view.w, r.height / view.h); // viewBox units -> css px
+  const stageW = r.width / m,
+    stageH = r.height / m; // stage size in viewBox units
+  const k = Math.min(stageW / bb.width, stageH / bb.height) * 0.95;
+  fitK = k;
+  vp = {
+    k,
+    x: view.w / 2 - (bb.x + bb.width / 2) * k,
+    y: view.h / 2 - (bb.y + bb.height / 2) * k,
+  };
   apply();
 }
-function ctm(){return svg.getScreenCTM();}
-function screenToVB(cx,cy){
-  const m=ctm(); if(!m) return {x:view.w/2,y:view.h/2};
-  const pt=svg.createSVGPoint(); pt.x=cx; pt.y=cy;
+function ctm() {
+  return svg.getScreenCTM();
+}
+function screenToVB(cx, cy) {
+  const m = ctm();
+  if (!m) return { x: view.w / 2, y: view.h / 2 };
+  const pt = svg.createSVGPoint();
+  pt.x = cx;
+  pt.y = cy;
   return pt.matrixTransform(m.inverse());
 }
-function pxPerUnit(){const m=ctm();return m&&m.a?m.a:1;}
-function zoomBy(f,cx,cy){
-  const k2=Math.max(fitK*0.5,Math.min(fitK*6,vp.k*f));
-  if(cx===undefined){cx=view.w/2;cy=view.h/2;}
-  vp.x=cx-(cx-vp.x)*(k2/vp.k); vp.y=cy-(cy-vp.y)*(k2/vp.k); vp.k=k2; apply();
+function pxPerUnit() {
+  const m = ctm();
+  return m && m.a ? m.a : 1;
+}
+function zoomBy(f, cx, cy) {
+  const k2 = Math.max(fitK * 0.5, Math.min(fitK * 6, vp.k * f));
+  if (cx === undefined) {
+    cx = view.w / 2;
+    cy = view.h / 2;
+  }
+  vp.x = cx - (cx - vp.x) * (k2 / vp.k);
+  vp.y = cy - (cy - vp.y) * (k2 / vp.k);
+  vp.k = k2;
+  apply();
 }
 /* Drag pans from anywhere, including from on top of a box. A gesture only counts
    as a pan once it travels past DRAG_SLOP, and that same flag suppresses the click
    that follows, so a drag never selects and a tap never pans. */
-const DRAG_SLOP=4;
-let drag=null; window.__panned=false;
+const DRAG_SLOP = 4;
+let drag = null;
+window.__panned = false;
 /* Every live pointer, so a second finger can turn a pan into a pinch mid-gesture. */
-const touches=new Map();
-let pinch=null;
-const span=()=>{const[a,b]=[...touches.values()];
-  return{d:Math.hypot(a.x-b.x,a.y-b.y),cx:(a.x+b.x)/2,cy:(a.y+b.y)/2};};
+const touches = new Map();
+let pinch = null;
+const span = () => {
+  const [a, b] = [...touches.values()];
+  return {
+    d: Math.hypot(a.x - b.x, a.y - b.y),
+    cx: (a.x + b.x) / 2,
+    cy: (a.y + b.y) / 2,
+  };
+};
 /* Deliberately no setPointerCapture: capturing on the svg retargets the click that
    follows, which would swallow every box and line selection. Window listeners give
    the same "keep dragging outside the frame" behaviour without touching click targets. */
-svg.addEventListener("pointerdown",ev=>{
-  if(ev.pointerType==="mouse"&&ev.button!==0)return;
-  if(ev.pointerType!=="mouse")touches.set(ev.pointerId,{x:ev.clientX,y:ev.clientY});
-  if(touches.size===2){
+svg.addEventListener("pointerdown", (ev) => {
+  if (ev.pointerType === "mouse" && ev.button !== 0) return;
+  if (ev.pointerType !== "mouse")
+    touches.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+  if (touches.size === 2) {
     /* A second finger cancels the pan it interrupted, so the canvas does not lurch. */
-    drag=null; window.__panned=true; stage.classList.remove("dragging");
-    const s=span(); pinch={d:s.d,k:vp.k};
+    drag = null;
+    window.__panned = true;
+    stage.classList.remove("dragging");
+    const s = span();
+    pinch = { d: s.d, k: vp.k };
     return;
   }
-  drag={sx:ev.clientX,sy:ev.clientY,ox:vp.x,oy:vp.y,u:pxPerUnit()}; window.__panned=false;
+  drag = { sx: ev.clientX, sy: ev.clientY, ox: vp.x, oy: vp.y, u: pxPerUnit() };
+  window.__panned = false;
 });
-addEventListener("pointermove",ev=>{
-  if(touches.has(ev.pointerId))touches.set(ev.pointerId,{x:ev.clientX,y:ev.clientY});
-  if(pinch&&touches.size===2){
-    const s=span();
-    if(s.d>0){const p=screenToVB(s.cx,s.cy); zoomBy((s.d/pinch.d)*(pinch.k/vp.k),p.x,p.y);}
+addEventListener("pointermove", (ev) => {
+  if (touches.has(ev.pointerId))
+    touches.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+  if (pinch && touches.size === 2) {
+    const s = span();
+    if (s.d > 0) {
+      const p = screenToVB(s.cx, s.cy);
+      zoomBy((s.d / pinch.d) * (pinch.k / vp.k), p.x, p.y);
+    }
     return;
   }
-  if(!drag)return;
-  const dx=ev.clientX-drag.sx, dy=ev.clientY-drag.sy;
-  if(!window.__panned&&Math.hypot(dx,dy)<DRAG_SLOP)return;
-  if(!window.__panned){window.__panned=true;stage.classList.add("dragging");}
-  vp.x=drag.ox+dx/drag.u; vp.y=drag.oy+dy/drag.u; apply();
+  if (!drag) return;
+  const dx = ev.clientX - drag.sx,
+    dy = ev.clientY - drag.sy;
+  if (!window.__panned && Math.hypot(dx, dy) < DRAG_SLOP) return;
+  if (!window.__panned) {
+    window.__panned = true;
+    stage.classList.add("dragging");
+  }
+  vp.x = drag.ox + dx / drag.u;
+  vp.y = drag.oy + dy / drag.u;
+  apply();
 });
-["pointerup","pointercancel"].forEach(t=>addEventListener(t,ev=>{
-  touches.delete(ev.pointerId);
-  if(touches.size<2)pinch=null;
-  drag=null; stage.classList.remove("dragging");
-}));
-svg.addEventListener("wheel",ev=>{ev.preventDefault();const p=screenToVB(ev.clientX,ev.clientY);zoomBy(ev.deltaY<0?1.12:1/1.12,p.x,p.y);},{passive:false});
-svg.addEventListener("click",ev=>{
-  if(window.__panned)return;
-  if(!ev.target.closest(".node")&&!ev.target.closest(".edge")&&!ev.target.closest(".zone.clickable"))clearSel();
+["pointerup", "pointercancel"].forEach((t) =>
+  addEventListener(t, (ev) => {
+    touches.delete(ev.pointerId);
+    if (touches.size < 2) pinch = null;
+    drag = null;
+    stage.classList.remove("dragging");
+  }),
+);
+svg.addEventListener(
+  "wheel",
+  (ev) => {
+    ev.preventDefault();
+    const p = screenToVB(ev.clientX, ev.clientY);
+    zoomBy(ev.deltaY < 0 ? 1.12 : 1 / 1.12, p.x, p.y);
+  },
+  { passive: false },
+);
+svg.addEventListener("click", (ev) => {
+  if (window.__panned) return;
+  if (
+    !ev.target.closest(".node") &&
+    !ev.target.closest(".edge") &&
+    !ev.target.closest(".zone.clickable")
+  )
+    clearSel();
 });
-document.getElementById("zin").onclick=()=>zoomBy(1.25);
-document.getElementById("zout").onclick=()=>zoomBy(1/1.25);
-document.getElementById("zfit").onclick=fit;
-addEventListener("keydown",ev=>{
-  if(ev.target.matches("input,textarea,[type=search]"))return;
-  if(ev.key==="Escape"){clearSel();menu(false);}
-  else if(ev.key==="+"||ev.key==="=")zoomBy(1.25);
-  else if(ev.key==="-")zoomBy(1/1.25);
-  else if(ev.key==="0")fit();
+document.getElementById("zin").onclick = () => zoomBy(1.25);
+document.getElementById("zout").onclick = () => zoomBy(1 / 1.25);
+document.getElementById("zfit").onclick = fit;
+addEventListener("keydown", (ev) => {
+  if (ev.target.matches("input,textarea,[type=search]")) return;
+  if (ev.key === "Escape") {
+    clearSel();
+    menu(false);
+  } else if (ev.key === "+" || ev.key === "=") zoomBy(1.25);
+  else if (ev.key === "-") zoomBy(1 / 1.25);
+  else if (ev.key === "0") fit();
 });
 
 /* ============================ TABS ============================ */
-const tabs=document.getElementById("tabs");
-let lastGroup=null;
-VIEWS.forEach((v,i)=>{
+const tabs = document.getElementById("tabs");
+let lastGroup = null;
+VIEWS.forEach((v, i) => {
   /* A divider wherever the group changes: the zoom ladder, the views that cut
      across it, and the lookup table are three different kinds of thing. */
-  if(v.group&&v.group!==lastGroup){
-    const sep=document.createElement("span");
-    sep.className="tabgroup"; sep.textContent=v.group; sep.setAttribute("aria-hidden","true");
-    tabs.appendChild(sep); lastGroup=v.group;
+  if (v.group && v.group !== lastGroup) {
+    const sep = document.createElement("span");
+    sep.className = "tabgroup";
+    sep.textContent = v.group;
+    sep.setAttribute("aria-hidden", "true");
+    tabs.appendChild(sep);
+    lastGroup = v.group;
   }
-  const b=document.createElement("button");
-  b.className="tab"; b.textContent=v.name; b.setAttribute("role","tab");
-  b.id="tab-"+v.id; b.setAttribute("aria-controls","stage");
-  b.setAttribute("aria-selected",i===0?"true":"false");
+  const b = document.createElement("button");
+  b.className = "tab";
+  b.setAttribute("role", "tab");
+  b.appendChild(document.createTextNode(v.name));
+  /* Filled by markTabs: a small number per planned state that touches this view, solid
+     where it changes and outlined where it is declared the same. The numbers are
+     decorative; markTabs puts the same fact into the tab's accessible name.
+     Not an sr-only span — absolutely positioned, its containing block is the header rather
+     than the scrolling strip, so one sitting at x600 stretched the header to 652px. */
+  const cov = document.createElement("span");
+  cov.className = "cov";
+  b.appendChild(cov);
+  b.id = "tab-" + v.id;
+  b.setAttribute("aria-controls", "stage");
+  b.setAttribute("aria-selected", i === 0 ? "true" : "false");
   /* Roving tabindex, per the tab pattern: the strip is one stop in the tab order and the
      arrow keys move within it. Eight stops for eight tabs is eight things to pass through
      before reaching the diagram they label. */
-  b.tabIndex=i===0?0:-1;
-  b.onclick=()=>selectTab(v,b);
+  b.tabIndex = i === 0 ? 0 : -1;
+  b.onclick = () => selectTab(v, b);
   tabs.appendChild(b);
 });
 
 /** Every element that is actually a tab. The group dividers are spans in the same strip. */
-const tabButtons=()=>[...tabs.querySelectorAll(".tab")];
+const tabButtons = () => [...tabs.querySelectorAll(".tab")];
 
-function selectTab(v,b){
-  view=v; sel=null; filter=""; pin=null;
+/*
+ * Choosing and rendering are two acts. Each picker has a `pick` that sets the value and
+ * its pressed marker, and a click handler that picks and then renders. A deep link picks
+ * everything it names and renders once — read through the click handlers it rendered the
+ * page up to five times before anyone saw it.
+ */
+function pickTab(v, b) {
+  baseView = v;
+  sel = null;
+  filter = "";
+  pin = null;
   /* Only the tabs — the earlier version set aria-selected on the group dividers too. */
-  tabButtons().forEach(c=>{
-    const on=c===b;
-    c.setAttribute("aria-selected",on?"true":"false");
-    c.tabIndex=on?0:-1;
+  tabButtons().forEach((c) => {
+    const on = c === b;
+    c.setAttribute("aria-selected", on ? "true" : "false");
+    c.tabIndex = on ? 0 : -1;
   });
   /* The panel says which tab it belongs to, so a screen reader landing in it knows. */
-  document.getElementById("stage").setAttribute("aria-labelledby",b.id);
-  build(); fit(); renderIdle();
+  document.getElementById("stage").setAttribute("aria-labelledby", b.id);
+}
+function selectTab(v, b) {
+  pickTab(v, b);
+  applyState();
 }
 
 /*
  * Manual activation: the arrows move focus and Enter or Space chooses. The pattern allows
  * either, and following focus would rebuild the whole diagram on every arrow press.
  */
-tabs.addEventListener("keydown",ev=>{
-  const list=tabButtons(), at=list.indexOf(document.activeElement);
-  if(at<0)return;
-  const go=i=>{const t=list[(i+list.length)%list.length];t.focus();};
-  if(ev.key==="ArrowRight")go(at+1);
-  else if(ev.key==="ArrowLeft")go(at-1);
-  else if(ev.key==="Home")go(0);
-  else if(ev.key==="End")go(list.length-1);
-  else if(ev.key==="Enter"||ev.key===" ")list[at].click();
+tabs.addEventListener("keydown", (ev) => {
+  const list = tabButtons(),
+    at = list.indexOf(document.activeElement);
+  if (at < 0) return;
+  const go = (i) => {
+    const t = list[(i + list.length) % list.length];
+    t.focus();
+  };
+  if (ev.key === "ArrowRight") go(at + 1);
+  else if (ev.key === "ArrowLeft") go(at - 1);
+  else if (ev.key === "Home") go(0);
+  else if (ev.key === "End") go(list.length - 1);
+  else if (ev.key === "Enter" || ev.key === " ") list[at].click();
   else return;
   ev.preventDefault();
 });
 
-function stageTotal(){
-  let n=0;
-  VIEWS.find(v=>v.id===CONFIG.inventoryView).groups.forEach(g=>(g.items||[]).forEach(it=>{const c=countOf(it);if(c)n+=c;}));
+function stageTotal() {
+  let n = 0;
+  VIEWS.find((v) => v.id === CONFIG.inventoryView).groups.forEach((g) =>
+    (g.items || []).forEach((it) => {
+      const c = countOf(it);
+      if (c) n += c;
+    }),
+  );
   return n;
 }
 /* Icons are off by default so the diagrams read as they always have; an architect who
@@ -1003,85 +1744,308 @@ function stageTotal(){
    the reader's preference for the site, so choosing dark on the index or on one project's
    page holds on every other. The index page's toggle is handed the same constant, from
    the same place, so the two cannot disagree. */
-const THEMES=[
-  {id:"system",label:"Match system",
-   d:'<rect x="2" y="3" width="12" height="8" rx="1.5"/><path d="M6 14h4M8 11v3"/>'},
-  {id:"light",label:"Light",
-   d:'<circle cx="8" cy="8" r="3"/><path d="M8 1v1.6M8 13.4V15M1 8h1.6M13.4 8H15M3.1 3.1l1.1 1.1M11.8 11.8l1.1 1.1M12.9 3.1l-1.1 1.1M4.2 11.8l-1.1 1.1"/>'},
-  {id:"dark",label:"Dark",
-   d:'<path d="M13.5 9.6A5.8 5.8 0 0 1 6.4 2.5a5.9 5.9 0 1 0 7.1 7.1Z"/>'},
+const THEMES = [
+  {
+    id: "system",
+    label: "Match system",
+    d: '<rect x="2" y="3" width="12" height="8" rx="1.5"/><path d="M6 14h4M8 11v3"/>',
+  },
+  {
+    id: "light",
+    label: "Light",
+    d: '<circle cx="8" cy="8" r="3"/><path d="M8 1v1.6M8 13.4V15M1 8h1.6M13.4 8H15M3.1 3.1l1.1 1.1M11.8 11.8l1.1 1.1M12.9 3.1l-1.1 1.1M4.2 11.8l-1.1 1.1"/>',
+  },
+  {
+    id: "dark",
+    label: "Dark",
+    d: '<path d="M13.5 9.6A5.8 5.8 0 0 1 6.4 2.5a5.9 5.9 0 1 0 7.1 7.1Z"/>',
+  },
 ];
-const themeBtn=document.getElementById("themetoggle");
+const themeBtn = document.getElementById("themetoggle");
 {
-  const read=()=>{try{return localStorage.getItem(THEME_KEY);}catch{return null;}};
-  let i=Math.max(0,THEMES.findIndex(t=>t.id===read()));
-  const paint=()=>{
-    const t=THEMES[i];
-    if(t.id==="system")document.documentElement.removeAttribute("data-theme");
-    else document.documentElement.setAttribute("data-theme",t.id);
-    themeBtn.innerHTML=`<svg viewBox="0 0 16 16" aria-hidden="true">${t.d}</svg>`;
-    themeBtn.title=`Theme: ${t.label}`;
-    themeBtn.setAttribute("aria-label",`Theme: ${t.label}. Click to change.`);
+  const read = () => {
+    try {
+      return localStorage.getItem(THEME_KEY);
+    } catch {
+      return null;
+    }
+  };
+  let i = Math.max(
+    0,
+    THEMES.findIndex((t) => t.id === read()),
+  );
+  const paint = () => {
+    const t = THEMES[i];
+    if (t.id === "system")
+      document.documentElement.removeAttribute("data-theme");
+    else document.documentElement.setAttribute("data-theme", t.id);
+    themeBtn.innerHTML = `<svg viewBox="0 0 16 16" aria-hidden="true">${t.d}</svg>`;
+    themeBtn.title = `Theme: ${t.label}`;
+    themeBtn.setAttribute("aria-label", `Theme: ${t.label}. Click to change.`);
   };
   paint();
-  themeBtn.addEventListener("click",()=>{
-    i=(i+1)%THEMES.length; paint();
-    try{localStorage.setItem(THEME_KEY,THEMES[i].id);}catch{/* private mode */}
+  themeBtn.addEventListener("click", () => {
+    i = (i + 1) % THEMES.length;
+    paint();
+    try {
+      localStorage.setItem(THEME_KEY, THEMES[i].id);
+    } catch {
+      /* private mode */
+    }
   });
 }
 
-const ICON_KEY="arch-icons";
-const iconBtn=document.getElementById("icontoggle");
-if(!ICON_IDS.length){ if(iconBtn)iconBtn.hidden=true; }
-else{
-  const read=()=>{try{return localStorage.getItem(ICON_KEY)==="1";}catch{return false;}};
-  const paint=on=>{
-    document.body.classList.toggle("icons-on",on);
-    iconBtn.setAttribute("aria-pressed",on?"true":"false");
-    iconBtn.title=`${on?"Hide":"Show"} ${CONFIG.iconLabel}`;
+const ICON_KEY = "arch-icons";
+const iconBtn = document.getElementById("icontoggle");
+if (!ICON_IDS.length) {
+  if (iconBtn) iconBtn.hidden = true;
+} else {
+  const read = () => {
+    try {
+      return localStorage.getItem(ICON_KEY) === "1";
+    } catch {
+      return false;
+    }
   };
-  let on=read(); paint(on);
-  iconBtn.addEventListener("click",()=>{
-    on=!on; paint(on);
-    try{localStorage.setItem(ICON_KEY,on?"1":"0");}catch{/* private mode */}
+  const paint = (on) => {
+    document.body.classList.toggle("icons-on", on);
+    iconBtn.setAttribute("aria-pressed", on ? "true" : "false");
+    iconBtn.title = `${on ? "Hide" : "Show"} ${CONFIG.iconLabel}`;
+  };
+  let on = read();
+  paint(on);
+  iconBtn.addEventListener("click", () => {
+    on = !on;
+    paint(on);
+    try {
+      localStorage.setItem(ICON_KEY, on ? "1" : "0");
+    } catch {
+      /* private mode */
+    }
   });
 }
 
 /* "scroll to zoom" is a lie on a phone, where the wheel event never fires. */
-if(COARSE){
-  const h=document.getElementById("hint");
-  if(h)h.innerHTML='<span>drag to pan</span><span>pinch to zoom</span><span>tap a box or a line</span>';
+if (COARSE) {
+  const h = document.getElementById("hint");
+  if (h)
+    h.innerHTML =
+      "<span>drag to pan</span><span>pinch to zoom</span><span>tap a box or a line</span>";
 }
 /* The page's one h1. Everything else steps down from it: the panel and a reference
    view's own title are h2, and a reference view's sections h3. Before this the page had
    a single heading and nothing to navigate by. */
-document.getElementById("brand").innerHTML=
+document.getElementById("brand").innerHTML =
   `<h1>${esc(CONFIG.title)}</h1><span>${esc(CONFIG.tagline)}</span>`;
-iconBtn.setAttribute("aria-label",CONFIG.iconLabel);
-svg.setAttribute("aria-label",`Interactive ${CONFIG.title} diagram`);
-document.getElementById("savepng").addEventListener("click",exportPng);
+iconBtn.setAttribute("aria-label", CONFIG.iconLabel);
+svg.setAttribute("aria-label", `Interactive ${CONFIG.title} diagram`);
+document.getElementById("savepng").addEventListener("click", exportPng);
 
-const stageBar=document.getElementById("stages");
-STAGES.forEach(st=>{
-  const b=document.createElement("button");
-  const long=document.createElement("span"); long.className="s-long"; long.textContent=st.label;
-  const short=document.createElement("span"); short.className="s-short"; short.textContent=st.id;
-  b.append(long,short); b.setAttribute("aria-pressed",st.id===deployStage?"true":"false");
-  b.onclick=()=>{
-    deployStage=st.id;
-    [...stageBar.children].forEach(c=>c.setAttribute("aria-pressed",c===b?"true":"false"));
-    const keep=sel; build(); if(view.type!=="doc"&&keep&&keep.t==="node"&&nodeEls.has(keep.id))select(keep); else renderIdle();
+const stageBar = document.getElementById("stages");
+STAGES.forEach((st) => {
+  const b = document.createElement("button");
+  const long = document.createElement("span");
+  long.className = "s-long";
+  long.textContent = st.label;
+  const short = document.createElement("span");
+  short.className = "s-short";
+  short.textContent = st.id;
+  b.append(long, short);
+  b.dataset.stage = st.id;
+  b.setAttribute("aria-pressed", st.id === deployStage ? "true" : "false");
+  b.onclick = () => {
+    pickStage(st.id);
+    const keep = sel;
+    build();
+    if (
+      view.type !== "doc" &&
+      keep &&
+      keep.t === "node" &&
+      nodeEls.has(keep.id)
+    )
+      select(keep);
+    else renderIdle();
+    writeHash();
   };
   stageBar.appendChild(b);
 });
 
-indexResources(); indexPlaces();
-document.getElementById("stage").setAttribute("aria-labelledby","tab-"+VIEWS[0].id);
+function pickStage(id) {
+  deployStage = id;
+  [...stageBar.children].forEach((c) =>
+    c.setAttribute("aria-pressed", c.dataset.stage === id ? "true" : "false"),
+  );
+}
+
+const stateBar = document.getElementById("states");
+const changesBtn = document.getElementById("changes");
+const stateButtons = () => stateBar.querySelectorAll("button.st");
+const mkState = (id, label) => {
+  const b = document.createElement("button");
+  b.className = "st";
+  b.textContent = label;
+  b.dataset.state = id;
+  b.setAttribute("aria-pressed", id === state ? "true" : "false");
+  /* Only the state segments are exclusive. The Changes toggle shares the group but keeps
+     its own pressed state, so it is never included in the reset. */
+  b.onclick = () => {
+    pickState(id);
+    applyState();
+  };
+  stateBar.insertBefore(b, changesBtn);
+};
+function pickState(id) {
+  state = id;
+  stateButtons().forEach((c) =>
+    c.setAttribute("aria-pressed", c.dataset.state === id ? "true" : "false"),
+  );
+}
+function pickChanges(on) {
+  showChanges = on;
+  changesBtn.setAttribute("aria-pressed", String(on));
+}
+mkState("asis", "As-is");
+STATES.forEach((st) => mkState(st.id, st.name));
+changesBtn.onclick = () => {
+  pickChanges(!showChanges);
+  applyState();
+};
+
+indexResources();
+indexPlaces();
+document
+  .getElementById("stage")
+  .setAttribute("aria-labelledby", "tab-" + VIEWS[0].id);
 
 /* The skip link lands on the panel. On a phone the panel is closed, so a reader who asks
    for it should get it rather than a handle. */
-document.querySelector(".skip").addEventListener("click",()=>{
-  sheet(true,gripLabel.textContent);
+document.querySelector(".skip").addEventListener("click", () => {
+  sheet(true, gripLabel.textContent);
 });
 
-build(); fit(); renderIdle();
+/* ============================ DEEP LINKS ============================ */
+/*
+ * The URL names what you are looking at, and reading it back gets you there.
+ *
+ * Without this the only way to point someone at a diagram is a list of instructions —
+ * "open the page, pick Containers, choose S3, turn on Changes" — which is exactly the thing
+ * you want to paste beside a row somebody is arguing about on the review page.
+ *
+ * Written on every change and read once on load. Nothing else depends on it: an unreadable
+ * or stale fragment leaves the page on its defaults rather than failing.
+ */
+function writeHash() {
+  if (!view) return;
+  const p = new URLSearchParams();
+  p.set("tab", baseView.id);
+  if (deployStage !== STAGES[0].id) p.set("stage", deployStage);
+  if (state !== "asis") p.set("state", state);
+  if (showChanges) p.set("changes", "1");
+  const next = "#" + p.toString();
+  if (location.hash !== next) history.replaceState(null, "", next);
+}
+
+function readHash() {
+  const p = new URLSearchParams(ENTRY_HASH.slice(1));
+  const wanted = VIEWS.find((v) => v.id === p.get("tab"));
+  if (wanted) {
+    const b = document.getElementById("tab-" + wanted.id);
+    if (b) pickTab(wanted, b);
+  }
+  const st = p.get("stage");
+  if (st && STAGES.some((s) => s.id === st)) pickStage(st);
+  const s = p.get("state");
+  if (s && (s === "asis" || STATES.some((x) => x.id === s))) pickState(s);
+  /* After the state, because the toggle means nothing while the as-is is showing. */
+  if (p.get("changes") === "1" && state !== "asis") pickChanges(true);
+}
+
+/* ============================ HOW TO READ THIS PAGE ============================ */
+/*
+ * Shown once, then on request. The page carries five separate controls — tabs, stage,
+ * state, the changes toggle and the canvas itself — and nothing on it says so; a reader
+ * who does not know the state selector exists cannot discover it by looking at a diagram.
+ *
+ * A native <dialog> so the focus trap, the backdrop and Escape are the browser's to get
+ * right rather than ours. The "seen" flag is per project and best-effort: a private window
+ * or blocked site data throws on read, and the honest answer to that is to show the intro
+ * again rather than to fail.
+ */
+const intro = document.getElementById("intro");
+const INTRO_KEY = `${CONFIG.id}:intro-seen`;
+const seen = (k) => {
+  try {
+    return localStorage.getItem(k) === "1";
+  } catch {
+    return false;
+  }
+};
+const remember = (k) => {
+  try {
+    localStorage.setItem(k, "1");
+  } catch {
+    /* nothing to do about it */
+  }
+};
+
+function introHtml() {
+  document.getElementById("introlede").textContent =
+    `${CONFIG.name ?? "This"} is an explorer for one architecture: every tab is the same system at a different level or concern.`;
+  const items = [
+    [
+      "Tabs",
+      "Each tab is a view. " +
+        (STATES.length
+          ? "A small number on a tab says how a planned state leaves that view: solid where it differs from today, outlined where the state declares it unchanged, nothing where no state has reached it yet. States are cumulative, so a change S1 makes is still marked at S2 and S3."
+          : "Reference tabs hold the tables the diagrams cite."),
+    ],
+    [
+      "Stage",
+      "Switches which deployed environment the counts describe. It appears on the tabs whose numbers differ by stage.",
+    ],
+    ...(STATES.length
+      ? [
+          [
+            "State",
+            "As-is is what the code does today. The others are planned architectures, each including every step before it — pick one to see the system as it would stand by then.",
+          ],
+          [
+            "Changes",
+            "With a state chosen, the last button in that group marks what it does: dashed for new, heavier for changed, and a strip at the foot for what it retires.",
+          ],
+        ]
+      : []),
+    [
+      "The canvas",
+      "Drag to pan, scroll to zoom, click a box or a line to see what it is and everything it touches. Escape clears the selection.",
+    ],
+    [
+      "The panel",
+      "Holds the key for the diagram and the detail for whatever you select. On a phone it is a sheet you pull up from the bottom.",
+    ],
+  ];
+  document.getElementById("introlist").innerHTML = items
+    .map(([k, v]) => `<li><b>${esc(k)}</b><span>${esc(v)}</span></li>`)
+    .join("");
+}
+/* Nothing in it changes after load, so it is written once and only ever shown. */
+introHtml();
+
+function showIntro() {
+  if (!intro.open) intro.showModal();
+}
+document.getElementById("helpbtn").onclick = () => {
+  menu(false);
+  showIntro();
+};
+document.getElementById("introdone").onclick = () => intro.close();
+/* Clicking the backdrop is the other way people close these. */
+intro.addEventListener("click", (ev) => {
+  if (ev.target === intro) intro.close();
+});
+intro.addEventListener("close", () => remember(INTRO_KEY));
+
+/* Everything the link names is picked first, then the page is drawn once. */
+readHash();
+applyState();
+if (!seen(INTRO_KEY)) showIntro();

@@ -110,6 +110,9 @@ export interface ProjectConfig {
   softBudget?: number;
   /** Ratchet for the placement rules in CANVAS.md — same rule: it may fall, never rise. */
   placementBudget?: number;
+  /** The same two ratchets, for the views composed from states/. */
+  stateSoftBudget?: number;
+  statePlacementBudget?: number;
   kinds: { id: string; label: string; colour: string }[];
   /** `synth` is the value the source's stage variable takes; a stage without one is not synthesised. */
   stages: { id: string; label: string; facts: string; synth?: string }[];
@@ -195,13 +198,14 @@ function readConfig(id: string, file: string): ProjectConfig {
       );
   }
 
-  if (cfg.softBudget !== undefined && !Number.isInteger(cfg.softBudget))
-    throw new Error(`projects/${id}: softBudget must be a whole number`);
-  if (
-    cfg.placementBudget !== undefined &&
-    !Number.isInteger(cfg.placementBudget)
-  )
-    throw new Error(`projects/${id}: placementBudget must be a whole number`);
+  for (const key of [
+    "softBudget",
+    "placementBudget",
+    "stateSoftBudget",
+    "statePlacementBudget",
+  ] as const)
+    if (cfg[key] !== undefined && !Number.isInteger(cfg[key]))
+      throw new Error(`projects/${id}: ${key} must be a whole number`);
 
   const derive = cfg.derive;
   if (derive && (!derive.module || typeof derive.inputs !== "object"))

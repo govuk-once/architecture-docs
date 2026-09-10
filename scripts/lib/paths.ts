@@ -28,6 +28,8 @@ const CONFIG_PATH = inDocs("explorer.config.json");
 export interface SiteContract {
   root: string;
   page: string;
+  /** Where the built site is published, for anything that has to link to it. */
+  url?: string;
 }
 
 /**

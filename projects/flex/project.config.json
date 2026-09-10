@@ -10,6 +10,8 @@
   "filterHint": "Filter — try isolated, KMS, 365 days, alarm",
   "softBudget": 6,
   "placementBudget": 65,
+  "stateSoftBudget": 27,
+  "statePlacementBudget": 20,
   "kinds": [
     {
       "id": "person",

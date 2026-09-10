@@ -9,6 +9,31 @@ The build measures geometry twice: statically in `pnpm build`, which refuses the
 in a browser in `pnpm check`, which counts what only rendering can see. The numbers below
 are those gates.
 
+They apply to a **planned state's** views exactly as they apply to the as-is. Those views
+are composed at build time, not in the renderer, precisely so these rules can run over them
+— a layout only a person ever sees is a layout nothing checks. A failure names the state it
+first appears at, and the later states that inherit it: `containers@s3/router: … — also at
+s4`. See [STATES.md](STATES.md).
+
+## Let the build do the arithmetic
+
+Everything below is a number you can avoid choosing. A box in a planned state may name a
+**slot** — `"zone": "tenant", "row": 1, "col": 1` — and the build sizes it from its own label
+using the advances in the table below, widens each column to its widest box, and grows the
+zone to hold the grid and its own label. Explicit `x`/`y`/`w`/`h` still wins where a grid
+cannot express the intent.
+
+A zone given no `w`/`h` starts at 320 × 160 and grows from there — around the grid, and
+around any hand-placed box that overlaps it — never below that. The grid's own numbers, for
+placing beside it by hand: 24 at the sides, 50 above the first row for the zone label, 22
+below the last, and gutters of 14 across and 20 down. The state editor's **Fix** puts the
+three arithmetic faults right — a box too narrow for its text, one over a zone edge, two on
+top of each other — and never moves a box to the other side of a boundary; see
+[STATES.md](STATES.md).
+
+Reach for the table when you are placing a zone on the canvas, or laying out an as-is view,
+where there is no grid to fall back on.
+
 ## What the build refuses
 
 | Rule                                  | Number                              | Why                                                      |

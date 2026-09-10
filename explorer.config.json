@@ -5,7 +5,8 @@
   "footer": "Each architecture here is derived from its own source repository and rebuilt against it on every merge. The models are the only part written by hand, and every claim in one names the code that proves it.",
   "site": {
     "root": "site",
-    "page": "index.html"
+    "page": "index.html",
+    "url": "https://govuk-once.github.io/architecture-docs/"
   },
   "projects": ["flex"],
   "planned": [

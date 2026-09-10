@@ -33,6 +33,7 @@ import { pathToFileURL } from "node:url";
 
 import { check } from "prettier";
 
+import type { Lifecycle, StateManifest, Why } from "./lib/composeStates.js";
 import { loadLikeC4Views } from "./lib/loadLikeC4Views.js";
 import {
   DOCS_ROOT,
@@ -48,6 +49,17 @@ import {
   selectProjects,
 } from "./lib/projects.js";
 import { readState, short } from "./lib/sourceState.js";
+import {
+  checkCitations,
+  checkDeclarations,
+  composeAll,
+  foldComposed,
+  loadStates,
+  planned,
+  stateCoverage,
+  type States,
+  unchangedByState,
+} from "./lib/states.js";
 
 const SRC = inDocs("explorer");
 const ICONS = path.join(SRC, "icons.svg");
@@ -248,7 +260,7 @@ function page(title: string, head: string, body: string): string {
   );
 }
 /** Whatever the project's config declares; checkGeometry holds a node to that set. */
-type Plane = "request" | "control";
+export type Plane = "request" | "control";
 
 /** The payload behind every clickable thing: what it is, and the code that proves it. */
 export interface Detail {
@@ -257,11 +269,16 @@ export interface Detail {
   type?: string;
   /** Names the sprite symbol outright, for a row whose `type` implies none. */
   icon?: string;
+  /** Absolute links, for a row that points outside the repo — a decision record, say. */
+  links?: [string, string][];
   tech?: string;
   role?: string;
   protocol?: string;
   auth?: string;
   carries?: string;
+  /** Set by state composition only: what this state does to the box, and why. */
+  lifecycle?: Lifecycle;
+  why?: Why;
 }
 
 export interface Box {
@@ -351,6 +368,15 @@ export interface View {
   /** Reference views only — set to "doc" by loadViews(). */
   type?: string;
   groups?: DocGroup[];
+  /** Set by state composition only: the line shown under the view header. */
+  stateNote?: string;
+  /**
+   * A reference view's own vocabulary for its rows. Without these the decisions tab wore the
+   * inventory's furniture — "Resource", "Config", "37 in Development" — which is the wrong
+   * noun for every one of them.
+   */
+  itemUnit?: string;
+  itemTerms?: { type?: string; tech?: string };
 }
 
 /** Catches the class of bug where a literal <name> is eaten as an unknown HTML tag. */
@@ -750,12 +776,99 @@ interface Built {
   body: string;
   /** Sprite symbols this project draws, for the site-wide unused check. */
   iconsUsed: Set<string>;
+  /** Planned changes with nothing to cite. Counted, ratcheted, never silent. */
+  uncited: number;
+  /** Planned changes resting only on questions nobody has answered yet. */
+  unsettled: number;
+  /** What each planned state accounts for, printed after the page is written. */
+  coverage: {
+    st: StateManifest;
+    modelled: string[];
+    declared: string[];
+    missing: string[];
+    total: number;
+  }[];
+}
+
+/**
+ * The register as a reference tab: every decision, grouped by what it is about, carrying
+ * the count of planned changes that rest on it and the list of what those are. This is the
+ * view that answers "what does this decision actually change", which is the question a
+ * reviewer has and the diagrams alone cannot answer.
+ */
+function decisionsView(views: View[], states: States): View | null {
+  const ids = Object.keys(states.decisions);
+  if (!ids.length) return null;
+  const name = (id: string) => views.find((v) => v.id === id)?.name ?? id;
+  const changes = planned(states);
+  const byCategory = new Map<string, DocItem[]>();
+  for (const id of ids) {
+    const d = states.decisions[id];
+    if (!d) continue;
+    const mine = changes.filter((c) => c.why.includes(id));
+    const item: DocItem = {
+      id,
+      name: d.title,
+      n: mine.length,
+      meta: [d.kind, d.status ?? "", d.level ?? "", d.date ?? ""].filter(
+        Boolean,
+      ),
+      d: {
+        type: d.kind,
+        tech:
+          [d.status, d.level, d.date].filter(Boolean).join(" · ") || undefined,
+        role:
+          (d.status === "open"
+            ? "Still open — nothing has been decided. "
+            : "") +
+          (mine.length
+            ? `Rests on this: ${String(mine.length)} planned change(s).`
+            : "Nothing in any state cites this yet.") +
+          (d.supersededBy ? ` Superseded by ${d.supersededBy}.` : ""),
+        facts: mine.map((c) => `${c.st.name} · ${name(c.view)} — ${c.what}`),
+        links: d.links?.map((l) => [l.title, l.url] as [string, string]),
+      },
+    };
+    const list = byCategory.get(d.category) ?? [];
+    list.push(item);
+    byCategory.set(d.category, list);
+  }
+  return {
+    id: "decisions",
+    name: "Decisions",
+    itemUnit: "planned changes rest on this",
+    itemTerms: { type: "Kind", tech: "Status" },
+    order: 999,
+    group: "Reference",
+    audience: "Anyone reviewing a proposed change",
+    blurb:
+      "Where every planned change was argued. The as-is is derived from the code and gated against it; a state is a proposal, and this is what makes one reviewable rather than an assertion.",
+    note: "",
+    type: "doc",
+    groups: [...byCategory.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([category, items]) => ({
+        name: category,
+        note: null,
+        table: null,
+        items: [...items].sort((a, b) => Number(b.n) - Number(a.n)),
+      })),
+  };
 }
 
 async function buildProject(project: Project): Promise<Built> {
   const views = await loadViews(project);
   const kindIds = new Set(project.config.kinds.map((k) => k.id));
   const icons = loadIcons();
+
+  const states = loadStates(project);
+  /* Appended rather than modelled: it is a view of the register, not of the architecture,
+     and nothing in the .c4 files knows the register exists. */
+  const decisions = decisionsView(views, states);
+  if (decisions) views.push(decisions);
+  const composed = composeAll(views, states);
+  const coverage = stateCoverage(views, states);
+  const citations = checkCitations(states);
 
   checkAngleBrackets(views);
   const iconCheck = checkIcons(views, icons.ids);
@@ -769,6 +882,13 @@ async function buildProject(project: Project): Promise<Built> {
         ]),
     ...checkKindStyles(project),
     ...checkGeometry(views, kindIds),
+    ...composed.problems,
+    ...citations.problems,
+    ...checkDeclarations(states),
+    ...foldComposed([
+      ...checkGeometry(composed.labelled, kindIds),
+      ...checkGlyphs(composed.labelled, fontCharset()),
+    ]),
     ...checkGlyphs(views, fontCharset()),
     ...checkPlacement(project, views),
     ...checkDashLegend(views),
@@ -789,6 +909,10 @@ async function buildProject(project: Project): Promise<Built> {
     `/* Generated from projects/${project.id}/model/*.c4 — edit those, not this file. */\n` +
     `const VIEWS=${JSON.stringify(views)};\n` +
     `const PLACEMENT=${JSON.stringify(placement)};\n` +
+    `const STATES=${JSON.stringify(states.list)};\n` +
+    `const COMPOSED=${JSON.stringify(composed.byState)};\n` +
+    `const DECISIONS=${JSON.stringify(states.decisions)};\n` +
+    `const UNCHANGED=${JSON.stringify(unchangedByState(states.list))};\n` +
     `const CONFIG=${JSON.stringify(pageConfig)};\n` +
     `const ICON_IDS=${JSON.stringify([...icons.ids])};\n` +
     `const SERVICE_ICON=${JSON.stringify(SERVICE_ICON)};\n` +
@@ -801,7 +925,16 @@ async function buildProject(project: Project): Promise<Built> {
     `<script>\n${data}\n${asset("app.js")}\n</script>`,
   ].join("\n");
 
-  return { project, views, problems, body, iconsUsed: iconCheck.used };
+  return {
+    project,
+    views,
+    problems,
+    body,
+    iconsUsed: iconCheck.used,
+    uncited: citations.uncited,
+    unsettled: citations.unsettled,
+    coverage,
+  };
 }
 
 /* ------------------------------------------------------------------------------------ *
@@ -935,6 +1068,29 @@ async function main() {
       `${b.project.id}: wrote ${path.relative(DOCS_ROOT, b.project.pagePath)} ` +
         `(${(html.length / 1024).toFixed(0)} KB, ${String(b.views.length)} tabs)`,
     );
+    /* A planned state is only as good as what it accounts for. Say what each one covers,
+       and name what it has not reached yet, so the gap is a line here rather than a
+       discovery someone makes three tabs into a review. */
+    const cited = b.uncited
+      ? `${String(b.uncited)} planned change(s) cite nothing yet`
+      : "every planned change cites a decision";
+    if (b.coverage.length)
+      console.log(
+        `  citations: ${cited}` +
+          (b.unsettled
+            ? ` · ${String(b.unsettled)} rest only on questions still open`
+            : ""),
+      );
+    for (const c of b.coverage)
+      console.log(
+        `  ${c.st.name}: models ${String(c.modelled.length)} of ${String(c.total)} diagram views` +
+          (c.declared.length
+            ? `, ${String(c.declared.length)} declared unchanged`
+            : "") +
+          (c.missing.length
+            ? ` · not modelled yet: ${c.missing.join(", ")}`
+            : " · every view accounted for"),
+      );
     if (bodyFlag !== -1) {
       const dest = process.argv[bodyFlag + 1];
       if (!dest) throw new Error("--body needs a destination path");

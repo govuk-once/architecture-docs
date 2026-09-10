@@ -12,6 +12,10 @@ projects/
     model/*.c4                 authored: the diagrams, as a LikeC4 model — the source
     model/views.json           authored: tab order, audience, reference tables
     model/resources.json       authored: the inventory
+    states/                    authored: proposed architectures — see STATES.md
+      decisions.json             the register every planned change cites
+      <state>/state.json         what the state is, and where it sits in the order
+      <state>/<view>.json        what that state's own step does to that view
     derived/                   the build owns this; never edit
       architecture-facts.json    the counts, read from the synthesised templates
       architecture-source.json   two commits: `derived` (facts computed from) and
@@ -89,9 +93,9 @@ under [_Tab order and grouping_](#tab-order-and-grouping). Write each tab by rea
 why, and cite as you go. Add `synth` and `derive.counts` to the config as soon as there is
 a number worth gating; until then the counts are prose.
 
-The one thing no template gives you is the model itself. FLEX's is 9,944 lines across
-eight tabs, and it took a verification pass that found 80 wrong claims in 1,091 to get
-right. Expect the reading, not the writing, to be the work.
+The one thing no template gives you is the model itself. FLEX's is 9,944 lines across the
+eight tabs it derives from code, and it took a verification pass that found 80 wrong claims
+in 1,091 to get right. Expect the reading, not the writing, to be the work.
 
 ---
 
@@ -171,10 +175,13 @@ In a project directory:
 | `model/views.json`     | Per-view presentation a LikeC4 view cannot hold: tab order, audience, reference tables |
 | `model/resources.json` | The AWS inventory: 84 rows with per-stage counts. Not a diagram                        |
 | `project.config.json`  | Everything specific to this architecture — see below                                   |
+| `states/`              | Proposed architectures laid over the as-is, one directory per state — see STATES.md    |
 
 Beside this file, [`CANVAS.md`](CANVAS.md) is the layout contract: the geometry the build
 refuses, the placement rules that keep a view free of crossings, and the loop for getting
-there. Read it before placing a box.
+there. Read it before placing a box. [`STATES.md`](STATES.md) is the contract for `states/`:
+how a planned state edits the as-is, what it must cite, what the editor does, and what the
+build refuses in it.
 
 In [`../explorer/`](../explorer/), shared by every project:
 
@@ -201,23 +208,25 @@ artifact, and neither can fetch a sibling file.
 `project.config.json` holds everything true of one architecture rather than of the site or
 of the renderer. The directory name is the id: it names the URL and prefixes exported files.
 
-| Field              | What it does                                                                                                   |
-| ------------------ | -------------------------------------------------------------------------------------------------------------- |
-| `name`             | Short name, on the index card                                                                                  |
-| `title`, `tagline` | The browser tab and the header brand                                                                           |
-| `blurb`            | One paragraph on the index card: what this architecture is                                                     |
-| `repo`             | Base URL that every `code` citation links against                                                              |
-| `inventoryView`    | Which view is the resource inventory — `resources` here                                                        |
-| `inventoryLabel`   | What the inventory's count line calls the things it counts — "AWS resources" here                              |
-| `iconLabel`        | Names the service-icon control, for readers and screen readers                                                 |
-| `filterHint`       | Placeholder in the Resources filter box                                                                        |
-| `softBudget`       | How much soft geometry the render check allows this project — a ratchet, zero if unset                         |
-| `placementBudget`  | The same ratchet for CANVAS.md's placement rules: upward edges, diagonals, zone tails. Zero if unset           |
-| `kinds`            | The ownership kinds: `id`, `label`, and the palette `colour` each uses                                         |
-| `stages`           | The stage selector: `id`, `label`, and `facts` — the name the same stage goes by in `architecture-facts.json`  |
-| `source`           | `repo`, `ref` and `root`: the repository this documents and where its checkout lands                           |
-| `synth`            | How to run the CDK app per stage: `cwd`, `command`, `env` with `{stage}` filled, `output`. Needed for `derive` |
-| `derive`           | Optional. `module`, the `inputs` it reads, and `counts` — what to count in the templates. No block, no facts   |
+| Field                  | What it does                                                                                                   |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `name`                 | Short name, on the index card                                                                                  |
+| `title`, `tagline`     | The browser tab and the header brand                                                                           |
+| `blurb`                | One paragraph on the index card: what this architecture is                                                     |
+| `repo`                 | Base URL that every `code` citation links against                                                              |
+| `inventoryView`        | Which view is the resource inventory — `resources` here                                                        |
+| `inventoryLabel`       | What the inventory's count line calls the things it counts — "AWS resources" here                              |
+| `iconLabel`            | Names the service-icon control, for readers and screen readers                                                 |
+| `filterHint`           | Placeholder in the Resources filter box                                                                        |
+| `softBudget`           | How much soft geometry the render check allows this project — a ratchet, zero if unset                         |
+| `placementBudget`      | The same ratchet for CANVAS.md's placement rules: upward edges, diagonals, zone tails. Zero if unset           |
+| `stateSoftBudget`      | The soft ratchet for the composed planned-state views, counting only what an overlay _adds_ over the as-is     |
+| `statePlacementBudget` | The placement ratchet for the same. Kept apart from the as-is numbers so neither can pay for the other         |
+| `kinds`                | The ownership kinds: `id`, `label`, and the palette `colour` each uses                                         |
+| `stages`               | The stage selector: `id`, `label`, and `facts` — the name the same stage goes by in `architecture-facts.json`  |
+| `source`               | `repo`, `ref` and `root`: the repository this documents and where its checkout lands                           |
+| `synth`                | How to run the CDK app per stage: `cwd`, `command`, `env` with `{stage}` filled, `output`. Needed for `derive` |
+| `derive`               | Optional. `module`, the `inputs` it reads, and `counts` — what to count in the templates. No block, no facts   |
 
 Nothing about presentation is in here — colours live in `theme.css` — and nothing that
 duplicates a view: a resource's `from` sits on the resource. The build validates the file
@@ -583,6 +592,10 @@ while the identities stay honest.
 - a derived count that disagrees with `architecture-facts.json`
 - a reference table with no `code` citation, or one citing a file that does not exist
 - a `derived` table whose bound column disagrees with the facts it is bound to
+- a planned state that names a box, zone or line not in the view at its step, cites a
+  decision the register does not hold, or declares a view unchanged while changing it — and
+  every geometry rule above, over the composed future and diff views. See
+  [STATES.md](STATES.md)
 
 Pass `--lenient` to report problems without failing, while iterating.
 
@@ -606,6 +619,12 @@ It splits results in two:
 - **Placement** — three of CANVAS.md's rules, counted on every canvas tab: an edge running
   upward, one whose boxes share neither a row nor a column, a zone running past its last
   content. `placementBudget` is a second ratchet with the same rule.
+- **Planned states are ratcheted apart.** `stateSoftBudget` and `statePlacementBudget` cover
+  the composed future and diff views. They count only what an overlay adds over the as-is
+  view it composes from — a composed view inherits every awkward line the as-is already
+  draws, and counting those again would make the state ratchet a second, worse measure of
+  the as-is. Separate numbers also stop a regression in one being paid for by an improvement
+  in the other. See [STATES.md](STATES.md).
 
 It also runs axe-core over both colour schemes on the WCAG 2.2 AA rule set, and renders
 every tab in four viewport shapes — a phone upright and sideways, a tablet, a resized
