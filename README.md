@@ -7,7 +7,7 @@ derived from that platform's own code rather than from prior design documents.
 
 | Architecture        | State                                                |
 | ------------------- | ---------------------------------------------------- |
-| **FLEX** — `/flex/` | Documented, eight tabs, rebuilt on every merge       |
+| **FLEX** — `/flex/` | Documented, nine tabs, rebuilt on every merge        |
 | **UDP**, **UNS**    | Planned. Listed on the index, nothing read from them |
 
 Each lives in a separate repository. This one holds the models, the pipeline that renders
@@ -16,8 +16,9 @@ them.
 
 ## FLEX
 
-Eight tabs, in three groups. Every box, line and zone is clickable; resource counts update
-when you switch stage.
+Nine tabs, in three groups. Every box, line and zone is clickable; resource counts update
+when you switch stage, and the state selector lays a proposed architecture over the one the
+code describes.
 
 | Tab              | Group         | Who it is for                                                    |
 | ---------------- | ------------- | ---------------------------------------------------------------- |
@@ -29,6 +30,7 @@ when you switch stage.
 | **Security**     | Cross-cutting | Security review, assurance and threat modelling                  |
 | **Delivery**     | Cross-cutting | Platform engineers and on-call                                   |
 | **Resources**    | Reference     | Cost, audit and incident scoping — the detail behind every badge |
+| **Decisions**    | Reference     | Anyone reviewing a proposed change — what each rests on          |
 
 ## How the documentation is kept true
 
@@ -84,9 +86,57 @@ The agent cannot take these off you:
 - **Say when the reading is done.** `pnpm drift <id>` lists what to re-read;
   `pnpm drift <id> --mark-read` records that it has been. Nothing else advances that
   record — not a build, not a sync — so run it only when the reading has actually happened.
+- **Decide the architecture.** The as-is is derived from code; a **planned state** is not
+  derived from anything, and the agent may not invent one. A state is somebody's proposal,
+  every change in it cites an entry in the decision register, and the build refuses a
+  citation the register does not hold. What the agent can do is write one down, lay it out
+  and check it.
 - **For a new project**: a checkout step in `.github/workflows/build.yml`, a token if the
   repository is private, and Pages set to the GitHub Actions source. Everything else is
   config the agent writes.
+
+## Proposing a change to an architecture
+
+Alongside what the code does today, a project may carry planned states — S1, S2, S3 — each
+a step from the one before, so the picture at S3 is every step up to it and not a delta from
+today that never existed. Pick one and the diagram becomes the system as it would stand;
+turn on **Changes** and every difference from today is marked, with what it retires listed
+beneath.
+
+Every planned change cites a decision, and the register follows the
+[GOV.UK Architectural Decision Record framework](https://www.gov.uk/government/publications/architectural-decision-record-framework/architectural-decision-record-framework):
+what it is called, its status, which of the framework's four approval levels settles it, and
+where to read the record. The build counts what rests on nothing and what rests only on
+questions still open — because a state that looks decided and is not is the thing worth
+knowing before a review.
+
+A published page has nowhere to leave a comment, so `pnpm review` writes the states out for
+Confluence — `export/<id>/page.html`, a browser preview beside it, and one PNG per state and
+view drawn from the built page: the open questions first, then each state view by view,
+with the diagram as the page draws it and what the step does in sentences that use the words
+on the diagram.
+Comments happen there; the repo stays the source of truth, and a comment that changes
+something comes back as a decision and a pull request. [`projects/STATES.md`](projects/STATES.md)
+is the whole workflow.
+
+The states are JSON files, and `pnpm editor` is the way to write them without learning the
+format: the same local server with a visual editor at `/editor/`, where a state is a canvas
+you place boxes on and a panel that asks for what each box needs. It runs the build's own
+gates before it saves, puts right the faults that are arithmetic — a box too narrow for its
+label, one over a boundary's edge, two on top of each other — when you press Fix, and shows
+the file diff before it writes. It binds loopback, writes only under
+`projects/<id>/states/`, and never reaches the published site.
+
+The gates say a layout is not wrong: nothing overlaps, nothing hangs over an edge, every
+label fits. [`projects/CANVAS.md`](projects/CANVAS.md) says what looks right, and nothing
+checks that. So a state you have arranged by hand gets one more step before the pull
+request: ask the agent to arrange it. The editor's Save dialog offers the prompt when the
+draft placed or resized something by hand; it reads, in short:
+
+> Read `projects/CANVAS.md` and `projects/STATES.md`. Arrange the layout in
+> `projects/flex/states/s2/containers.json` so it follows the canvas rules: change positions
+> and sizes only, never what a box or a line says or cites, and keep every box on the side of
+> a boundary it is on now. Then run `pnpm build` and `pnpm check` and fix what they report.
 
 ## What it costs to keep up to date
 
@@ -124,4 +174,9 @@ measured, and the script that measured them is a `git log` away from being run a
 - [`projects/README.md`](projects/README.md) — the model contract: what a project directory
   holds, the metadata every node carries, tab order, scope rules, every gate the build
   enforces, and how to start a model from nothing.
+- [`projects/CANVAS.md`](projects/CANVAS.md) — the canvas design rules: how to lay out a
+  view so it reads, and every geometry number the build and the render check enforce.
+- [`projects/STATES.md`](projects/STATES.md) — proposing a change: how a planned state is
+  authored, what it must cite, how the states compose, and the review loop through
+  Confluence and back.
 - [`explorer/README.md`](explorer/README.md) — the renderer, which knows about no project.

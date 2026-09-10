@@ -21,6 +21,9 @@ pnpm install
 pnpm sync      # clone or fetch each source into .sources/, and install what needs it
 pnpm synth     # run each CDK app per stage: the CloudFormation the counts are read from
 pnpm build     # derive the facts, validate the models, assemble every page and the index
+pnpm check     # render every page in a browser and measure what only rendering can see
+pnpm review    # export the planned states for comment, where people can actually comment
+pnpm editor    # serve the site with the state editor at /editor/ — local, writes states/ only
 ```
 
 `pnpm synth` is the one command here that executes a documented repository. `sync` and
@@ -50,6 +53,22 @@ The install inside a checkout is not optional the first time: `pnpm synth` runs 
 so its dependencies have to resolve. After that the install is repeated only when a manifest
 moved in the range; `pnpm sync --install` forces it if a checkout ever looks wrong. A sync
 keeps `cdk.out` so the templates survive it; `pnpm synth` always rewrites them.
+
+## What is yours, and what is not
+
+The as-is is yours. You read the source, you write the model, you cite the file, and every
+gate in this repository exists to stop you asserting something the code does not do.
+
+**Planned states are not yours.** `projects/<id>/states/` holds proposed architectures, and
+a proposal is somebody's — it comes out of a board, an RFC, an ADR, a decision somebody is
+answerable for. You may be asked to write one down, lay it out, or check it; you may not
+invent one, and you may not decide what a state should contain because it would make the
+diagram tidier. If an overlay needs a change nobody has argued for, say so and stop.
+
+The line is enforced as well as stated: every planned change cites an entry in
+`states/decisions.json`, the build refuses a citation the register does not hold, and it
+counts the changes resting only on questions still open. See
+[`projects/STATES.md`](projects/STATES.md) for the whole workflow.
 
 ## Authoring the model
 
@@ -114,9 +133,10 @@ determines the work:
 | An alarm added or removed | Any alarm construct in the CDK app  | Update the Delivery alarm table          |
 | Nothing                   | Nothing that these docs derive from | Still read on — see below                |
 
-An empty diff is **not** proof the docs are current. Only ten resource counts and the
-nineteen alarm kinds are derived; everything else is prose written by reading the code. A rewrite
-of a CDK stack changes no number here and can still make a paragraph false.
+An empty diff is **not** proof the docs are current. Only the resource counts the config
+declares — 28 for FLEX — and the nineteen alarm kinds are derived; everything else is prose
+written by reading the code. A rewrite of a CDK stack changes no number here and can still
+make a paragraph false.
 
 So there is a second half, and it is the one that finds those:
 
@@ -155,6 +175,9 @@ Every rule the build refuses and every number the render check counts is covered
 `scripts/buildArchitectureExplorer.test.ts` and `scripts/checkArchitectureExplorer.test.ts`.
 The first is pure and fast; the second builds small SVG fixtures and measures them in
 Chromium, because `getBBox` and `getPointAtLength` return nothing useful outside a browser.
+The planned-state rules — composition, the fold, the declarations, what autofix may and may
+not move — are covered by the tests beside `scripts/lib/states.ts`, `composeStates.ts` and
+`autofix.ts`, and the review wording by the one beside `reviewText.ts`.
 
 A gate that stops catching things fails nothing, and looks exactly like a gate with nothing
 to catch. So when you add one:
@@ -195,11 +218,23 @@ citation, a citation pointing at a file that no longer exists, text that will no
 overlapping boxes, a box straddling a zone edge, an edge to a node that does not exist, a box
 with no `ownership`, a sub-label that repeats its label, a dashed edge on a view that never says
 what dashed means, a kind naming a colour the theme lacks, a character the embedded fonts do
-not carry, a view with no stated audience, a raw `<` that would swallow a label, or JSON that
-is not prettier-formatted.
+not carry, a raw `<` that would swallow a label, or JSON that is not prettier-formatted.
+
+A planned state adds its own refusals: an overlay file named for a view the model does not
+have, an overlay naming a box the view does not have at that step, a line drawn to an
+endpoint that is not there, a view a state declares unchanged and also overlays, a citation
+the decision register does not hold, a status or approval level outside the vocabulary, a
+dangling `supersededBy`, a relative link, and every geometry rule above applied again to the
+composed future and diff views. A fault in a composed view is reported once, at the state
+where it first appears, with the later states it is still in force at after the dash —
+`— also at s2, s3` — because those states only inherit it and the fix is in the first one's
+file. Two things it counts rather than refuses, and prints on every run: planned changes
+that cite nothing, and planned changes resting only on questions still open; beside them,
+one line per state saying which views it models and which it has not reached yet.
 
 `pnpm check` then renders the page in headless Chromium, light and dark, and measures what
-static validation cannot see. Run both.
+static validation cannot see — a tab that has lost its audience line among it, and every
+planned state, in both its future and its diff, against their own two ratchets. Run both.
 
 ## Verify your work
 
@@ -238,6 +273,19 @@ build enforces, and the known defects in the source that the diagrams must not p
 [`explorer/README.md`](explorer/README.md) covers the renderer, which is shared and knows
 about no project.
 
+## Arranging a planned state
+
+A person arranges a state in the editor and the gates accept it; then they ask you to
+arrange it. That request has a narrow meaning. Read [`projects/CANVAS.md`](projects/CANVAS.md)
+and [`projects/STATES.md`](projects/STATES.md), then edit only geometry in the named overlay:
+`x`, `y`, `w`, `h`, and slots (`zone`, `row`, `col`) where a box would sit better on a
+zone's grid than by hand. Never change a label, a sub, a fact, a citation, a line, or which
+side of a boundary a box is on — those are the author's claims, and a layout pass that
+touches them has changed the proposal. Prefer slots to coordinates inside a zone; keep
+reading order left to right along the request path; leave the as-is where it is unless the
+state's own additions force a move. Run `pnpm build` and `pnpm check` after, and fix what
+they report rather than widening a budget.
+
 ## Conventions
 
 - **Commit messages** are `TICKET-000 type: description`, matching the source repository's
@@ -254,13 +302,18 @@ about no project.
 
 [`.github/workflows/build.yml`](.github/workflows/build.yml) runs on every pull request, on
 every push to `main`, on a weekday schedule, and by hand. Every run checks each documented
-source out beside this repository, installs it, synthesises it, rebuilds — never from the
-recorded state, always from the templates — and fails if any committed
-`derived/architecture-facts.json` no longer matches. On a pull request that means someone
-changed a model without rebuilding; on the scheduled run it means a source moved and the
-docs have not caught up. It then prints the `pnpm drift` reading list without failing on it,
-runs the render check, lint, typecheck and tests, and publishes `site/` to Pages from
-`main`.
+source out into `.sources/`, where `pnpm sync` puts it, installs it, synthesises it, prints
+the `pnpm drift` reading list without failing on it — before the build, because the build
+advances the recorded commit — then rebuilds, never from the recorded state, always from the
+templates, and fails if any committed `derived/architecture-facts.json` no longer matches.
+On a pull request that means someone changed a model without rebuilding; on the scheduled
+run it means a source moved and the docs have not caught up. It then runs the render check,
+lint, typecheck and tests, and publishes `site/` to Pages from `main`.
+
+The planned-state gates need no step of their own: `pnpm build` composes and refuses, and
+`pnpm check` sweeps every state in both modes against its own two ratchets. `pnpm review` is
+not run in CI — it writes a review copy for a person to paste into Confluence, and it writes
+into gitignored `export/`.
 
 A scheduled run that fails opens an issue titled _Scheduled build is failing_, comments on
 it rather than opening another on each further failure, and closes it when a scheduled run
