@@ -33,6 +33,13 @@ export default [
        */
       "explorer/app.js",
       "explorer/shell.html",
+      /*
+       * The state editor is browser code too, and served only by `pnpm serve --edit` — it
+       * is never inlined, never built and never published. Prettier still formats it; only
+       * the Node-shaped rules are off.
+       */
+      "editor/editor.js",
+      "editor/canvas.js",
     ],
   },
   {
