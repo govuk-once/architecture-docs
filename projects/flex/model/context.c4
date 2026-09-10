@@ -126,7 +126,7 @@ model {
 
     context_uns = internal 'UNS' {
       #request-path
-      description 'GOV.UK Once · notify'
+      description 'GOV.UK Once · notifications'
       technology 'AWS API behind a private endpoint · SigV4'
       link https://github.com/govuk-once/flex/blob/main/platform/domains/uns/src/gateway.ts 'uns gateway.ts'
       link https://github.com/govuk-once/flex/blob/main/domains/udp/src/utils/get-push-id.ts 'get-push-id.ts'
@@ -142,7 +142,7 @@ model {
         order '6'
         x '880'
         y '340'
-        w '198'
+        w '206'
         h '62'
         ownership 'govuk'
       }
