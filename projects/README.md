@@ -46,7 +46,8 @@ Six things, and no TypeScript. The build, the renderer, the checks, the export a
 index all read config, so none of them changes:
 
 1. `projects/<id>/project.config.json` — copy FLEX's and rewrite it. `source` names the
-   repository to document and where its checkout lands.
+   repository to document and where its checkout lands; `sources` names several — see
+   [_A project read from several repositories_](#a-project-read-from-several-repositories).
 2. `projects/<id>/model/` with a `specification.c4`, a `.c4` per tab, `views.json` and
    whatever the inventory view reads. This is the work, and the only part that is judgement
    rather than transformation.
@@ -57,13 +58,48 @@ index all read config, so none of them changes:
    [_What a second architecture actually costs_](#what-a-second-architecture-actually-costs).
    Or no `derive` block at all, if nothing is worth gating: then leave `from` off every
    resource and `derived` off every table, and maintain those numbers by hand.
-5. A checkout step for its repository in
+5. A checkout step for each of its repositories in
    [`../.github/workflows/build.yml`](../.github/workflows/build.yml) — a workflow cannot
    loop `actions/checkout`, and a private repository needs its own token.
 6. `<id>` in the `projects` array of [`../explorer.config.json`](../explorer.config.json),
    which is also the order the index lists them in. Remove it from `planned` if it was there.
 
 Then `pnpm sync <id>`, `pnpm synth <id>`, `pnpm build`, `pnpm check`.
+
+### A project read from several repositories
+
+The GOV.UK App is two apps, a backend and a config repository, and one page. Its config
+declares `sources` in place of `source` and the project-wide `repo`:
+
+```json
+"sources": {
+  "ios": {
+    "repo": "git@github.com:govuk-once/govuk-mobile-ios-app.git",
+    "ref": "main",
+    "root": ".sources/app/ios",
+    "url": "https://github.com/govuk-once/govuk-mobile-ios-app/blob/main/"
+  },
+  "backend": { "…": "…" }
+}
+```
+
+What that changes, and what it does not:
+
+- **A citation names its source.** A `code` pair's path is `ios:Production/…`; a LikeC4
+  `link` stays a full URL, and the loader turns it into the same form by matching it
+  against each source's `url`. There is no default source: a path that names none fails the
+  build, because with four checkouts a bare path could be checked against the wrong one and
+  found to exist.
+- **A link into any other repository fails the build**, in a project with one source as
+  well as several. Before this, a GitHub link had its prefix stripped whichever repository
+  it pointed at, and was then checked against this project's checkout.
+- **Each source is synced, drifted and read on its own.** `derived/architecture-source.json`
+  holds one record per source under `sources`, and `pnpm drift <id> --source <name>` reads
+  or marks one of them. A single-source project's file keeps the shape it always had.
+- **Only the checkout `synth` runs in is installed**, and `synth.cwd` and
+  `derive.inputs` name their source like any other path: `backend:services/*/template.yaml`.
+- **The renderer is told only where each source is browsed**, as `CONFIG.sources`, so a
+  citation's link opens the right repository.
 
 ## Starting a model from nothing
 
@@ -83,8 +119,13 @@ the smallest model, and will refuse without:
   is placed on some box's `resources` list; a row no diagram reaches is an error.
 - Every node has `ownership` from the config's `kinds`, a `link` to the file that proves
   it, and `facts`. A node whose owner is unstated is exactly the box a reader gets wrong.
+  A box whose facts come from two places — its type, route and timeout from a template, what
+  it does from a handler — links both, because either file changing can falsify a fact. It
+  links nothing else: a link is what `pnpm drift` re-reads, so a link that would not need
+  re-reading when its file moved is one that proves nothing.
 - Boxes are at least 176 wide, do not overlap, and do not straddle a zone edge.
-- Every `code` citation points at a file that exists in the checkout.
+- Every citation — a `link` or a `code` pair — points at a file that exists in a checkout
+  the project reads.
 
 Then grow it tab by tab, in the order a reader must already know things — Context first,
 then the request path, then containers, then the cross-cutting views — for the reason given
@@ -121,9 +162,11 @@ pnpm build
 
 That runs two steps:
 
-1. **`pnpm facts`** counts what `pnpm synth` wrote. Every project here is an AWS CDK app,
-   and `pnpm synth` runs each one per stage into CloudFormation templates under
-   `cdk.out/<stage>/` in its checkout; the one derivation,
+1. **`pnpm facts`** counts CloudFormation. FLEX is an AWS CDK app, and `pnpm synth` runs
+   it per stage into templates under `cdk.out/<stage>/` in its checkout. The GOV.UK App's
+   backend is SAM, whose templates are read as written — YAML, short-form intrinsics and
+   all — with each stage's `parameters` deciding which resources its Conditions keep. The
+   one derivation,
    [`scripts/derive/cloudformation.ts`](../scripts/derive/cloudformation.ts), then counts
    resources in them as the project's `derive.counts` declares — per stage, per template,
    by type, by logical id, or one entry per distinct construct for a table. No TypeScript
@@ -208,25 +251,26 @@ artifact, and neither can fetch a sibling file.
 `project.config.json` holds everything true of one architecture rather than of the site or
 of the renderer. The directory name is the id: it names the URL and prefixes exported files.
 
-| Field                  | What it does                                                                                                   |
-| ---------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `name`                 | Short name, on the index card                                                                                  |
-| `title`, `tagline`     | The browser tab and the header brand                                                                           |
-| `blurb`                | One paragraph on the index card: what this architecture is                                                     |
-| `repo`                 | Base URL that every `code` citation links against                                                              |
-| `inventoryView`        | Which view is the resource inventory — `resources` here                                                        |
-| `inventoryLabel`       | What the inventory's count line calls the things it counts — "AWS resources" here                              |
-| `iconLabel`            | Names the service-icon control, for readers and screen readers                                                 |
-| `filterHint`           | Placeholder in the Resources filter box                                                                        |
-| `softBudget`           | How much soft geometry the render check allows this project — a ratchet, zero if unset                         |
-| `placementBudget`      | The same ratchet for CANVAS.md's placement rules: upward edges, diagonals, zone tails. Zero if unset           |
-| `stateSoftBudget`      | The soft ratchet for the composed planned-state views, counting only what an overlay _adds_ over the as-is     |
-| `statePlacementBudget` | The placement ratchet for the same. Kept apart from the as-is numbers so neither can pay for the other         |
-| `kinds`                | The ownership kinds: `id`, `label`, and the palette `colour` each uses                                         |
-| `stages`               | The stage selector: `id`, `label`, and `facts` — the name the same stage goes by in `architecture-facts.json`  |
-| `source`               | `repo`, `ref` and `root`: the repository this documents and where its checkout lands                           |
-| `synth`                | How to run the CDK app per stage: `cwd`, `command`, `env` with `{stage}` filled, `output`. Needed for `derive` |
-| `derive`               | Optional. `module`, the `inputs` it reads, and `counts` — what to count in the templates. No block, no facts   |
+| Field                  | What it does                                                                                                                                                                          |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`                 | Short name, on the index card                                                                                                                                                         |
+| `title`, `tagline`     | The browser tab and the header brand                                                                                                                                                  |
+| `blurb`                | One paragraph on the index card: what this architecture is                                                                                                                            |
+| `repo`                 | Base URL that every `code` citation links against, with one `source`                                                                                                                  |
+| `inventoryView`        | Which view is the resource inventory — `resources` here                                                                                                                               |
+| `inventoryLabel`       | What the inventory's count line calls the things it counts — "AWS resources" here                                                                                                     |
+| `iconLabel`            | Names the service-icon control, for readers and screen readers                                                                                                                        |
+| `filterHint`           | Placeholder in the Resources filter box                                                                                                                                               |
+| `softBudget`           | How much soft geometry the render check allows this project — a ratchet, zero if unset                                                                                                |
+| `placementBudget`      | The same ratchet for CANVAS.md's placement rules: upward edges, diagonals, zone tails. Zero if unset                                                                                  |
+| `stateSoftBudget`      | The soft ratchet for the composed planned-state views, counting only what an overlay _adds_ over the as-is                                                                            |
+| `statePlacementBudget` | The placement ratchet for the same. Kept apart from the as-is numbers so neither can pay for the other                                                                                |
+| `kinds`                | The ownership kinds: `id`, `label`, and the palette `colour` each uses                                                                                                                |
+| `stages`               | The stage selector: `id`, `label`, and `facts` — the name the same stage goes by in `architecture-facts.json`. `parameters`, for a template read as written, are what it deploys with |
+| `source`               | `repo`, `ref` and `root`: the repository this documents and where its checkout lands                                                                                                  |
+| `sources`              | Or several, by the name citations use, each also with the `url` it is browsed at. Exactly one of the two                                                                              |
+| `synth`                | How to run the CDK app per stage: `cwd`, `command`, `env` with `{stage}` filled, `output`. Needed for `derive`                                                                        |
+| `derive`               | Optional. `module`, the `inputs` it reads, and `counts` — what to count in the templates. No block, no facts                                                                          |
 
 Nothing about presentation is in here — colours live in `theme.css` — and nothing that
 duplicates a view: a resource's `from` sits on the resource. The build validates the file
@@ -590,7 +634,10 @@ while the identities stay honest.
 - a `placement` entry naming a resource id that is not in `model/resources.json`
 - a resource that no diagram places, so nothing links to it
 - a derived count that disagrees with `architecture-facts.json`
-- a reference table with no `code` citation, or one citing a file that does not exist
+- a reference table with no `code` citation
+- any citation — a box's or a line's `link`, a table's or a row's `code` — to a file that
+  does not exist, to a path that names no source the project reads, or into a repository its
+  config does not list
 - a `derived` table whose bound column disagrees with the facts it is bound to
 - a planned state that names a box, zone or line not in the view at its step, cites a
   decision the register does not hold, or declares a view unchanged while changing it — and
@@ -610,7 +657,8 @@ a selection.
 It splits results in two:
 
 - **Hard** — text that does not fit, a target opening an empty panel, a tab that lost its
-  audience, any console error. Always a defect, always fails.
+  audience, a box drawn under the canvas chrome — the hint, the tables strip — at the zoom
+  the tab opens at, any console error. Always a defect, always fails.
 - **Soft** — a line clipping an unrelated box, a label on a box, two labels touching. A
   handful are unavoidable on the dense views. `softBudget` in the project's config is a
   ratchet: it may fall, never rise. When the check reports fewer soft defects than the

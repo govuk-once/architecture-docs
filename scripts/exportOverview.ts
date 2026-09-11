@@ -32,9 +32,7 @@ export const titlesOf = (project: Project) => ({
 
 export async function main(argv: string[]): Promise<void> {
   for (const project of selectProjects(argv)) {
-    const views = (await loadLikeC4Views(
-      project.modelDir,
-    )) as unknown as View[];
+    const views = (await loadLikeC4Views(project)) as unknown as View[];
     const states = loadStates(project);
     const dir = path.join(DOCS_ROOT, "export", project.id);
     mkdirSync(dir, { recursive: true });

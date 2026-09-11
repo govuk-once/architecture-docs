@@ -8,9 +8,9 @@
   "inventoryLabel": "AWS resources",
   "iconLabel": "AWS icons",
   "filterHint": "Filter — try isolated, KMS, 365 days, alarm",
-  "softBudget": 6,
+  "softBudget": 8,
   "placementBudget": 65,
-  "stateSoftBudget": 27,
+  "stateSoftBudget": 18,
   "statePlacementBudget": 20,
   "kinds": [
     {

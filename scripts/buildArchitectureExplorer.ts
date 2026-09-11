@@ -43,12 +43,13 @@ import {
   SITE_ROOT,
 } from "./lib/paths.js";
 import {
-  inSource,
   loadProjects,
+  locate,
   type Project,
   selectProjects,
 } from "./lib/projects.js";
-import { readState, short } from "./lib/sourceState.js";
+import { collectCitations } from "./lib/sourceCitations.js";
+import { readStates, short } from "./lib/sourceState.js";
 import {
   checkCitations,
   checkDeclarations,
@@ -603,23 +604,68 @@ function checkDerivedCounts(project: Project, views: View[]): string[] {
 
 /**
  * A reference table cites the files it was transcribed from. Those citations are the only
- * thing tying a hand-written table back to the code, so a moved or deleted file has to fail
- * here — a dead link is worse than no link, because it still looks like provenance.
+ * thing tying a hand-written table back to the code, so a table without one fails here;
+ * whether what it cites still exists is checkSourceCitations', with every other citation.
  */
-function checkTableCitations(project: Project, views: View[]): string[] {
+function checkTableCitations(views: View[]): string[] {
   const problems: string[] = [];
   for (const v of views)
-    for (const t of v.tables ?? []) {
-      if (!t.code?.length) {
+    for (const t of v.tables ?? [])
+      if (!t.code?.length)
         problems.push(`${v.id}/"${t.name}": no code citation`);
-        continue;
-      }
-      for (const [label, rel] of t.code)
-        if (!existsSync(inSource(project, rel)))
-          problems.push(
-            `${v.id}/"${t.name}": cites ${rel} (${label}), which does not exist`,
-          );
+  return problems;
+}
+
+/**
+ * Every citation in the model — on a box, a line, a table, an inventory row — has to name
+ * a file that exists in a repository this project reads. A moved or deleted file fails
+ * here: a dead link is worse than no link, because it still looks like provenance.
+ *
+ * A project reading several repositories adds two ways to be wrong, and both fail too: a
+ * path that names no source, and a link into a repository the project does not read. The
+ * second is the one that would otherwise pass — its path, checked against the wrong
+ * checkout, can happen to exist there.
+ */
+export function checkSourceCitations(
+  project: Pick<Project, "id" | "sources" | "qualified">,
+  views: unknown,
+): string[] {
+  const problems: string[] = [];
+  const unsynced = new Set<string>();
+  for (const [rel, where] of collectCitations(views)) {
+    const places = [...where];
+    const at =
+      places.slice(0, 3).join(", ") +
+      (places.length > 3 ? ` and ${String(places.length - 3)} more` : "");
+    if (/^[a-z][a-z0-9+.-]*:\/\//i.test(rel)) {
+      problems.push(
+        `${at}: cites ${rel}, which is in no repository this project reads`,
+      );
+      continue;
     }
+    const found = locate(project, rel);
+    if (!found) {
+      problems.push(
+        `${at}: cites "${rel}", which names no source — write it as <source>:<path>, ` +
+          `one of ${project.sources.map((s) => s.id).join(", ")}`,
+      );
+      continue;
+    }
+    if (!existsSync(path.join(found.source.dir, ".git"))) {
+      unsynced.add(found.source.root);
+      continue;
+    }
+    const file = path.resolve(found.source.dir, found.path);
+    if (!file.startsWith(found.source.dir + path.sep))
+      problems.push(`${at}: cites ${rel}, which is outside its checkout`);
+    else if (!existsSync(file))
+      problems.push(`${at}: cites ${rel}, which does not exist`);
+  }
+  for (const root of unsynced)
+    problems.push(
+      `${project.id}: no checkout at ${root}, so its citations cannot be checked — ` +
+        `run \`pnpm sync ${project.id}\``,
+    );
   return problems;
 }
 
@@ -802,7 +848,7 @@ function checkPlacement(project: Project, views: View[]) {
  * derived JSON would either be committed and drift, or gitignored and so never reviewed.
  */
 async function loadViews(project: Project): Promise<View[]> {
-  const views = (await loadLikeC4Views(project.modelDir)) as unknown as View[];
+  const views = (await loadLikeC4Views(project)) as unknown as View[];
   // A view with groups and no nodes is a reference tab; the renderer keys off this.
   for (const v of views) if (!v.nodes && v.groups) v.type = "doc";
   return views;
@@ -933,18 +979,35 @@ async function buildProject(project: Project): Promise<Built> {
     ...checkPlacement(project, views),
     ...checkDashLegend(views),
     ...checkDerivedCounts(project, views),
-    ...checkTableCitations(project, views),
+    ...checkTableCitations(views),
+    ...checkSourceCitations(project, views),
     ...checkDerivedTables(project, views),
   ];
 
   const placement = Object.fromEntries(
     views.map((v) => [v.id, v.placement ?? {}]),
   );
-  // `source` and `derive` say where the checkout is and how to read it. Both are build
-  // concerns, and the page is published, so they are dropped rather than shipped as
-  // filesystem paths.
-  const { source: _source, derive: _derive, ...rest } = project.config;
-  const pageConfig = { id: project.id, ...rest };
+  // `source`, `sources` and `derive` say where the checkouts are and how to read them.
+  // They are build concerns, and the page is published, so they are dropped rather than
+  // shipped as filesystem paths. A page reading several repositories gets only what a
+  // citation needs: where each one is browsed.
+  const {
+    source: _source,
+    sources: _sources,
+    derive: _derive,
+    ...rest
+  } = project.config;
+  const pageConfig = {
+    id: project.id,
+    ...rest,
+    ...(project.qualified
+      ? {
+          sources: Object.fromEntries(
+            project.sources.map((s) => [s.id, s.url]),
+          ),
+        }
+      : {}),
+  };
   const data =
     `/* Generated from projects/${project.id}/model/*.c4 — edit those, not this file. */\n` +
     `const VIEWS=${JSON.stringify(views)};\n` +
@@ -985,18 +1048,45 @@ async function buildProject(project: Project): Promise<Built> {
 const repoName = (url: string) =>
   /[:/]([^/:]+\/[^/]+?)(?:\.git)?$/.exec(url)?.[1] ?? url;
 
+/**
+ * Where a project's reading stands. One repository gets its name and both commits; several
+ * get a count, the newest derivation and how many have been read — with the oldest read
+ * date, because the least-read repository is the one the page is least sure of.
+ */
+function sourceMeta(project: Project): string[] {
+  const states = readStates(project);
+  const day = (iso: string) => esc(iso.slice(0, 10));
+  if (!project.qualified) {
+    const [only] = project.sources;
+    const state = only ? states[only.id] : null;
+    return [
+      only ? `<span>${esc(repoName(only.repo))}</span>` : "",
+      state
+        ? `<span>derived from <b>${esc(short(state.derived.sha))}</b> · ${day(state.derived.committed)}</span>`
+        : "",
+      state?.read
+        ? `<span>read to <b>${esc(short(state.read.sha))}</b> · ${day(state.read.committed)}</span>`
+        : "",
+    ];
+  }
+  const all = project.sources.map((s) => states[s.id] ?? null);
+  const derived = all.flatMap((s) => (s ? [s.derived.committed] : [])).sort();
+  const read = all.flatMap((s) => (s?.read ? [s.read.committed] : [])).sort();
+  const n = String(project.sources.length);
+  return [
+    `<span><b>${n}</b> repositories</span>`,
+    derived.length ? `<span>derived · ${day(derived.at(-1) ?? "")}</span>` : "",
+    read.length
+      ? `<span>read to <b>${String(read.length)} of ${n}</b> · ${day(read[0] ?? "")}</span>`
+      : "",
+  ];
+}
+
 function projectCard(built: Built): string {
   const { project, views } = built;
-  const state = readState(project);
   const meta = [
     `<span><b>${String(views.length)}</b> tabs</span>`,
-    `<span>${esc(repoName(project.source.repo))}</span>`,
-    state
-      ? `<span>derived from <b>${esc(short(state.derived.sha))}</b> · ${esc(state.derived.committed.slice(0, 10))}</span>`
-      : "",
-    state?.read
-      ? `<span>read to <b>${esc(short(state.read.sha))}</b> · ${esc(state.read.committed.slice(0, 10))}</span>`
-      : "",
+    ...sourceMeta(project),
   ].filter(Boolean);
   return (
     `<a class="card" href="${esc(project.href)}">` +

@@ -396,6 +396,7 @@ async function main() {
         /* Overflow measured against fallback metrics is noise; the build checks text fit
          statically from the real advances, so nothing goes unchecked here. */
         if (fontsLoaded) tally.hard += r.over.length;
+        tally.hard += r.under.length;
         /* Same reasoning as overflow: every geometry number here is measured from rendered
          text, so without the real faces none of it means anything. */
         if (fontsLoaded)
@@ -410,7 +411,8 @@ async function main() {
             ` · overflow ${String(r.over.length)} · crossings ${String(r.cross.length)}` +
             ` · label-on-box ${String(r.onBox.length)} · label-clash ${String(r.clash.length)}` +
             ` · up ${String(r.upward.length)} · diagonal ${String(r.diagonal.length)}` +
-            ` · zone-tail ${String(r.tail.length)}`,
+            ` · zone-tail ${String(r.tail.length)}` +
+            (r.under.length ? ` · under chrome ${String(r.under.length)}` : ""),
         );
         for (const [label, list] of [
           ["overflow", fontsLoaded ? r.over : []],
@@ -420,6 +422,7 @@ async function main() {
           ["upward", r.upward],
           ["diagonal", r.diagonal],
           ["zone tail", r.tail],
+          ["under chrome", r.under],
         ] as const)
           if (list.length)
             console.log(`      ${label}: ${list.slice(0, 3).join(" | ")}`);
@@ -462,6 +465,7 @@ async function main() {
                 r.upward.length + r.diagonal.length + r.tail.length - was.place,
               );
               if (fontsLoaded) tally.hard += r.over.length;
+              tally.hard += r.under.length;
               if (fontsLoaded) tally.stateSoft += soft;
               tally.statePlace += place;
               console.log(
@@ -470,6 +474,9 @@ async function main() {
                   ` · label-on-box ${String(r.onBox.length)} · label-clash ${String(r.clash.length)}` +
                   ` · up ${String(r.upward.length)} · diagonal ${String(r.diagonal.length)}` +
                   ` · zone-tail ${String(r.tail.length)}` +
+                  (r.under.length
+                    ? ` · under chrome ${String(r.under.length)}`
+                    : "") +
                   ` · over the as-is: soft +${String(soft)} placement +${String(place)}`,
               );
               for (const [name, list] of [
@@ -480,6 +487,7 @@ async function main() {
                 ["upward", r.upward],
                 ["diagonal", r.diagonal],
                 ["zone tail", r.tail],
+                ["under chrome", r.under],
               ] as const)
                 if (list.length)
                   console.log(`      ${name}: ${list.slice(0, 3).join(" | ")}`);
@@ -673,6 +681,7 @@ export function measure() {
       upward: [] as string[],
       diagonal: [] as string[],
       tail: [] as string[],
+      under: [] as string[],
     };
   const nodes = [...document.querySelectorAll("#root .node")];
   const boxes = nodes.map((g) => ({
@@ -854,6 +863,33 @@ export function measure() {
       if (b && area(a.r, b.r) > 40) clash.push(`${a.t} ✕ ${b.t}`);
     }
   }
+  /*
+   * The hint and the reference-tables strip are pinned to the stage floor, over the
+   * drawing. Fit-to-view is meant to keep the drawing clear of them; when it does not,
+   * the bottom row of boxes is drawn under "drag to pan" at 100% — which is what a
+   * reader sees first, and what nothing above measures, because every rule so far is in
+   * viewBox units and this is a collision in the page. Measured in screen space, box
+   * against chrome, at whatever zoom the tab opened at.
+   */
+  const chrome = ["#hint", "#tables"].flatMap((sel) => {
+    const el = document.querySelector<HTMLElement>(sel);
+    return el && !el.hidden && el.getClientRects().length
+      ? [{ sel, r: el.getBoundingClientRect() }]
+      : [];
+  });
+  const under: string[] = [];
+  for (const g of nodes) {
+    const box = g.querySelector(".box") as SVGGraphicsElement;
+    const r = box.getBoundingClientRect();
+    for (const c of chrome) {
+      const w = Math.min(r.right, c.r.right) - Math.max(r.left, c.r.left);
+      const h = Math.min(r.bottom, c.r.bottom) - Math.max(r.top, c.r.top);
+      if (w > 4 && h > 4) {
+        under.push(`${g.getAttribute("aria-label") ?? ""} under ${c.sel}`);
+        break;
+      }
+    }
+  }
   return {
     doc: false,
     rows: 0,
@@ -867,6 +903,7 @@ export function measure() {
     upward,
     diagonal,
     tail,
+    under,
   };
 }
 

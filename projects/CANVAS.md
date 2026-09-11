@@ -155,3 +155,7 @@ than the line's endpoints.
   everything, and says nothing the box does not.
 - A zone stretched to the container's bottom with its boxes at the top: a line through
   its empty half looks like a line through the zone's contents.
+- A box stretched across the canvas so that every caller's line can be vertical: it reads
+  as a bus, and the router picks a line's sides from box centres, so the outermost lines
+  hook round its ends anyway. A box is as wide as its label; a fan of callers is what the
+  placement budget is for.

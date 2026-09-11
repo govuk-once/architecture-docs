@@ -23,6 +23,8 @@
     "Events": "eventbridge"
   },
   "type": {
+    "AWS::Serverless::Function": "lambda",
+    "AWS::Serverless::Api": "apigateway",
     "AWS::CloudFront::Function": "cloudfront-functions",
     "AWS::EC2::NatGateway": "vpc-nat",
     "AWS::EC2::InternetGateway": "vpc-igw",

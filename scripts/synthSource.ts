@@ -24,7 +24,8 @@ import { globSync } from "node:fs";
 import path from "node:path";
 
 import {
-  assertSourceRoot,
+  assertCheckout,
+  locateOrThrow,
   type Project,
   selectProjects,
 } from "./lib/projects.js";
@@ -39,10 +40,13 @@ function synthProject(project: Project): void {
     console.log("  no synth block — nothing to synthesise");
     return;
   }
-  assertSourceRoot(project);
-  const cwd = path.resolve(project.sourceRoot, synth.cwd);
+  // A project reading several repositories synthesises in the one its cwd names.
+  const at = locateOrThrow(project, synth.cwd, "synth.cwd");
+  const root = at.source.dir;
+  assertCheckout(project, at.source);
+  const cwd = path.resolve(root, at.path);
   // The checkout is somebody else's repository; nothing here may reach outside it.
-  if (!cwd.startsWith(project.sourceRoot + path.sep))
+  if (!cwd.startsWith(root + path.sep))
     throw new Error(
       `projects/${project.id}: synth.cwd "${synth.cwd}" is outside the checkout`,
     );
@@ -64,8 +68,13 @@ function synthProject(project: Project): void {
   };
 
   for (const st of project.config.stages.filter((s) => s.synth)) {
-    const out = path.resolve(project.sourceRoot, fill(synth.output, st));
-    if (!out.startsWith(project.sourceRoot + path.sep))
+    const outAt = locateOrThrow(
+      project,
+      fill(synth.output, st),
+      "synth.output",
+    );
+    const out = path.resolve(root, outAt.path);
+    if (outAt.source !== at.source || !out.startsWith(root + path.sep))
       throw new Error(
         `projects/${project.id}: synth.output "${synth.output}" is outside the checkout`,
       );
@@ -88,7 +97,7 @@ function synthProject(project: Project): void {
     });
     const n = globSync("*.template.json", { cwd: out }).length;
     console.log(
-      `${String(n)} templates in ${((Date.now() - started) / 1000).toFixed(0)}s → ${path.relative(project.sourceRoot, out)}`,
+      `${String(n)} templates in ${((Date.now() - started) / 1000).toFixed(0)}s → ${path.relative(root, out)}`,
     );
   }
 }

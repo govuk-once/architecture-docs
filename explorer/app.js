@@ -1,5 +1,12 @@
 /* Everything project-specific comes from explorer.config.json, injected as CONFIG. */
 const REPO = CONFIG.repo;
+/* A project reading several repositories names each citation's repository first —
+   `ios:Production/…` — and CONFIG.sources says where each one is browsed. */
+const SOURCES = CONFIG.sources || {};
+const codeHref = (p) => {
+  const m = /^([a-z][a-z0-9-]*):(.+)$/.exec(p);
+  return m && SOURCES[m[1]] ? SOURCES[m[1]] + m[2] : REPO + p;
+};
 const STAGES = CONFIG.stages;
 const LC_LABEL = {
   new: "planned — new in this state",
@@ -422,6 +429,24 @@ document.addEventListener("click", (ev) => {
     menu(false);
 });
 document.getElementById("fitm").addEventListener("click", () => fit());
+/* A rotated phone or a resized window is a different canvas, and the drawing was fitted
+   to the old one — offset for the old floor chrome too, so the top row could end up under
+   the header. Refit, once the resize has settled. */
+let refit;
+const refitSoon = () => {
+  clearTimeout(refit);
+  refit = setTimeout(() => {
+    if (!held) fit();
+  }, 120);
+};
+window.addEventListener("resize", refitSoon);
+/* On a short screen the details rail opens and closes by transitioning the shell's grid
+   columns, and a tab change mid-transition fits the drawing to a canvas still changing
+   size. Fit again once it has settled — unless the reader has taken hold of the view,
+   in which case their pan and zoom are theirs until they change tab or press fit. */
+document.querySelector(".shell").addEventListener("transitionend", (ev) => {
+  if (ev.target === ev.currentTarget && view.type !== "doc") refitSoon();
+});
 document
   .getElementById("panelclose")
   .addEventListener("click", () => sheet(false, gripLabel.textContent));
@@ -999,14 +1024,14 @@ const facts = (a) =>
     ? `<ul class="facts">${a.map((f) => `<li>${rich(f)}</li>`).join("")}</ul>`
     : "";
 /* Links that leave the repo — a decision record, a board. Kept apart from `codes`, which
-   prefixes the repo URL and would mangle an absolute one. */
+   resolves a path against a repository and would mangle an absolute one. */
 const links = (a) =>
   a && a.length
     ? `<div class="sect"><div class="eyebrow">Where it was decided</div><div class="code">${a.map(([l, u]) => `<a href="${esc(u)}" target="_blank" rel="noreferrer">${esc(l)}</a>`).join("")}</div></div>`
     : "";
 const codes = (a) =>
   a && a.length
-    ? `<div class="sect"><div class="eyebrow">In the repo</div><div class="code">${a.map(([l, p]) => `<a href="${REPO}${p}" target="_blank" rel="noopener">${esc(l)}</a>`).join("")}</div></div>`
+    ? `<div class="sect"><div class="eyebrow">In the repo</div><div class="code">${a.map(([l, p]) => `<a href="${esc(codeHref(p))}" target="_blank" rel="noopener">${esc(l)}</a>`).join("")}</div></div>`
     : "";
 
 function renderIdle() {
@@ -1478,6 +1503,9 @@ function renderItem(it, groupName, ctx) {
 
 /* ============================ PAN / ZOOM ============================ */
 let fitK = 1;
+/* True once the reader has panned or zoomed: the view is theirs, and nothing refits it
+   behind their back until the next tab change or the fit button hands it back. */
+let held = false;
 function apply() {
   root.setAttribute("transform", `translate(${vp.x} ${vp.y}) scale(${vp.k})`);
   document.getElementById("zval").textContent =
@@ -1489,9 +1517,22 @@ function apply() {
    viewBox centre. Fit therefore measures the real content bounds and scales them to
    fill the stage — content pushed into the letterbox bands still renders, so the
    drawing can use the whole frame instead of just the viewBox's aspect-matched part. */
+/* The hint and the reference-tables strip are pinned over the canvas floor. Whatever
+   they cover is not the drawing's to use: how many px of the canvas, from the bottom,
+   lie under the higher of the two. Measured rather than known, because the strip is
+   38px collapsed, 40% open, and both move up on a phone to clear the sheet handle. */
+function floorInset(r) {
+  let top = r.bottom;
+  for (const id of ["hint", "tables"]) {
+    const el = document.getElementById(id);
+    if (!el || el.hidden || !el.getClientRects().length) continue;
+    top = Math.min(top, el.getBoundingClientRect().top);
+  }
+  return Math.max(0, r.bottom - top);
+}
 function fit() {
   if (view.type === "doc") return;
-  const r = stage.getBoundingClientRect();
+  const r = svg.getBoundingClientRect();
   const prev = root.getAttribute("transform");
   root.removeAttribute("transform");
   const bb = root.getBBox();
@@ -1502,14 +1543,18 @@ function fit() {
     return apply();
   }
   const m = Math.min(r.width / view.w, r.height / view.h); // viewBox units -> css px
+  /* Fit into the part of the canvas nothing is pinned over, and centre on that part:
+     at 100% the bottom row used to land under "drag to pan". */
+  const inset = floorInset(r) / m; // in viewBox units
   const stageW = r.width / m,
-    stageH = r.height / m; // stage size in viewBox units
+    stageH = r.height / m - inset; // usable size in viewBox units
   const k = Math.min(stageW / bb.width, stageH / bb.height) * 0.95;
   fitK = k;
+  held = false;
   vp = {
     k,
     x: view.w / 2 - (bb.x + bb.width / 2) * k,
-    y: view.h / 2 - (bb.y + bb.height / 2) * k,
+    y: view.h / 2 - inset / 2 - (bb.y + bb.height / 2) * k,
   };
   apply();
 }
@@ -1537,6 +1582,7 @@ function zoomBy(f, cx, cy) {
   vp.x = cx - (cx - vp.x) * (k2 / vp.k);
   vp.y = cy - (cy - vp.y) * (k2 / vp.k);
   vp.k = k2;
+  held = true;
   apply();
 }
 /* Drag pans from anywhere, including from on top of a box. A gesture only counts
@@ -1596,6 +1642,7 @@ addEventListener("pointermove", (ev) => {
   }
   vp.x = drag.ox + dx / drag.u;
   vp.y = drag.oy + dy / drag.u;
+  held = true;
   apply();
 });
 ["pointerup", "pointercancel"].forEach((t) =>
