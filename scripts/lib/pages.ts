@@ -53,7 +53,11 @@ export async function snapshots(
   } catch {
     return "pictures skipped: playwright is not installed (pnpm add -Dw playwright && pnpm exec playwright install chromium)";
   }
-  const browser = await chromium.launch();
+  /* Hinting off, as the render check runs: linear text metrics, the same on every
+     platform, so a picture taken here matches what the check measured. */
+  const browser = await chromium.launch({
+    args: ["--font-render-hinting=none"],
+  });
   try {
     const context = await browser.newContext({
       viewport: { width: 1500, height: 900 },

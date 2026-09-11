@@ -76,12 +76,14 @@ Containers. The zone tails are gone.
   means the zones inside it as well as the boxes. Counting boxes alone called half the
   first eight empty while a nested zone sat in the space.
 
-Design to the wider platform, and do not trust a local pass. Linux Chromium renders IBM
-Plex about **17% wider** than macOS at 13px — "OpenAPI breaking check" is 140.6px here and
-164.9px on CI. A box clearing its edge by 20px on a Mac can clear it by 5px on CI and fail
-the render check there. The build's static rule is calibrated to the wider platform for
-exactly this reason; the render check can only measure the machine it runs on, and on a Mac
-it under-reports.
+Do not trust a local pass over the render check on CI. The two used to disagree by a lot:
+Linux Chromium hints glyphs to whole pixels at the size the text is drawn at, so the same
+label measured **17% wider** than on macOS at one zoom and narrower at another — "OpenAPI
+breaking check" was 140.6px on a Mac and 164.9px on CI, and a composed view fitted at a
+different zoom from the as-is measured its unchanged boxes differently again. The render
+check and the picture export now launch Chromium with font hinting off, which makes the
+metrics linear and the same on every platform to within a pixel. The build's static rule
+keeps its wider advances as a margin: it should refuse before the browser has to.
 
 ## Rules for placement
 

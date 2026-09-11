@@ -91,7 +91,16 @@ async function main() {
     return;
   }
 
-  const browser = await chromium.launch();
+  /*
+   * Hinting off. On Linux, Chromium snaps glyph advances to whole pixels at the size the
+   * text is drawn at, so the same label measures a different width at every zoom — 166px
+   * on a view fitted at one scale, 127px on another — and a check calibrated on one view
+   * failed the next for no reason a person could act on. Without hinting the metrics are
+   * linear, as they are on macOS, and a width means the same thing everywhere.
+   */
+  const browser = await chromium.launch({
+    args: ["--font-render-hinting=none"],
+  });
   /** One row per page checked, so the verdict is given per project and then overall. */
   const scores = new Map<
     string,
