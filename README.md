@@ -150,6 +150,14 @@ the ones that feed models named individually since not all of them honour the wi
 render check fails a build that drops either. These are requests, not walls — a public URL
 is public — so the link is shared, not published.
 
+The wall, when one is wanted, is a password. Set `SITE_PASSWORD` on the `github-pages`
+environment and the deploy job seals every page behind it before uploading: what Pages
+serves is a small page that asks for the password and decrypts the real one in the browser
+(AES-256-GCM, key from PBKDF2). A crawler, a cache or anyone without the password gets the
+form and an opaque blob. Remove the secret and the next deploy publishes plainly. It is one
+shared password, remembered per browser tab, changed only by deploying again — it keeps the
+content from the public, not from a colleague who has moved on.
+
 ## What it costs to keep up to date
 
 Measured against twelve weeks of FLEX: 10 commits a week, of which 22 files are ones the

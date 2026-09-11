@@ -9,7 +9,7 @@ name: Publish to Confluence
 #
 # It follows the build rather than repeating it: the pictures are rendered from the built
 # page, and building needs every documented source checked out and synthesised. The build
-# uploads the site as the Pages artifact; this downloads it.
+# uploads the plain site as an artifact; this downloads it.
 #
 # Secrets live in the `confluence` environment so a fork's pull request can never see them:
 #   CONFLUENCE_BASE_URL   https://<site>.atlassian.net/wiki
@@ -86,18 +86,15 @@ jobs:
           [ -n "$run_id" ] || { echo "::error::no successful build of main to take the site from"; exit 1; }
           echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
 
+      # The plain site the build uploaded — not what Pages serves, which may be sealed
+      # behind a password and would photograph as a login form.
       - name: Download the built site
         uses: actions/download-artifact@v4
         with:
-          name: github-pages
+          name: site
           run-id: ${{ steps.build.outputs.run_id }}
           github-token: ${{ github.token }}
-          path: pages-artifact
-
-      - name: Unpack it where the build would have written it
-        run: |
-          mkdir -p site
-          tar -xf pages-artifact/artifact.tar -C site
+          path: site
 
       - name: Install Chromium
         run: pnpm exec playwright install --with-deps chromium

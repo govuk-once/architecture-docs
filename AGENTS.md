@@ -26,6 +26,7 @@ pnpm review    # export the planned states for comment, where people can actuall
 pnpm editor    # serve the site with the state editor at /editor/ — local, writes states/ only
 pnpm overview  # export the architecture overview page, one per project
 pnpm confluence  # put the overview and the review page in Confluence; CI runs it after each build of main
+pnpm encrypt-site  # seal site/ behind SITE_PASSWORD; the deploy job runs it when the secret is set
 ```
 
 `pnpm synth` is the one command here that executes a documented repository. `sync` and

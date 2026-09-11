@@ -139,27 +139,26 @@ jobs:
           pnpm tsc
           pnpm test --run
 
-      # A push to main always publishes. Any other run publishes only when asked, and a
-      # scheduled run never does: it is a drift check, and a drifted build fails before it
-      # gets here anyway.
-      - name: Upload Pages artifact
-        if: >-
-          (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
-          (github.event_name == 'workflow_dispatch' && inputs.deploy)
-        uses: actions/upload-pages-artifact@v4
-        with:
-          path: site
-
-      # On a pull request the build is still worth looking at, so it is kept as a plain
-      # artifact: download it, open index.html. Nothing is published.
-      - name: Upload the built site for review
-        if: github.event_name == 'pull_request'
+      # The site as built, plain. The deploy job takes it from here, and so does the
+      # Confluence workflow; on a pull request it is the thing to download and open. What
+      # gets published may be sealed behind a password — that happens in the deploy job,
+      # which is the one bound to the environment holding the password.
+      - name: Upload the built site
         uses: actions/upload-artifact@v4
         with:
-          name: site-${{ github.event.pull_request.number }}
+          name: site
           path: site
           retention-days: 14
 
+  # A push to main always publishes. Any other run publishes only when asked, and a
+  # scheduled run never does: it is a drift check, and a drifted build fails before it
+  # gets here anyway.
+  #
+  # If the github-pages environment holds a SITE_PASSWORD, every page is sealed behind it
+  # before it is uploaded: what Pages serves is a small page that asks for the password
+  # and decrypts the real one in the browser. With no secret set the site publishes as it
+  # is. The secret lives on the environment, which is why the sealing happens here and not
+  # in the build — the build job cannot see it, and should not.
   deploy:
     name: Deploy to Pages
     needs: build
@@ -169,12 +168,47 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
+      contents: read
       pages: write
       id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
+      - name: Checkout the docs
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup node
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Download the built site
+        uses: actions/download-artifact@v4
+        with:
+          name: site
+          path: site
+
+      - name: Seal it behind the password, if one is set
+        env:
+          SITE_PASSWORD: ${{ secrets.SITE_PASSWORD }}
+        run: pnpm encrypt-site
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: site
+
       - name: Deploy
         id: deploy
         uses: actions/deploy-pages@v4
