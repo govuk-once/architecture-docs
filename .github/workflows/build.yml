@@ -36,8 +36,10 @@ permissions:
   contents: read
 
 env:
-  # Each project's ref, matching the `source.ref` in its project.config.json.
+  # Each project's ref, matching the `ref` of each source in its project.config.json.
   FLEX_REF: main
+  # All four of the GOV.UK App's sources track main.
+  APP_REF: main
 
 jobs:
   build:
@@ -64,6 +66,41 @@ jobs:
           repository: govuk-once/flex
           ref: ${{ env.FLEX_REF }}
           path: .sources/flex
+          persist-credentials: false
+
+      # The GOV.UK App is read from four repositories, one step each, to the roots its
+      # `sources` name. All four are public. None is installed: nothing synthesises from
+      # them — two are Swift and Kotlin, and the backend's SAM templates are read as written.
+      - name: Checkout the GOV.UK App · iOS
+        uses: actions/checkout@v5
+        with:
+          repository: govuk-once/govuk-mobile-ios-app
+          ref: ${{ env.APP_REF }}
+          path: .sources/app/ios
+          persist-credentials: false
+
+      - name: Checkout the GOV.UK App · Android
+        uses: actions/checkout@v5
+        with:
+          repository: govuk-once/govuk-mobile-android-app
+          ref: ${{ env.APP_REF }}
+          path: .sources/app/android
+          persist-credentials: false
+
+      - name: Checkout the GOV.UK App · backend
+        uses: actions/checkout@v5
+        with:
+          repository: alphagov/govuk-mobile-backend
+          ref: ${{ env.APP_REF }}
+          path: .sources/app/backend
+          persist-credentials: false
+
+      - name: Checkout the GOV.UK App · remote config
+        uses: actions/checkout@v5
+        with:
+          repository: alphagov/govuk-mobile-backend-config
+          ref: ${{ env.APP_REF }}
+          path: .sources/app/config
           persist-credentials: false
 
       - name: Setup pnpm

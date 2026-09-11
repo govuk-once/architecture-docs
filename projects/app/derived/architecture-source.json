@@ -1,0 +1,56 @@
+{
+  "sources": {
+    "ios": {
+      "repo": "git@github.com:govuk-once/govuk-mobile-ios-app.git",
+      "ref": "main",
+      "derived": {
+        "sha": "4d22e1338e36c07d0eafad2f76515e3a81be9e89",
+        "subject": "GOVUKAPP-2496 Persist selected topics tab in user defaults (#325)",
+        "committed": "2026-09-11T10:19:08+01:00",
+        "builtFrom": "backend:services/*/template.yaml counts={\"fnAuthProxy\":{\"type\":\"AWS::Serverless::Function\",\"logicalId\":\"^AuthProxyFunction$\"},\"fnRevoke\":{\"type\":\"AWS::Serverless::Function\",\"logicalId\":\"^RevokeRefreshTokenFunction$\"},\"fnLinking\":{\"type\":\"AWS::Serverless::Function\",\"logicalId\":\"^LinkingVerificationFunction$\"},\"fnSsAuthorizer\":{\"type\":\"AWS::Serverless::Function\",\"logicalId\":\"^SharedSignalAuthorizer$\"},\"fnSsReceiver\":{\"type\":\"AWS::Serverless::Function\",\"logicalId\":\"^SharedSignalReceiverFunction$\"},\"fnSsHealth\":{\"type\":\"AWS::Serverless::Function\",\"logicalId\":\"^SharedSignalHealthCheckFunction$\"},\"fnPagerDutyTest\":{\"type\":\"AWS::Serverless::Function\",\"logicalId\":\"^PagerDutyTestFunction$\"},\"fnSmokeTest\":{\"type\":\"AWS::Serverless::Function\",\"logicalId\":\"^SmokeTestFunction$\"},\"fnAcceptance\":{\"type\":\"AWS::Serverless::Function\",\"logicalId\":\"^AcceptanceTestingFunction$\"},\"fnMockTransmitter\":{\"type\":\"AWS::Serverless::Function\",\"logicalId\":\"^MockSharedSignalsTransmitterFunction$\"},\"fnChatAuthorizer\":{\"type\":\"AWS::Serverless::Function\",\"logicalId\":\"^ChatAuthorizerFunction$\"},\"apiTokenProxy\":{\"type\":\"AWS::Serverless::Api\",\"logicalId\":\"^AttestationProxyApi$\"},\"apiSharedSignals\":{\"type\":\"AWS::Serverless::Api\",\"logicalId\":\"^SharedSignalApi$\"},\"apiMockTransmitter\":{\"type\":\"AWS::Serverless::Api\",\"logicalId\":\"^MockSharedSignalsTransmitterApi$\"},\"apiChat\":{\"type\":\"AWS::ApiGateway::RestApi\"},\"alarmCount\":{\"type\":\"AWS::CloudWatch::Alarm\"},\"userPools\":{\"type\":\"AWS::Cognito::UserPool\"},\"userPoolClients\":{\"type\":\"AWS::Cognito::UserPoolClient\"},\"identityProviders\":{\"type\":\"AWS::Cognito::UserPoolIdentityProvider\"},\"webAcls\":{\"type\":\"AWS::WAFv2::WebACL\"},\"kmsKeys\":{\"type\":\"AWS::KMS::Key\"},\"logGroups\":{\"type\":\"AWS::Logs::LogGroup\"},\"metricFilters\":{\"type\":\"AWS::Logs::MetricFilter\"},\"iamRoles\":{\"type\":\"AWS::IAM::Role\"},\"snsTopics\":{\"type\":\"AWS::SNS::Topic\"},\"dashboards\":{\"type\":\"AWS::CloudWatch::Dashboard\"},\"alarms\":{\"type\":\"AWS::CloudWatch::Alarm\",\"distinctBy\":\"construct\",\"capture\":[\"Namespace\",\"MetricName\",\"Threshold\",\"ComparisonOperator\",\"EvaluationPeriods\",\"ActionsEnabled\",\"AlarmActions\"]}}",
+        "derivation": "2b72b62f9b7e116f",
+        "facts": "28c4425fe7b95720"
+      },
+      "read": null
+    },
+    "android": {
+      "repo": "git@github.com:govuk-once/govuk-mobile-android-app.git",
+      "ref": "main",
+      "derived": {
+        "sha": "12e70802317cdadb86a15e6c973a7dac65230e70",
+        "subject": "GOVUKAPP-3984 Focus indicator missing for some components (#855)",
+        "committed": "2026-09-11T12:11:59+01:00",
+        "builtFrom": "backend:services/*/template.yaml counts={\"fnAuthProxy\":{\"type\":\"AWS::Serverless::Function\",\"logicalId\":\"^AuthProxyFunction$\"},\"fnRevoke\":{\"type\":\"AWS::Serverless::Function\",\"logicalId\":\"^RevokeRefreshTokenFunction$\"},\"fnLinking\":{\"type\":\"AWS::Serverless::Function\",\"logicalId\":\"^LinkingVerificationFunction$\"},\"fnSsAuthorizer\":{\"type\":\"AWS::Serverless::Function\",\"logicalId\":\"^SharedSignalAuthorizer$\"},\"fnSsReceiver\":{\"type\":\"AWS::Serverless::Function\",\"logicalId\":\"^SharedSignalReceiverFunction$\"},\"fnSsHealth\":{\"type\":\"AWS::Serverless::Function\",\"logicalId\":\"^SharedSignalHealthCheckFunction$\"},\"fnPagerDutyTest\":{\"type\":\"AWS::Serverless::Function\",\"logicalId\":\"^PagerDutyTestFunction$\"},\"fnSmokeTest\":{\"type\":\"AWS::Serverless::Function\",\"logicalId\":\"^SmokeTestFunction$\"},\"fnAcceptance\":{\"type\":\"AWS::Serverless::Function\",\"logicalId\":\"^AcceptanceTestingFunction$\"},\"fnMockTransmitter\":{\"type\":\"AWS::Serverless::Function\",\"logicalId\":\"^MockSharedSignalsTransmitterFunction$\"},\"fnChatAuthorizer\":{\"type\":\"AWS::Serverless::Function\",\"logicalId\":\"^ChatAuthorizerFunction$\"},\"apiTokenProxy\":{\"type\":\"AWS::Serverless::Api\",\"logicalId\":\"^AttestationProxyApi$\"},\"apiSharedSignals\":{\"type\":\"AWS::Serverless::Api\",\"logicalId\":\"^SharedSignalApi$\"},\"apiMockTransmitter\":{\"type\":\"AWS::Serverless::Api\",\"logicalId\":\"^MockSharedSignalsTransmitterApi$\"},\"apiChat\":{\"type\":\"AWS::ApiGateway::RestApi\"},\"alarmCount\":{\"type\":\"AWS::CloudWatch::Alarm\"},\"userPools\":{\"type\":\"AWS::Cognito::UserPool\"},\"userPoolClients\":{\"type\":\"AWS::Cognito::UserPoolClient\"},\"identityProviders\":{\"type\":\"AWS::Cognito::UserPoolIdentityProvider\"},\"webAcls\":{\"type\":\"AWS::WAFv2::WebACL\"},\"kmsKeys\":{\"type\":\"AWS::KMS::Key\"},\"logGroups\":{\"type\":\"AWS::Logs::LogGroup\"},\"metricFilters\":{\"type\":\"AWS::Logs::MetricFilter\"},\"iamRoles\":{\"type\":\"AWS::IAM::Role\"},\"snsTopics\":{\"type\":\"AWS::SNS::Topic\"},\"dashboards\":{\"type\":\"AWS::CloudWatch::Dashboard\"},\"alarms\":{\"type\":\"AWS::CloudWatch::Alarm\",\"distinctBy\":\"construct\",\"capture\":[\"Namespace\",\"MetricName\",\"Threshold\",\"ComparisonOperator\",\"EvaluationPeriods\",\"ActionsEnabled\",\"AlarmActions\"]}}",
+        "derivation": "2b72b62f9b7e116f",
+        "facts": "28c4425fe7b95720"
+      },
+      "read": null
+    },
+    "backend": {
+      "repo": "git@github.com:alphagov/govuk-mobile-backend.git",
+      "ref": "main",
+      "derived": {
+        "sha": "a86f6bed9f82c3808ad9c7f9d4a46882cb19257c",
+        "subject": "fix: Added extra permissions to linking-verification lambda role (#533)",
+        "committed": "2026-08-12T16:47:17+01:00",
+        "builtFrom": "backend:services/*/template.yaml counts={\"fnAuthProxy\":{\"type\":\"AWS::Serverless::Function\",\"logicalId\":\"^AuthProxyFunction$\"},\"fnRevoke\":{\"type\":\"AWS::Serverless::Function\",\"logicalId\":\"^RevokeRefreshTokenFunction$\"},\"fnLinking\":{\"type\":\"AWS::Serverless::Function\",\"logicalId\":\"^LinkingVerificationFunction$\"},\"fnSsAuthorizer\":{\"type\":\"AWS::Serverless::Function\",\"logicalId\":\"^SharedSignalAuthorizer$\"},\"fnSsReceiver\":{\"type\":\"AWS::Serverless::Function\",\"logicalId\":\"^SharedSignalReceiverFunction$\"},\"fnSsHealth\":{\"type\":\"AWS::Serverless::Function\",\"logicalId\":\"^SharedSignalHealthCheckFunction$\"},\"fnPagerDutyTest\":{\"type\":\"AWS::Serverless::Function\",\"logicalId\":\"^PagerDutyTestFunction$\"},\"fnSmokeTest\":{\"type\":\"AWS::Serverless::Function\",\"logicalId\":\"^SmokeTestFunction$\"},\"fnAcceptance\":{\"type\":\"AWS::Serverless::Function\",\"logicalId\":\"^AcceptanceTestingFunction$\"},\"fnMockTransmitter\":{\"type\":\"AWS::Serverless::Function\",\"logicalId\":\"^MockSharedSignalsTransmitterFunction$\"},\"fnChatAuthorizer\":{\"type\":\"AWS::Serverless::Function\",\"logicalId\":\"^ChatAuthorizerFunction$\"},\"apiTokenProxy\":{\"type\":\"AWS::Serverless::Api\",\"logicalId\":\"^AttestationProxyApi$\"},\"apiSharedSignals\":{\"type\":\"AWS::Serverless::Api\",\"logicalId\":\"^SharedSignalApi$\"},\"apiMockTransmitter\":{\"type\":\"AWS::Serverless::Api\",\"logicalId\":\"^MockSharedSignalsTransmitterApi$\"},\"apiChat\":{\"type\":\"AWS::ApiGateway::RestApi\"},\"alarmCount\":{\"type\":\"AWS::CloudWatch::Alarm\"},\"userPools\":{\"type\":\"AWS::Cognito::UserPool\"},\"userPoolClients\":{\"type\":\"AWS::Cognito::UserPoolClient\"},\"identityProviders\":{\"type\":\"AWS::Cognito::UserPoolIdentityProvider\"},\"webAcls\":{\"type\":\"AWS::WAFv2::WebACL\"},\"kmsKeys\":{\"type\":\"AWS::KMS::Key\"},\"logGroups\":{\"type\":\"AWS::Logs::LogGroup\"},\"metricFilters\":{\"type\":\"AWS::Logs::MetricFilter\"},\"iamRoles\":{\"type\":\"AWS::IAM::Role\"},\"snsTopics\":{\"type\":\"AWS::SNS::Topic\"},\"dashboards\":{\"type\":\"AWS::CloudWatch::Dashboard\"},\"alarms\":{\"type\":\"AWS::CloudWatch::Alarm\",\"distinctBy\":\"construct\",\"capture\":[\"Namespace\",\"MetricName\",\"Threshold\",\"ComparisonOperator\",\"EvaluationPeriods\",\"ActionsEnabled\",\"AlarmActions\"]}}",
+        "derivation": "2b72b62f9b7e116f",
+        "facts": "28c4425fe7b95720"
+      },
+      "read": null
+    },
+    "config": {
+      "repo": "git@github.com:alphagov/govuk-mobile-backend-config.git",
+      "ref": "main",
+      "derived": {
+        "sha": "8f164601e6352e2d470dda57196485324ce4682d",
+        "subject": "Add DVLA contact url (#176)",
+        "committed": "2026-09-04T14:38:11+01:00",
+        "builtFrom": "backend:services/*/template.yaml counts={\"fnAuthProxy\":{\"type\":\"AWS::Serverless::Function\",\"logicalId\":\"^AuthProxyFunction$\"},\"fnRevoke\":{\"type\":\"AWS::Serverless::Function\",\"logicalId\":\"^RevokeRefreshTokenFunction$\"},\"fnLinking\":{\"type\":\"AWS::Serverless::Function\",\"logicalId\":\"^LinkingVerificationFunction$\"},\"fnSsAuthorizer\":{\"type\":\"AWS::Serverless::Function\",\"logicalId\":\"^SharedSignalAuthorizer$\"},\"fnSsReceiver\":{\"type\":\"AWS::Serverless::Function\",\"logicalId\":\"^SharedSignalReceiverFunction$\"},\"fnSsHealth\":{\"type\":\"AWS::Serverless::Function\",\"logicalId\":\"^SharedSignalHealthCheckFunction$\"},\"fnPagerDutyTest\":{\"type\":\"AWS::Serverless::Function\",\"logicalId\":\"^PagerDutyTestFunction$\"},\"fnSmokeTest\":{\"type\":\"AWS::Serverless::Function\",\"logicalId\":\"^SmokeTestFunction$\"},\"fnAcceptance\":{\"type\":\"AWS::Serverless::Function\",\"logicalId\":\"^AcceptanceTestingFunction$\"},\"fnMockTransmitter\":{\"type\":\"AWS::Serverless::Function\",\"logicalId\":\"^MockSharedSignalsTransmitterFunction$\"},\"fnChatAuthorizer\":{\"type\":\"AWS::Serverless::Function\",\"logicalId\":\"^ChatAuthorizerFunction$\"},\"apiTokenProxy\":{\"type\":\"AWS::Serverless::Api\",\"logicalId\":\"^AttestationProxyApi$\"},\"apiSharedSignals\":{\"type\":\"AWS::Serverless::Api\",\"logicalId\":\"^SharedSignalApi$\"},\"apiMockTransmitter\":{\"type\":\"AWS::Serverless::Api\",\"logicalId\":\"^MockSharedSignalsTransmitterApi$\"},\"apiChat\":{\"type\":\"AWS::ApiGateway::RestApi\"},\"alarmCount\":{\"type\":\"AWS::CloudWatch::Alarm\"},\"userPools\":{\"type\":\"AWS::Cognito::UserPool\"},\"userPoolClients\":{\"type\":\"AWS::Cognito::UserPoolClient\"},\"identityProviders\":{\"type\":\"AWS::Cognito::UserPoolIdentityProvider\"},\"webAcls\":{\"type\":\"AWS::WAFv2::WebACL\"},\"kmsKeys\":{\"type\":\"AWS::KMS::Key\"},\"logGroups\":{\"type\":\"AWS::Logs::LogGroup\"},\"metricFilters\":{\"type\":\"AWS::Logs::MetricFilter\"},\"iamRoles\":{\"type\":\"AWS::IAM::Role\"},\"snsTopics\":{\"type\":\"AWS::SNS::Topic\"},\"dashboards\":{\"type\":\"AWS::CloudWatch::Dashboard\"},\"alarms\":{\"type\":\"AWS::CloudWatch::Alarm\",\"distinctBy\":\"construct\",\"capture\":[\"Namespace\",\"MetricName\",\"Threshold\",\"ComparisonOperator\",\"EvaluationPeriods\",\"ActionsEnabled\",\"AlarmActions\"]}}",
+        "derivation": "2b72b62f9b7e116f",
+        "facts": "28c4425fe7b95720"
+      },
+      "read": null
+    }
+  }
+}

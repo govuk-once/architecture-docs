@@ -8,7 +8,7 @@
     "page": "index.html",
     "url": "https://govuk-once.github.io/architecture-docs/"
   },
-  "projects": ["flex"],
+  "projects": ["flex", "app"],
   "planned": [
     {
       "id": "udp",

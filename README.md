@@ -5,10 +5,11 @@
 The architectures of the GOV.UK Once platforms, each documented as one interactive page and
 derived from that platform's own code rather than from prior design documents.
 
-| Architecture        | State                                                |
-| ------------------- | ---------------------------------------------------- |
-| **FLEX** — `/flex/` | Documented, nine tabs, rebuilt on every merge        |
-| **UDP**, **UNS**    | Planned. Listed on the index, nothing read from them |
+| Architecture             | State                                                |
+| ------------------------ | ---------------------------------------------------- |
+| **FLEX** — `/flex/`      | Documented, nine tabs, rebuilt on every merge        |
+| **GOV.UK App** — `/app/` | Documented, nine tabs, read from four repositories   |
+| **UDP**, **UNS**         | Planned. Listed on the index, nothing read from them |
 
 Each lives in a separate repository. This one holds the models, the pipeline that renders
 them, and the checks that keep them honest; it reads those repositories and never writes to
@@ -31,6 +32,26 @@ code describes.
 | **Delivery**     | Cross-cutting | Platform engineers and on-call                                   |
 | **Resources**    | Reference     | Cost, audit and incident scoping — the detail behind every badge |
 | **Decisions**    | Reference     | Anyone reviewing a proposed change — what each rests on          |
+
+## GOV.UK App
+
+Nine tabs, read from four repositories: the iOS and Android apps in `govuk-once`, and the
+backend and the remote config in `alphagov`. Every citation names the repository it is from —
+`ios:`, `android:`, `backend:` or `config:` — and the build refuses one that names none, or
+that links into any other repository. The backend's two SAM templates are counted per
+environment by evaluating their Conditions, so the resource counts change with the stage.
+
+| Tab                 | Group         | Who it is for                                                    |
+| ------------------- | ------------- | ---------------------------------------------------------------- |
+| **Context**         | Architecture  | Anyone new to the GOV.UK App, including non-engineers            |
+| **Sign-in path**    | Architecture  | On-call, and anyone tracing a sign-in                            |
+| **Account linking** | Architecture  | Anyone tracing a DVLA link, and anyone reviewing it              |
+| **Containers**      | Architecture  | Backend engineers, and anyone reviewing a change to the backend  |
+| **Components**      | Architecture  | Backend and app engineers — the code, not the infrastructure     |
+| **Inside the app**  | Architecture  | App engineers, and anyone asking what the app calls and when     |
+| **Security**        | Cross-cutting | Security review, assurance and threat modelling                  |
+| **Delivery**        | Cross-cutting | Anyone shipping a change, and on-call                            |
+| **Resources**       | Reference     | Cost, audit and incident scoping — the detail behind every badge |
 
 ## How the documentation is kept true
 
@@ -91,8 +112,8 @@ The agent cannot take these off you:
   every change in it cites an entry in the decision register, and the build refuses a
   citation the register does not hold. What the agent can do is write one down, lay it out
   and check it.
-- **For a new project**: a checkout step in `.github/workflows/build.yml`, a token if the
-  repository is private, and Pages set to the GitHub Actions source. Everything else is
+- **For a new project**: a checkout step per repository in `.github/workflows/build.yml`, a
+  token for any that is private, and Pages set to the GitHub Actions source. Everything else is
   config the agent writes.
 
 ## Proposing a change to an architecture

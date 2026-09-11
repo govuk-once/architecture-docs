@@ -1,0 +1,342 @@
+// GOV.UK App architecture — Sign-in path.
+//
+// Every hop a sign-in takes, numbered in reading order, and what each one checks. The
+// authorize leg runs in a browser; the token leg runs from the app to the proxy.
+
+model {
+
+  signin_app = internal '1. GOV.UK App' {
+    #request-path
+    description 'authorization code flow'
+    link https://github.com/govuk-once/govuk-mobile-android-app/blob/main/data/src/main/kotlin/uk/gov/govuk/data/auth/AuthRepo.kt 'android · AuthRepo.kt'
+    link https://github.com/govuk-once/govuk-mobile-android-app/blob/main/data/src/main/kotlin/uk/gov/govuk/data/auth/di/AuthModule.kt 'android · AuthModule.kt'
+    link https://github.com/govuk-once/govuk-mobile-ios-app/blob/main/Production/govuk_ios/ServiceClients/AuthenticationServiceClient.swift 'ios · AuthenticationServiceClient.swift'
+    link https://github.com/govuk-once/govuk-mobile-ios-app/blob/main/Production/govuk_ios/Extensions/Container/Container+Configs.swift 'ios · Container+Configs.swift'
+    metadata {
+      type 'Mobile client'
+      tech 'AppAuth · secure store'
+      role 'Starts the sign-in, holds the tokens, and refreshes them.'
+      facts [
+        'Opens the authorize request in an ephemeral browser session on both platforms, so no One Login cookie outlives the sign-in.',
+        'Asks for <code>openid email</code> and names <code>govuk://govuk/login-auth-callback</code> as the redirect, the same on both platforms.',
+        'Keeps the access and ID tokens in memory. The refresh token goes to a secure store that needs the current biometrics on iOS, and biometrics or the device passcode on Android.',
+        'On a 401 or 403 from FLEX or chat, refreshes once and retries once.'
+      ]
+      sourceId 'app'
+      order '1'
+      x '64'
+      y '30'
+      w '678'
+      h '62'
+      ownership 'app'
+    }
+  }
+
+  signin_auth = boundary 'App backend · auth stack' {
+    metadata {
+      type 'SAM stack'
+      tech 'services/auth/template.yaml'
+      role 'The user pool, the proxy in front of its token endpoint, and nothing else on this path.'
+      facts [
+        'One template creates everything in this box, and none of it runs in a VPC.'
+      ]
+      sourceId 'auth'
+      order '0'
+      x '40'
+      y '150'
+      w '760'
+      h '430'
+      boundary 'hard'
+    }
+
+    signin_hosted = internal '2. Cognito hosted UI' {
+      #request-path
+      description '/oauth2/authorize · WAF'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/template.yaml 'backend · services/auth/template.yaml'
+      metadata {
+        type 'AWS::Cognito::UserPoolDomain'
+        tech 'Cognito prefix domain'
+        role 'The page the authorize request lands on. It hands straight over to One Login.'
+        facts [
+          'A prefix domain, <code>{prefix}.auth.eu-west-2.amazoncognito.com</code>, with the prefix read from SSM. There is no custom domain and no certificate.',
+          'The app client supports one identity provider, One Login, so there is nothing to choose on this page.',
+          'A regional WAF on the user pool answers 429 to an IP above 300 requests, and applies the AWS known-bad-inputs rules.'
+        ]
+        sourceId 'hosted'
+        order '2'
+        x '64'
+        y '230'
+        w '262'
+        h '62'
+        ownership 'app'
+        awsIcon 'cognito'
+      }
+    }
+
+    signin_proxyapi = internal '4. Token proxy API' {
+      #request-path
+      description 'POST /oauth2/token · WAF'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/template.yaml 'backend · services/auth/template.yaml'
+      metadata {
+        type 'AWS::Serverless::Api'
+        tech 'API Gateway REST · stage per environment'
+        role 'The token endpoint the app actually calls. It has no authorizer.'
+        facts [
+          'Its own WAF answers 429 to an IP above 300 requests; the stage throttles at 10,000 requests a second with a burst of 5,000.',
+          'The same API serves <code>/oauth2/revoke</code> and <code>/linking/verification</code> — see Containers and Security.',
+          'Reached on its <code>execute-api</code> URL; nothing in the template gives it a custom domain.'
+        ]
+        sourceId 'proxyapi'
+        order '4'
+        x '480'
+        y '230'
+        w '262'
+        h '62'
+        ownership 'app'
+        awsIcon 'apigateway'
+      }
+    }
+
+    signin_proxyfn = internal '5. Auth proxy Lambda' {
+      #request-path
+      description 'App Check · client secret'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/proxy/proxy.ts 'backend · proxy.ts'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/proxy/middleware/attestation.ts 'backend · middleware/attestation.ts'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/proxy/firebaseJwt.ts 'backend · firebaseJwt.ts'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/proxy/validation/body.ts 'backend · validation/body.ts'
+  
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/template.yaml 'backend · services/auth/template.yaml'
+    metadata {
+        type 'AWS::Serverless::Function'
+        tech 'nodejs22.x · 128 MB · 60 s'
+        role 'Checks the request, adds the client secret, and forwards it to Cognito.'
+        facts [
+          'Accepts only an <code>authorization_code</code> grant — which must carry a <code>code_verifier</code>, so PKCE is required — or a <code>refresh_token</code> grant.',
+          'Checks the <code>x-attestation-token</code> header as a Firebase App Check token: RS256, issued for the Firebase project, with one of the two app IDs as subject. It checks only while the SSM parameter <code>feature-flags/attestation</code> is on.',
+          'Reads the client secret from Secrets Manager at <code>/{ConfigStackName}/cognito/client-secret</code>, which the template does not create.',
+          'Returns Cognito\'s status, body and headers unchanged.'
+        ]
+        sourceId 'proxyfn'
+        order '5'
+        x '480'
+        y '360'
+        w '262'
+        h '62'
+        ownership 'app'
+        awsIcon 'lambda'
+      }
+    }
+
+    signin_token = internal '6. Cognito token endpoint' {
+      #request-path
+      description 'code or refresh → tokens'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/template.yaml 'backend · services/auth/template.yaml'
+      metadata {
+        type 'AWS::Cognito::UserPoolClient'
+        tech 'Cognito /oauth2/token'
+        role 'Issues the tokens, to the proxy, which hands them back to the app.'
+        facts [
+          'Issues a 5-minute access token, a 1-hour ID token and a 365-day refresh token.',
+          'Token revocation is enabled on the app client, so a revoked refresh token stops working.',
+          'The access token is what every later call carries: the app keeps it only in memory.'
+        ]
+        sourceId 'token'
+        order '6'
+        x '480'
+        y '490'
+        w '262'
+        h '62'
+        ownership 'app'
+        awsIcon 'cognito'
+      }
+    }
+  }
+
+  signin_onelogin = external '3. GOV.UK One Login' {
+    #request-path
+    description 'OIDC · openid email'
+    link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/template.yaml 'backend · services/auth/template.yaml'
+    metadata {
+      type 'Outside GOV.UK Once'
+      tech 'OIDC'
+      role 'Where the user proves who they are.'
+      facts [
+        'Cognito federates with scopes <code>openid email</code>; the password and second factor are entered on One Login\'s page, never in the app.',
+        'After sign-in One Login redirects to Cognito, and Cognito to <code>govuk://govuk/login-auth-callback</code> with a code.',
+        'Production uses <code>oidc.account.gov.uk</code>; the other environments use One Login\'s integration or staging issuer.'
+      ]
+      sourceId 'onelogin'
+      order '3'
+      x '64'
+      y '640'
+      w '262'
+      h '62'
+      ownership 'third'
+    }
+  }
+
+  signin_firebase = external 'Firebase App Check' {
+    #request-path
+    description 'keys for the check'
+    link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/proxy/firebaseJwt.ts 'backend · firebaseJwt.ts'
+    link https://github.com/govuk-once/govuk-mobile-ios-app/blob/main/Production/govuk_ios/Services/AppAttest/GovUKProviderFactory.swift 'ios · GovUKProviderFactory.swift'
+    metadata {
+      type 'Third party · Google'
+      tech 'App Check JWKS'
+      role 'Publishes the keys the proxy verifies attestation tokens with.'
+      facts [
+        'Fetched from <code>firebaseappcheck.googleapis.com/v1/jwks</code>.',
+        'iOS staging builds use a provider that returns an empty token, so their sign-ins carry no proof of the app.'
+      ]
+      sourceId 'firebase'
+      order '8'
+      x '920'
+      y '360'
+      w '230'
+      h '62'
+      ownership 'vendor'
+    }
+  }
+
+  signin_flex = internal '7a. FLEX' {
+    #request-path
+    description 'Bearer · /app/…/v1'
+    link https://github.com/govuk-once/govuk-mobile-ios-app/blob/main/Production/govuk_ios/Networking/APIServiceClient.swift 'ios · APIServiceClient.swift'
+    link https://github.com/govuk-once/govuk-mobile-android-app/blob/main/data/src/main/kotlin/uk/gov/govuk/data/remote/AuthorizationInterceptor.kt 'android · AuthorizationInterceptor.kt'
+    metadata {
+      type 'GOV.UK Once system'
+      tech 'HTTPS · Bearer JWT'
+      role 'Where the access token goes first, once sign-in is done — if FLEX is switched on.'
+      facts [
+        'Every FLEX client sends the access token as <code>Authorization: Bearer</code>, and nothing else identifies the app.',
+        'The first call after sign-in is <code>GET /app/udp/v1/users/me</code>, made only when <code>profile_v2</code> is on.'
+      ]
+      sourceId 'flex'
+      order '7'
+      x '920'
+      y '30'
+      w '230'
+      h '62'
+      ownership 'govuk'
+    }
+  }
+
+  signin_chat = internal '7b. Chat proxy' {
+    #request-path
+    description 'Bearer · /conversation'
+    link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/chat/authorizer/client/authorizer-client.ts 'backend · authorizer-client.ts'
+    metadata {
+      type 'SAM stack · chat'
+      tech 'API Gateway · Lambda authorizer'
+      role 'The other backend the access token is sent to.'
+      facts [
+        'Its authorizer verifies the access token against the pool and client named in a secret, and API Gateway caches the answer for 300 seconds.'
+      ]
+      sourceId 'chat'
+      order '9'
+      x '920'
+      y '130'
+      w '230'
+      h '62'
+      ownership 'app'
+    }
+  }
+
+  signin_app -> signin_hosted 'authorize, code back' {
+    link https://github.com/govuk-once/govuk-mobile-android-app/blob/main/data/build.gradle.kts 'android · data/build.gradle.kts'
+    metadata {
+      protocol 'HTTPS, in the browser'
+      auth '—'
+      carries 'The authorize request out; the code back to govuk://'
+      edgeDir 'both'
+      facts [
+        'The authorize URL is Cognito\'s own: <code>govukapp-staging.auth…</code> in staging, <code>govukapp.auth…</code> in Android\'s release build.'
+      ]
+      order '1'
+    }
+  }
+  signin_hosted -> signin_onelogin 'federates' {
+    link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/template.yaml 'backend · services/auth/template.yaml'
+    metadata {
+      protocol 'OIDC redirect'
+      auth 'The user\'s One Login credentials'
+      carries 'The sign-in itself'
+      edgeDir 'both'
+      facts [
+        'One Login\'s <code>sub</code> becomes the Cognito username, and its <code>email</code> the user\'s email attribute.'
+      ]
+      order '2'
+    }
+  }
+  signin_app -> signin_proxyapi 'POST /oauth2/token' {
+    link https://github.com/govuk-once/govuk-mobile-ios-app/blob/main/Production/govuk_ios/ServiceClients/AuthenticationServiceClient.swift 'ios · AuthenticationServiceClient.swift'
+    link https://github.com/govuk-once/govuk-mobile-android-app/blob/main/data/src/main/kotlin/uk/gov/govuk/data/auth/AuthRepo.kt 'android · AuthRepo.kt'
+    metadata {
+      protocol 'HTTPS, form-encoded'
+      auth 'x-attestation-token, when App Check returns one'
+      carries 'The code and its verifier, or a refresh token'
+      facts [
+        'Both apps send the attestation header on the code exchange and on every refresh, and on nothing else.'
+      ]
+      order '3'
+    }
+  }
+  signin_proxyapi -> signin_proxyfn 'invokes' {
+    link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/template.yaml 'backend · services/auth/template.yaml'
+    metadata {
+      protocol 'Lambda proxy integration'
+      auth 'API Gateway invoke permission'
+      carries 'The token request'
+      order '4'
+    }
+  }
+  signin_proxyfn -> signin_token 'forwards, adds secret' {
+    link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/proxy/proxy.ts 'backend · proxy.ts'
+    metadata {
+      protocol 'HTTPS POST /oauth2/token'
+      auth 'The app client\'s secret'
+      carries 'The grant, with client_secret added'
+      facts [
+        'The host is checked against the Cognito domain the template names, so the proxy cannot be pointed elsewhere by a request.'
+      ]
+      order '5'
+    }
+  }
+  signin_proxyfn -> signin_firebase 'fetches keys' {
+    link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/proxy/firebaseJwt.ts 'backend · firebaseJwt.ts'
+    metadata {
+      protocol 'HTTPS GET'
+      auth 'None — the keys are public'
+      carries 'Signing keys for App Check tokens'
+      edgeStyle 'dash'
+      order '6'
+    }
+  }
+  signin_app -> signin_flex 'Bearer access token' {
+    link https://github.com/govuk-once/govuk-mobile-android-app/blob/main/data/src/main/kotlin/uk/gov/govuk/data/di/NetworkModule.kt 'android · NetworkModule.kt'
+    metadata {
+      protocol 'HTTPS'
+      auth 'Cognito access token'
+      carries '/app/{domain}/v1/… requests'
+      order '7'
+    }
+  }
+  signin_app -> signin_chat 'Bearer access token' {
+    link https://github.com/govuk-once/govuk-mobile-ios-app/blob/main/Production/govuk_ios/Networking/GOVRequest/GOVRequest+Chat.swift 'ios · GOVRequest+Chat.swift'
+    metadata {
+      protocol 'HTTPS'
+      auth 'Cognito access token'
+      carries 'Conversation requests'
+      order '8'
+    }
+  }
+}
+
+views {
+  view signin {
+    title 'Sign-in path'
+    include signin_app
+    include signin_auth, signin_auth.**
+    include signin_onelogin, signin_firebase, signin_flex, signin_chat
+  }
+}

@@ -5,9 +5,10 @@ lives elsewhere. It holds a LikeC4 model per platform, the pipeline that renders
 interactive page, an index over them, and the checks that keep model and code in step. It
 reads those repositories and never writes to them.
 
-Today that is **FLEX**, with UDP and UNS listed as planned. One directory per architecture
-under `projects/`; one renderer in `explorer/` that knows about none of them. Every command
-below takes an optional project id and acts on all of them when you give none.
+Today that is **FLEX** and the **GOV.UK App**, with UDP and UNS listed as planned. One
+directory per architecture under `projects/`; one renderer in `explorer/` that knows about
+none of them. Every command below takes an optional project id and acts on all of them when
+you give none. FLEX is read from one repository; the GOV.UK App from four.
 
 This file is for anyone — person or coding agent — making changes here. It is a router and an
 operating manual: it says how to run the loop, and where the real instructions live.
@@ -49,13 +50,17 @@ re-deriving and diffing is the whole point of the run.
 `pnpm sync` is what makes this repository self-contained: it pulls the sources it documents
 rather than assuming checkouts are already beside it. Each is disposable — gitignored,
 hard-reset on every sync so it can never carry local edits, and removed by `pnpm clean`.
-Where each comes from is declared in the `source` block of its `project.config.json`,
-nowhere else.
+Where each comes from is declared in the `source` block of its `project.config.json` — or
+`sources`, for a project read from more than one repository — and nowhere else.
 
 The install inside a checkout is not optional the first time: `pnpm synth` runs the CDK app,
 so its dependencies have to resolve. After that the install is repeated only when a manifest
 moved in the range; `pnpm sync --install` forces it if a checkout ever looks wrong. A sync
 keeps `cdk.out` so the templates survive it; `pnpm synth` always rewrites them.
+
+Only the checkout `synth` runs in is ever installed. The GOV.UK App's four are read and never
+installed: two are Swift and Kotlin, and its SAM templates are counted as written, with each
+stage's `parameters` deciding which `Condition` holds there.
 
 ## What is yours, and what is not
 
@@ -217,7 +222,9 @@ build already.
 
 `pnpm build` exits non-zero — it does not warn — on a count that disagrees with the derived
 facts, an alarm table that no longer matches the synthesised templates, a reference table with no
-citation, a citation pointing at a file that no longer exists, text that will not fit its box,
+citation, any citation — on a box, a line, a table or an inventory row — pointing at a file that
+no longer exists, a citation that names no repository the project reads or links into one it
+does not list, text that will not fit its box,
 overlapping boxes, a box straddling a zone edge, an edge to a node that does not exist, a box
 with no `ownership`, a sub-label that repeats its label, a dashed edge on a view that never says
 what dashed means, a kind naming a colour the theme lacks, a character the embedded fonts do
@@ -326,9 +333,10 @@ over a checkout step that still asked for a token for a repository that had gone
 
 Things that are the workflow's, not the scripts':
 
-- **One checkout step per project**, written out rather than generated — a workflow cannot
-  loop `actions/checkout`, and a private source needs a token with `Contents: read` on it;
-  the default `GITHUB_TOKEN` cannot read another repository. FLEX is public and needs none.
+- **One checkout step per source repository**, written out rather than generated — a
+  workflow cannot loop `actions/checkout`, and a private source needs a token with
+  `Contents: read` on it; the default `GITHUB_TOKEN` cannot read another repository. FLEX and
+  all four of the GOV.UK App's repositories are public and need none.
 - **Pages must use the GitHub Actions source**, not a branch: `site/` is gitignored, so a
   branch-based build would publish nothing.
 - **The `github-pages` environment only lets the default branch deploy** by default. A
@@ -345,7 +353,12 @@ Six things, and nothing else. The build, the renderer, the checks, the export an
 all read config, so none of them changes:
 
 1. `projects/<id>/project.config.json` — copy FLEX's and rewrite it. `source` names the
-   repository to document and where its checkout lands.
+   repository to document and where its checkout lands. An architecture read from several
+   repositories declares `sources` instead, each named and with the `url` its citations link
+   against — the GOV.UK App's is the worked example. Every citation in such a project then
+   names its source, `ios:Production/…`, and the build refuses one that names none or links
+   into a repository the config does not list: with four checkouts, a path that could be in
+   any of them is a claim nobody can check.
 2. `projects/<id>/model/` — the LikeC4 model. This is the work, and the only part that is
    judgement rather than transformation. Start from `projects/_template/`, the smallest
    model that builds; [`projects/README.md`](projects/README.md) sets out what it requires
@@ -353,10 +366,13 @@ all read config, so none of them changes:
 3. A `--legend-<colour>` token in `explorer/theme.css` for any colour its kinds name that is
    not already there. The build says so if you miss one.
 4. A `synth` block saying how to run its CDK app, and `derive.counts` saying what to count
-   in the templates — both JSON, no TypeScript. Or no `derive` block at all, if nothing is
-   worth gating: then leave `from` off every resource and `derived` off every table, and
+   in the templates — both JSON, no TypeScript. A SAM or CloudFormation template is read as
+   written and needs no `synth`: give each stage the `parameters` it deploys with, and each
+   resource's `Condition` is evaluated for that stage — a condition that cannot be evaluated
+   fails the derivation rather than being guessed at. Or no `derive` block at all, if nothing
+   is worth gating: then leave `from` off every resource and `derived` off every table, and
    maintain those numbers by hand like any other prose.
-5. A checkout step in `.github/workflows/build.yml`. A workflow cannot loop
+5. A checkout step per repository in `.github/workflows/build.yml`. A workflow cannot loop
    `actions/checkout`, and a private repository needs its own token.
 6. `<id>` in the `projects` array of `explorer.config.json`, which is also the order the
    index lists them in. Remove it from `planned` if it was there.
