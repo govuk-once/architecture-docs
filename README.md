@@ -141,6 +141,15 @@ draft placed or resized something by hand; it reads, in short:
 > and sizes only, never what a box or a line says or cites, and keep every box on the side of
 > a boundary it is on now. Then run `pnpm build` and `pnpm check` and fix what they report.
 
+## Not for indexing
+
+The pages are public because GitHub Pages is, not because they are meant to be found: they
+describe a live system in detail. Every page carries a `robots` meta tag asking not to be
+indexed, archived or quoted, and `robots.txt` at the site root disallows every crawler, with
+the ones that feed models named individually since not all of them honour the wildcard. The
+render check fails a build that drops either. These are requests, not walls — a public URL
+is public — so the link is shared, not published.
+
 ## What it costs to keep up to date
 
 Measured against twelve weeks of FLEX: 10 commits a week, of which 22 files are ones the

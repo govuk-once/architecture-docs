@@ -71,6 +71,7 @@ const TYPES: Record<string, string> = {
   ".js": "text/javascript; charset=utf-8",
   ".json": "application/json; charset=utf-8",
   ".md": "text/plain; charset=utf-8",
+  ".txt": "text/plain; charset=utf-8",
   ".svg": "image/svg+xml",
   ".png": "image/png",
   ".ico": "image/x-icon",
@@ -260,6 +261,9 @@ async function handle(
     res.writeHead(200, {
       "content-type": TYPES[path.extname(target)] ?? "application/octet-stream",
       "cache-control": "no-store",
+      /* The header form of what the pages say in their own meta tag. Pages cannot send
+         headers; this server can, and should say the same thing. */
+      "x-robots-tag": "noindex, nofollow, noarchive",
     });
     res.end(content);
   } catch (err) {

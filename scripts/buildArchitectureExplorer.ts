@@ -250,11 +250,51 @@ const esc = (s: string) =>
     (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c] ?? c,
   );
 
+/*
+ * Not for indexing. The pages are public because Pages is, not because they are meant to
+ * be found: they describe a live system in detail, and a search hit or a training crawl
+ * is the wrong way for anyone to meet them. The meta tag says so to every crawler that
+ * reads pages; robots.txt at the site root says so to the ones that read that first, by
+ * name for the crawlers that feed models and do not always honour the wildcard. Both are
+ * requests, not walls — a public URL is public — and the repository being public says
+ * what a wall here would be worth.
+ */
+const NO_INDEX =
+  '<meta name="robots" content="noindex, nofollow, noarchive, noimageindex, nosnippet">';
+
+const ROBOTS_TXT = [
+  "# Not for indexing or training. These pages describe a live system in detail;",
+  "# the source is the place to read from, not a search result or a model.",
+  ...[
+    "*",
+    "GPTBot",
+    "ChatGPT-User",
+    "OAI-SearchBot",
+    "ClaudeBot",
+    "Claude-Web",
+    "anthropic-ai",
+    "Google-Extended",
+    "Applebot-Extended",
+    "CCBot",
+    "PerplexityBot",
+    "Bytespider",
+    "Amazonbot",
+    "cohere-ai",
+    "meta-externalagent",
+    "FacebookBot",
+    "Diffbot",
+    "omgili",
+    "YouBot",
+    "DuckAssistBot",
+  ].flatMap((agent) => [`User-agent: ${agent}`, "Disallow: /", ""]),
+].join("\n");
+
 /** One page, wrapped. Assembled from parts rather than by slicing the body into lines. */
 function page(title: string, head: string, body: string): string {
   return (
     `<!doctype html>\n<html lang="en">\n<head>\n` +
     `<meta charset="utf-8">\n<meta name="viewport" content="width=device-width,initial-scale=1">\n` +
+    `${NO_INDEX}\n` +
     `<title>${esc(title)}</title>\n${FONTS}\n${head}\n</head>\n` +
     `<body>\n${body}\n</body>\n</html>\n`
   );
@@ -1121,6 +1161,7 @@ async function main() {
   }
   mkdirSync(SITE_ROOT, { recursive: true });
   writeFileSync(SITE_INDEX, buildIndex(shown));
+  writeFileSync(path.join(SITE_ROOT, "robots.txt"), ROBOTS_TXT + "\n");
   console.log(
     `index: wrote ${path.relative(DOCS_ROOT, SITE_INDEX)} ` +
       `(${String(shown.length)} documented, ${String(SITE_CONFIG.planned.length)} planned)`,

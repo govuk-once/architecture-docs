@@ -13,7 +13,7 @@
  *
  *   pnpm exec playwright install chromium
  */
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -176,6 +176,24 @@ async function main() {
       index.hard += dead.length;
     }
     if (!seen.themed) index.hard++;
+    /* Every page asks not to be indexed, and the root says so to crawlers that read
+       robots.txt first. A build that dropped either would publish a page meant to be found
+       only by people who were sent the link. */
+    const robots = path.join(path.dirname(SITE_INDEX), "robots.txt");
+    const unindexed = await page.evaluate(
+      () =>
+        document
+          .querySelector('meta[name="robots"]')
+          ?.getAttribute("content")
+          ?.includes("noindex") ?? false,
+    );
+    const disallowed =
+      existsSync(robots) &&
+      /^User-agent: \*\nDisallow: \/$/m.test(readFileSync(robots, "utf8"));
+    console.log(
+      `[index] not for indexing: meta ${unindexed ? "present" : "MISSING"} · robots.txt ${disallowed ? "disallows all" : "MISSING"}`,
+    );
+    if (!unindexed || !disallowed) index.hard++;
     const unique = [...new Set(errors)];
     if (unique.length) {
       console.log(`[index] ERRORS:\n  ${unique.slice(0, 4).join("\n  ")}`);
