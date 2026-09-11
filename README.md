@@ -116,8 +116,11 @@ view drawn from the built page: the open questions first, then each state view b
 with the diagram as the page draws it and what the step does in sentences that use the words
 on the diagram.
 Comments happen there; the repo stays the source of truth, and a comment that changes
-something comes back as a decision and a pull request. [`projects/STATES.md`](projects/STATES.md)
-is the whole workflow.
+something comes back as a decision and a pull request. Once a project names its Confluence
+space, CI publishes two pages after each build of `main`, when they have changed: an
+architecture overview — every diagram with its words and its picture — and the review page
+beneath it.
+[`projects/STATES.md`](projects/STATES.md) is the whole workflow.
 
 The states are JSON files, and `pnpm editor` is the way to write them without learning the
 format: the same local server with a visual editor at `/editor/`, where a state is a canvas

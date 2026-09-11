@@ -24,6 +24,8 @@ pnpm build     # derive the facts, validate the models, assemble every page and 
 pnpm check     # render every page in a browser and measure what only rendering can see
 pnpm review    # export the planned states for comment, where people can actually comment
 pnpm editor    # serve the site with the state editor at /editor/ — local, writes states/ only
+pnpm overview  # export the architecture overview page, one per project
+pnpm confluence  # put the overview and the review page in Confluence; CI runs it after each build of main
 ```
 
 `pnpm synth` is the one command here that executes a documented repository. `sync` and

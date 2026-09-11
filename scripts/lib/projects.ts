@@ -119,6 +119,19 @@ export interface ProjectConfig {
   source: SourceContract;
   derive?: DeriveContract;
   synth?: SynthContract;
+  /**
+   * Where this project's pages go in Confluence, when they go: the architecture overview,
+   * and the review page beneath it. The space key is the one thing that cannot be guessed.
+   * `parent` places the overview the first time only: a page id, or a path of titles such
+   * as "Architecture / FLEX", found in the space and made where missing. The titles
+   * default to "<name> — architecture" and "<name> — planned states, for comment".
+   */
+  confluence?: {
+    space: string;
+    parent?: string;
+    overviewTitle?: string;
+    reviewTitle?: string;
+  };
 }
 
 /** A loaded project, and every path that belongs to it. */
@@ -206,6 +219,10 @@ function readConfig(id: string, file: string): ProjectConfig {
   ] as const)
     if (cfg[key] !== undefined && !Number.isInteger(cfg[key]))
       throw new Error(`projects/${id}: ${key} must be a whole number`);
+
+  const confluence = cfg.confluence;
+  if (confluence && !confluence.space.trim())
+    throw new Error(`projects/${id}: confluence needs a space key`);
 
   const derive = cfg.derive;
   if (derive && (!derive.module || typeof derive.inputs !== "object"))

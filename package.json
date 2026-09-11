@@ -14,6 +14,8 @@
     "build": "pnpm facts && tsx scripts/buildArchitectureExplorer.ts",
     "check": "tsx scripts/checkArchitectureExplorer.ts",
     "review": "tsx scripts/exportForReview.ts",
+    "overview": "tsx scripts/exportOverview.ts",
+    "confluence": "tsx scripts/publishConfluence.ts",
     "serve": "pnpm build && tsx scripts/serveArchitectureDocs.ts",
     "editor": "pnpm build && tsx scripts/serveArchitectureDocs.ts --edit",
     "tsc": "tsc --noEmit",
