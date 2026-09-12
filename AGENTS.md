@@ -5,10 +5,10 @@ lives elsewhere. It holds a LikeC4 model per platform, the pipeline that renders
 interactive page, an index over them, and the checks that keep model and code in step. It
 reads those repositories and never writes to them.
 
-Today that is **FLEX** and the **GOV.UK App**, with UDP and UNS listed as planned. One
+Today that is **FLEX**, the **GOV.UK App** and **UDP**, with UNS listed as planned. One
 directory per architecture under `projects/`; one renderer in `explorer/` that knows about
 none of them. Every command below takes an optional project id and acts on all of them when
-you give none. FLEX is read from one repository; the GOV.UK App from four.
+you give none. FLEX and UDP are each read from one repository; the GOV.UK App from four.
 
 This file is for anyone — person or coding agent — making changes here. It is a router and an
 operating manual: it says how to run the loop, and where the real instructions live.
@@ -33,7 +33,10 @@ pnpm encrypt-site  # seal site/ behind SITE_PASSWORD; the deploy job runs it whe
 `pnpm synth` is the one command here that executes a documented repository. `sync` and
 `build` never do. It runs exactly the `synth.command` in each project's config — the CDK
 app itself, per stage, with no credentials: a context lookup the machine cannot make
-becomes a dummy value, which is right for counting resources by type. Read what it writes.
+becomes a dummy value, or the answer cached in the source's committed `cdk.context.json`,
+which is right for counting resources by type. Where the app needs the source's own build
+first — UDP loads every function from `build/` — `synth.prepare` names that build, and it
+runs once before the stages. Read what it writes.
 The templates under `cdk.out/<stage>/` in the checkout are the deployed truth, fully
 expanded, with nothing to reason through — a construct instantiated in a loop is one line
 of source and many resources in a template. When you author or re-read a model, read the

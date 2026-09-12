@@ -1,0 +1,441 @@
+// UDP architecture — Rights requests.
+//
+// The two asynchronous flows, side by side and numbered in reading order: a subject access
+// request that ends in a download link, and a deletion request that ends with the person's
+// links gone. Both answer 202 at the API and do the work off a queue.
+
+model {
+
+  rights_sar = boundary 'SAR · export everything' {
+    metadata {
+      type 'Flow'
+      tech 'main stack → sar stack'
+      role 'One export object, one download link good for seven days, one record of it.'
+      sourceId 'sar'
+      order '0'
+      x '40'
+      y '30'
+      w '650'
+      h '914'
+      boundary 'soft'
+    }
+
+    rights_sarcaller = internal '1. FLEX · POST /v1/sar' {
+      #request-path
+      description 'requesting-service headers'
+      link https://github.com/govuk-once/user-data-platform/blob/main/libs/utils/schemas/routes/routes.ts 'routes.ts'
+      metadata {
+        type 'Consumer request'
+        tech 'SigV4 · write permission'
+        role 'Made on the person\'s behalf; UDP records which service asked.'
+        sourceId 'sarcaller'
+        order '1'
+        x '64'
+        y '80'
+        w '262'
+        h '62'
+        ownership 'govuk'
+      }
+    }
+
+    rights_startsar = platform '2. startSar' {
+      #request-path
+      description '202 · { sarID }'
+      link https://github.com/govuk-once/user-data-platform/blob/main/src/startSarLambda/handler.ts 'startSarLambda/handler.ts'
+      metadata {
+        type 'AWS::Lambda::Function'
+        tech 'main stack'
+        role 'Mints a <code>sarID</code>, puts the request on the queue, and answers before anything is read.'
+        sourceId 'startsar'
+        order '2'
+        x '64'
+        y '210'
+        w '262'
+        h '62'
+        ownership 'udp'
+        awsIcon 'lambda'
+      }
+    }
+
+    rights_sarqueue = platform '3. SAR queue' {
+      #request-path
+      description 'KMS-encrypted'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/stacks/main-stack.ts 'main-stack.ts'
+      metadata {
+        type 'AWS::SQS::Queue'
+        tech 'main stack'
+        role 'Holds the request until the export function takes it, one at a time.'
+        sourceId 'sarqueue'
+        order '3'
+        x '64'
+        y '340'
+        w '262'
+        h '62'
+        ownership 'udp'
+      }
+    }
+
+    rights_createsar = platform '4. createSarFile' {
+      #request-path
+      description 'reads both tables'
+      link https://github.com/govuk-once/user-data-platform/blob/main/src/createSarFileLambda/handler.ts 'createSarFileLambda/handler.ts'
+      metadata {
+        type 'AWS::Lambda::Function'
+        tech 'sar stack · batch 1'
+        role 'Resolves the identity, collects every data record under the <code>udpId</code>, drops <code>pk</code>, <code>sk</code> and <code>ttl</code> from each, and writes one object.'
+        facts [
+          'An export that fails is sent to the file dead-letter queue by the function itself, with the error.'
+        ]
+        sourceId 'createsar'
+        order '4'
+        x '64'
+        y '470'
+        w '262'
+        h '62'
+        ownership 'udp'
+        awsIcon 'lambda'
+      }
+    }
+
+    rights_sardlq = platform 'SAR file dead-letter queue' {
+      #off-request-path
+      description 'nothing consumes it'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/stacks/sar-stack.ts 'sar-stack.ts'
+      metadata {
+        type 'AWS::SQS::Queue'
+        tech 'sar stack'
+        role 'Where a failed export goes. No function, alarm or runbook in the repository reads it.'
+        sourceId 'sardlq'
+        order '5'
+        x '410'
+        y '470'
+        w '262'
+        h '62'
+        ownership 'udp'
+      }
+    }
+
+    rights_bucket = platform '5. SAR bucket' {
+      #request-path
+      description 'govuk-udpsar-bucket-{env}'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/s3-construct.ts 's3-construct.ts'
+      metadata {
+        type 'AWS::S3::Bucket'
+        tech 'KMS · versioned · 90-day expiry'
+        role 'The export lives here for 90 days and then expires by lifecycle rule.'
+        sourceId 'bucket'
+        order '6'
+        x '64'
+        y '600'
+        w '262'
+        h '62'
+        ownership 'udp'
+        awsIcon 's3'
+      }
+    }
+
+    rights_presign = platform '6. generateSarPresignedUrl' {
+      #request-path
+      description 'on OBJECT_CREATED'
+      link https://github.com/govuk-once/user-data-platform/blob/main/src/generateSarPresignedUrlLambda/handler.ts 'generateSarPresignedUrlLambda/handler.ts'
+      metadata {
+        type 'AWS::Lambda::Function'
+        tech 'sar stack · S3 notification'
+        role 'Signs a GET URL that expires in 7 days and records it against the request, with a <code>ttl</code> matching the object\'s 90 days.'
+        sourceId 'presign'
+        order '7'
+        x '64'
+        y '730'
+        w '262'
+        h '62'
+        ownership 'udp'
+        awsIcon 'lambda'
+      }
+    }
+
+    rights_record = platform '7. SAR record' {
+      #request-path
+      description 'pk udpId · sk SAR/{sarId}'
+      link https://github.com/govuk-once/user-data-platform/blob/main/libs/data-access/services/SarService.ts 'SarService.ts'
+      link https://github.com/govuk-once/user-data-platform/blob/main/libs/data-access/factory/ServiceFactory.ts 'ServiceFactory.ts'
+      metadata {
+        type 'DynamoDB item · data table'
+        tech 'presignedURL envelope-encrypted'
+        role 'The link and its <code>expiresAt</code>, in the same table as the person\'s data, under the same key.'
+        sourceId 'record'
+        order '8'
+        x '64'
+        y '860'
+        w '262'
+        h '62'
+        ownership 'udp'
+        awsIcon 'dynamodb'
+      }
+    }
+
+    rights_statuscaller = internal '8. FLEX · GET /v1/sar/{sarId}' {
+      #request-path
+      description 'polls for the link'
+      link https://github.com/govuk-once/user-data-platform/blob/main/libs/utils/schemas/routes/routes.ts 'routes.ts'
+      metadata {
+        type 'Consumer request'
+        tech 'SigV4 · read permission'
+        role 'Nothing tells the consumer the export is ready; it asks.'
+        sourceId 'statuscaller'
+        order '9'
+        x '410'
+        y '730'
+        w '262'
+        h '62'
+        ownership 'govuk'
+      }
+    }
+
+    rights_status = platform '9. getSarStatus' {
+      #request-path
+      description '200 · url · expiresAt · 404'
+      link https://github.com/govuk-once/user-data-platform/blob/main/src/getSarStatusLambda/handler.ts 'getSarStatusLambda/handler.ts'
+      metadata {
+        type 'AWS::Lambda::Function'
+        tech 'main stack'
+        role 'Reads the record under the caller\'s own <code>udpId</code>, so one person cannot fetch another\'s link; 404 until the record exists.'
+        sourceId 'status'
+        order '10'
+        x '410'
+        y '860'
+        w '262'
+        h '62'
+        ownership 'udp'
+        awsIcon 'lambda'
+      }
+    }
+  }
+
+  rights_dsar = boundary 'DSAR · erase everything' {
+    metadata {
+      type 'Flow'
+      tech 'main stack → sar stack'
+      role 'Paged deletion of the person\'s records, then of the links that identify them.'
+      sourceId 'dsar'
+      order '0'
+      x '730'
+      y '30'
+      w '650'
+      h '914'
+      boundary 'soft'
+    }
+
+    rights_dsarcaller = internal '1. FLEX · POST /v1/dsar' {
+      #request-path
+      description 'requesting-service headers'
+      link https://github.com/govuk-once/user-data-platform/blob/main/libs/utils/schemas/routes/routes.ts 'routes.ts'
+      metadata {
+        type 'Consumer request'
+        tech 'SigV4 · write permission'
+        role 'A deletion needs <code>write</code>, not <code>delete</code>: the route is a POST.'
+        sourceId 'dsarcaller'
+        order '1'
+        x '754'
+        y '80'
+        w '262'
+        h '62'
+        ownership 'govuk'
+      }
+    }
+
+    rights_startdsar = platform '2. startDsar' {
+      #request-path
+      description '202 · { dsarID }'
+      link https://github.com/govuk-once/user-data-platform/blob/main/src/startDsarLambda/handler.ts 'startDsarLambda/handler.ts'
+      metadata {
+        type 'AWS::Lambda::Function'
+        tech 'main stack'
+        role 'Mints a <code>dsarID</code> and queues the request. There is no status route for a deletion.'
+        sourceId 'startdsar'
+        order '2'
+        x '754'
+        y '210'
+        w '262'
+        h '62'
+        ownership 'udp'
+        awsIcon 'lambda'
+      }
+    }
+
+    rights_dsarqueue = platform '3. DSAR queue' {
+      #request-path
+      description 'KMS-encrypted'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/stacks/main-stack.ts 'main-stack.ts'
+      metadata {
+        type 'AWS::SQS::Queue'
+        tech 'main stack'
+        role 'One request per message.'
+        sourceId 'dsarqueue'
+        order '3'
+        x '754'
+        y '340'
+        w '262'
+        h '62'
+        ownership 'udp'
+      }
+    }
+
+    rights_dsarrequest = platform '4. dsarRequest' {
+      #request-path
+      description 'pages of 100 keys'
+      link https://github.com/govuk-once/user-data-platform/blob/main/src/dsarRequestLambda/handler.ts 'dsarRequestLambda/handler.ts'
+      link https://github.com/govuk-once/user-data-platform/blob/main/libs/data-access/services/DynamoDbDataService.ts 'DynamoDbDataService.ts'
+      metadata {
+        type 'AWS::Lambda::Function'
+        tech 'sar stack · batch 1'
+        role 'Resolves the identity, counts the records, then walks their keys a page at a time and sends each page onward.'
+        facts [
+          'A person with no records is logged and dropped: nothing then deletes their identity links.'
+        ]
+        sourceId 'dsarrequest'
+        order '4'
+        x '754'
+        y '470'
+        w '262'
+        h '62'
+        ownership 'udp'
+        awsIcon 'lambda'
+      }
+    }
+
+    rights_deletequeue = platform '5. DSAR delete queue' {
+      #request-path
+      description 'maxReceiveCount 3'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/stacks/sar-stack.ts 'sar-stack.ts'
+      metadata {
+        type 'AWS::SQS::Queue'
+        tech 'sar stack'
+        role 'One message per page. A page that fails three times lands in the dead-letter queue.'
+        sourceId 'deletequeue'
+        order '5'
+        x '754'
+        y '600'
+        w '262'
+        h '62'
+        ownership 'udp'
+      }
+    }
+
+    rights_deletedlq = platform 'Delete dead-letter queue' {
+      #off-request-path
+      description 'nothing consumes it'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/stacks/sar-stack.ts 'sar-stack.ts'
+      metadata {
+        type 'AWS::SQS::Queue'
+        tech 'sar stack'
+        role 'A page that could not be deleted. No function, alarm or runbook in the repository reads it.'
+        sourceId 'deletedlq'
+        order '6'
+        x '1100'
+        y '600'
+        w '262'
+        h '62'
+        ownership 'udp'
+      }
+    }
+
+    rights_dsardelete = platform '6. dsarDelete' {
+      #request-path
+      description 'data, then identity'
+      link https://github.com/govuk-once/user-data-platform/blob/main/src/dsarDeleteLambda/handler.ts 'dsarDeleteLambda/handler.ts'
+      link https://github.com/govuk-once/user-data-platform/blob/main/libs/data-access/services/DynamoDbIdentityService.ts 'DynamoDbIdentityService.ts'
+      metadata {
+        type 'AWS::Lambda::Function'
+        tech 'sar stack · batch 1'
+        role 'Deletes every key in the page, a missing one logged as a warning, then <code>deleteAllByUdpId</code> on the identity table.'
+        facts [
+          'The identity delete runs on every page, not only the last — the links are gone after the first page lands.'
+        ]
+        sourceId 'dsardelete'
+        order '7'
+        x '754'
+        y '730'
+        w '262'
+        h '62'
+        ownership 'udp'
+        awsIcon 'lambda'
+      }
+    }
+
+    rights_tables = platform '7. Both tables' {
+      #request-path
+      description 'udp-data · udp-identity'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/dynamodb-construct.ts 'dynamodb-construct.ts'
+      metadata {
+        type 'AWS::DynamoDB::Table ×2'
+        tech 'point-in-time recovery on'
+        role 'What is erased. Point-in-time recovery and, outside development, AWS Backup keep copies for their own retention windows.'
+        sourceId 'tables'
+        order '8'
+        x '754'
+        y '860'
+        w '262'
+        h '62'
+        ownership 'udp'
+        awsIcon 'dynamodb'
+      }
+    }
+  }
+
+  rights_sarcaller -> rights_startsar 'AWS_PROXY' {
+    metadata { protocol 'Private API · Lambda proxy' auth 'IAM · write permission' carries 'The two headers' order '1' }
+  }
+  rights_startsar -> rights_sarqueue 'SendMessage' {
+    metadata { protocol 'SQS' auth 'Function role' carries '{ sarID, requestingService, requestingServiceUserId }' order '2' }
+  }
+  rights_sarqueue -> rights_createsar 'event source' {
+    metadata { protocol 'SQS event source · batch 1' auth 'Function role' carries 'One request' order '3' }
+  }
+  rights_createsar -> rights_sardlq 'on failure' {
+    metadata { protocol 'SQS' auth 'Function role: SendMessage' carries 'The request and the error' edgeStyle 'dash' order '4' }
+  }
+  rights_createsar -> rights_bucket 'PutObject' {
+    metadata { protocol 'S3 over the gateway endpoint' auth 'Function role: write' carries 'The export, KMS-encrypted at rest' order '5' }
+  }
+  rights_bucket -> rights_presign 'OBJECT_CREATED' {
+    metadata { protocol 'S3 event notification' auth 'Bucket\'s invoke permission' carries 'The object key' order '6' }
+  }
+  rights_presign -> rights_record 'PutItem' {
+    metadata { protocol 'DynamoDB' auth 'Function role; KMS for the URL field' carries 'presignedURL · expiresAt · ttl' order '7' }
+  }
+  rights_statuscaller -> rights_status 'AWS_PROXY' {
+    metadata { protocol 'Private API · Lambda proxy' auth 'IAM · read permission' carries 'sarId in the path, the two headers' order '8' }
+  }
+  rights_status -> rights_record 'GetItem' {
+    metadata { protocol 'DynamoDB' auth 'Function role; KMS to decrypt the URL' carries 'The record, or nothing' order '9' }
+  }
+  rights_dsarcaller -> rights_startdsar 'AWS_PROXY' {
+    metadata { protocol 'Private API · Lambda proxy' auth 'IAM · write permission' carries 'The two headers' order '10' }
+  }
+  rights_startdsar -> rights_dsarqueue 'SendMessage' {
+    metadata { protocol 'SQS' auth 'Function role' carries '{ dsarID, requestingService, requestingServiceUserId }' order '11' }
+  }
+  rights_dsarqueue -> rights_dsarrequest 'event source' {
+    metadata { protocol 'SQS event source · batch 1' auth 'Function role' carries 'One request' order '12' }
+  }
+  rights_dsarrequest -> rights_deletequeue 'SendMessage per page' {
+    metadata { protocol 'SQS' auth 'Function role' carries 'Up to 100 { pk, sk } keys and the udpId' order '13' }
+  }
+  rights_deletequeue -> rights_deletedlq 'redrive' {
+    metadata { protocol 'SQS redrive, after the third failed receive' auth '—' carries 'The page that failed' edgeStyle 'dash' order '14' }
+  }
+  rights_deletequeue -> rights_dsardelete 'event source' {
+    metadata { protocol 'SQS event source · batch 1' auth 'Function role' carries 'One page' order '15' }
+  }
+  rights_dsardelete -> rights_tables 'DeleteItem · Query + Delete' {
+    metadata { protocol 'DynamoDB' auth 'Function role on both tables' carries 'The keys, then every link for the udpId' order '16' }
+  }
+}
+
+views {
+  view rights {
+    title 'Rights requests'
+    include rights_sar, rights_sar.**
+    include rights_dsar, rights_dsar.**
+  }
+}

@@ -8,15 +8,8 @@
     "page": "index.html",
     "url": "https://govuk-once.github.io/architecture-docs/"
   },
-  "projects": ["flex", "app"],
+  "projects": ["flex", "app", "udp"],
   "planned": [
-    {
-      "id": "udp",
-      "name": "UDP",
-      "tagline": "GOV.UK Once · user data",
-      "blurb": "System of record for identity links, user records, notification preferences and group subscriptions. Described here only as FLEX sees it; nothing has been read from UDP’s own repository yet.",
-      "seenFrom": "flex"
-    },
     {
       "id": "uns",
       "name": "UNS",

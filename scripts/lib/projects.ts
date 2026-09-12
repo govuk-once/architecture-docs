@@ -104,6 +104,17 @@ export interface SynthContract {
   cwd: string;
   command: string[];
   env: Record<string, string>;
+  /**
+   * CDK context handed to the app per stage, `{stage}` and `{id}` filled as in `env` — for
+   * an app that picks its environment with `-c env=…` rather than from a variable.
+   */
+  context?: Record<string, string>;
+  /**
+   * A command run once in the checkout before any stage synthesises — the source's own
+   * build, for an app whose functions are loaded from a build directory it expects to
+   * exist. `cwd` is relative to the checkout; the command is an argv array.
+   */
+  prepare?: { cwd: string; command: string[] };
   output: string;
 }
 
@@ -335,6 +346,10 @@ export function validateConfig(id: string, raw: unknown): ProjectConfig {
       throw new Error(`projects/${id}: synth.command must be an argv array`);
     if (!synth.cwd || !synth.output)
       throw new Error(`projects/${id}: synth needs cwd and output`);
+    if (synth.prepare && (!synth.prepare.cwd || !synth.prepare.command.length))
+      throw new Error(
+        `projects/${id}: synth.prepare needs a cwd and an argv command`,
+      );
     for (const st of cfg.stages)
       if (st.synth !== undefined && !st.synth)
         throw new Error(

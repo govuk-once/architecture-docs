@@ -1,0 +1,188 @@
+// UDP architecture — Context.
+//
+// The model. Presentation that a LikeC4 view cannot hold — tab order, audience,
+// reference tables — is in views.json beside this file.
+
+model {
+
+  context_user = actor 'App user' {
+    #request-path
+    description 'the data subject'
+    link https://github.com/govuk-once/user-data-platform/blob/main/libs/utils/schemas/routes/routes.ts 'routes.ts'
+    metadata {
+      type 'Person'
+      tech '—'
+      role 'The person whose record this is. Never a direct caller: everything reaches UDP through FLEX.'
+      facts [
+        'A subject access request and a deletion request are routes on this API — <code>POST /v1/sar</code> and <code>POST /v1/dsar</code> — made on the person\'s behalf by a consumer.'
+      ]
+      sourceId 'user'
+      order '1'
+      x '64'
+      y '30'
+      w '200'
+      h '62'
+      ownership 'person'
+    }
+  }
+
+  context_govukonce = boundary 'GOV.UK Once' {
+    metadata {
+      type 'Ownership boundary'
+      tech '—'
+      role 'Every caller of UDP is a sibling system inside the programme, in its own AWS account, reaching a private API over a VPC endpoint.'
+      facts [
+        'Nothing outside GOV.UK Once calls UDP. It holds a link record for DVLA, but DVLA never talks to it — the link is made through FLEX.',
+        'The consumers a deployment admits are an SSM parameter in UDP\'s account, not code: the committed development context names two, <code>flex</code> and <code>gdsuns</code>, each with an account id and a VPC endpoint id.'
+      ]
+      sourceId 'govukonce'
+      order '0'
+      x '40'
+      y '150'
+      w '760'
+      h '264'
+      boundary 'hard'
+    }
+
+    context_app = internal 'GOV.UK App' {
+      #request-path
+      description 'mobile client'
+      link https://github.com/govuk-once/user-data-platform/blob/main/libs/utils/schemas/endpoints/data/defaults.ts 'data/defaults.ts'
+      metadata {
+        type 'GOV.UK Once system'
+        tech 'Mobile client'
+        role 'Where the person\'s requests start. Documented on its own page.'
+        facts [
+          'UDP sees the app only as a name: the header <code>requesting-service</code>, whose example value in the schema is <code>GOVUKAPP</code>, beside <code>requesting-service-user-id</code>.'
+        ]
+        sourceId 'app'
+        order '2'
+        x '64'
+        y '200'
+        w '200'
+        h '62'
+        ownership 'govuk'
+      }
+    }
+
+    context_flex = internal 'FLEX' {
+      #request-path
+      description 'GOV.UK Once · API layer'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/cdk.context.json 'cdk.context.json'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/consumer-config-construct.ts 'consumer-config-construct.ts'
+      metadata {
+        type 'GOV.UK Once system'
+        tech 'AWS · consumer of the private API'
+        role 'The consumer that carries every app request. Documented on its own page.'
+        facts [
+          'Named <code>flex</code> in the development consumer config, with <code>read</code>, <code>write</code> and <code>delete</code> and its own VPC endpoint id.',
+          'For each consumer UDP writes a secret in its own account — region, API account, API URL, the consumer role ARN, the API key — that the consumer\'s account may read. FLEX\'s udp gateway is configured with exactly that secret\'s ARN.'
+        ]
+        sourceId 'flex'
+        order '3'
+        x '64'
+        y '330'
+        w '200'
+        h '62'
+        ownership 'govuk'
+      }
+    }
+
+    context_uns = internal 'UNS' {
+      #request-path
+      description 'notifications'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/cdk.context.json 'cdk.context.json'
+      metadata {
+        type 'GOV.UK Once system'
+        tech 'AWS · consumer of the private API'
+        role 'The second consumer the development context names, as <code>gdsuns</code>.'
+        facts [
+          'Same three permissions and its own VPC endpoint id. What it calls is not in this repository; UNS\'s page is planned.'
+        ]
+        sourceId 'uns'
+        order '4'
+        x '480'
+        y '200'
+        w '200'
+        h '62'
+        ownership 'govuk'
+      }
+    }
+
+    context_udp = platform 'UDP' {
+      #request-path
+      description 'software system in scope'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/bin/app.ts 'cdk/bin/app.ts'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/api-gateway-construct.ts 'api-gateway-construct.ts'
+      link https://github.com/govuk-once/user-data-platform/blob/main/README.md 'README.md'
+      metadata {
+        type 'Software system · in scope'
+        tech 'AWS · TypeScript · serverless · one VPC'
+        role 'Keeps one record per person — a <code>udpId</code> — the links from each service\'s own identifier to it, the data services store against it, and the requests to export or erase all of it.'
+        facts [
+          'Thirteen routes on one private REST API, each an IAM-authorised Lambda in an isolated subnet, over two DynamoDB tables.',
+          'Eight stacks per environment: VPC, main, SAR, DVLA pilot, monitoring, Macie; backup outside development; end-to-end and performance test stacks outside production.',
+          'The README says no Cognito or OAuth credentials are involved and access is cross-account IAM. The OpenAPI file still declares a Cognito bearer scheme; nothing enforces one.'
+        ]
+        sourceId 'udp'
+        order '5'
+        x '480'
+        y '330'
+        w '262'
+        h '62'
+        ownership 'udp'
+      }
+    }
+  }
+
+  context_user -> context_app 'uses' {
+    metadata {
+      protocol '—'
+      auth '—'
+      carries 'Everything the person does'
+      order '1'
+    }
+  }
+  context_app -> context_flex 'HTTPS + JWT' {
+    metadata {
+      protocol 'HTTPS'
+      auth 'Cognito access token, verified by FLEX'
+      carries '/app/udp/v1/… requests'
+      facts [
+        'FLEX turns the token into the two headers UDP reads. UDP never sees the token.'
+      ]
+      order '2'
+    }
+  }
+  context_flex -> context_udp 'SigV4 over a VPC endpoint' {
+    link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/iam-consumer-construct.ts 'iam-consumer-construct.ts'
+    link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/api-gateway-construct.ts 'api-gateway-construct.ts'
+    metadata {
+      protocol 'HTTPS to a private API, through the consumer\'s execute-api endpoint'
+      auth 'An assumed consumer role, SigV4; the API\'s resource policy admits only listed endpoints'
+      carries 'Users, identity links and exchanges, data under /v1/{resourcePath+}, SAR and DSAR requests'
+      facts [
+        'The consumer role may invoke <code>GET</code> for <code>read</code>, <code>POST</code>, <code>PUT</code> and <code>PATCH</code> for <code>write</code>, <code>DELETE</code> for <code>delete</code> — on every path. Nothing scopes a consumer to a resource.',
+        'FLEX\'s udp gateway also calls <code>/v1/notifications</code> and <code>/v1/groups</code>, which are not routes here: they are resource paths on the generic data API.'
+      ]
+      order '3'
+    }
+  }
+  context_uns -> context_udp 'SigV4 over a VPC endpoint' {
+    link https://github.com/govuk-once/user-data-platform/blob/main/cdk/cdk.context.json 'cdk.context.json'
+    metadata {
+      protocol 'HTTPS to the private API'
+      auth 'The gdsuns consumer role'
+      carries 'Not stated in this repository'
+      order '4'
+    }
+  }
+}
+
+views {
+  view context {
+    title 'Context'
+    include context_user
+    include context_govukonce, context_govukonce.**
+  }
+}

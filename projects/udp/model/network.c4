@@ -1,0 +1,295 @@
+// UDP architecture — Network.
+//
+// The one VPC per environment, its three subnet tiers, and the endpoints that are the only
+// way out of the isolated tier. Traffic runs top to bottom: the API invokes a function in
+// the isolated tier, and everything the function reaches is an endpoint beside it.
+
+model {
+
+  network_api = platform 'Private REST API' {
+    #request-path
+    description 'not in the VPC · reached by endpoint'
+    link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/api-gateway-construct.ts 'api-gateway-construct.ts'
+    metadata {
+      type 'AWS::ApiGateway::RestApi'
+      tech 'PRIVATE endpoint type'
+      role 'A regional service, not a VPC resource: a private API has no public DNS answer and accepts calls only through execute-api endpoints its policy lists.'
+      facts [
+        'UDP\'s own VPC also has an execute-api endpoint — that is how the end-to-end tests in CodeBuild reach the API.'
+      ]
+      sourceId 'api'
+      order '1'
+      x '188'
+      y '30'
+      w '292'
+      h '62'
+      ownership 'udp'
+      awsIcon 'apigateway'
+    }
+  }
+
+  network_vpc = boundary 'VPC · {env}-vpc' {
+    metadata {
+      type 'AWS::EC2::VPC'
+      tech '10.0.0.0/16 · 2 AZs · vpc-construct.ts'
+      role 'One per environment, shared by every pull-request deployment in it. Six /24 subnets: two per tier across two availability zones.'
+      facts [
+        'Can be deployed alone first: a <code>skipMainStack</code> context flag leaves every other stack out of the app.',
+        'DNS support and hostnames are on, so the interface endpoints answer the services\' own names.'
+      ]
+      sourceId 'vpc'
+      order '0'
+      x '40'
+      y '150'
+      w '1380'
+      h '570'
+      boundary 'hard'
+    }
+
+    network_isolated = boundary 'private isolated · 2 subnets' {
+      metadata {
+        type 'Subnet tier'
+        tech 'PRIVATE_ISOLATED · /24'
+        role 'No route out at all. Every Lambda is placed here by default.'
+        sourceId 'isolated'
+        order '0'
+        x '164'
+        y '200'
+        w '340'
+        h '134'
+        boundary 'soft'
+      }
+
+      network_lambdas = platform 'Lambda functions' {
+        #request-path
+        description 'ENIs in both AZs'
+        link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/lambda-construct.ts 'lambda-construct.ts'
+        link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/vpc-construct.ts 'vpc-construct.ts'
+        metadata {
+          type 'AWS::Lambda::Function · VpcConfig'
+          tech 'lambda security group'
+          role 'Every function in main, sar and dvla-pilot. Their security group allows egress on 443 to the endpoint security group and DNS to the VPC resolver, and nothing else.'
+          sourceId 'lambdas'
+          order '1'
+          x '188'
+          y '250'
+          w '292'
+          h '62'
+          ownership 'udp'
+          resources [ 'subnets' ]
+          awsIcon 'lambda'
+        }
+      }
+    }
+
+    network_egress = boundary 'private with egress · 2 subnets' {
+      metadata {
+        type 'Subnet tier'
+        tech 'PRIVATE_WITH_EGRESS · /24'
+        role 'Routes to the NAT gateway. Only the test CodeBuild projects run here.'
+        sourceId 'egress'
+        order '0'
+        x '164'
+        y '380'
+        w '340'
+        h '134'
+        boundary 'soft'
+      }
+
+      network_codebuild = platform 'CodeBuild · e2e and perf' {
+        #off-request-path
+        description 'outside production'
+        link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/codebuild-e2e-construct.ts 'codebuild-e2e-construct.ts'
+        link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/codebuild-perf-construct.ts 'codebuild-perf-construct.ts'
+        metadata {
+          type 'AWS::CodeBuild::Project ×2'
+          tech 'codebuild security group · all outbound'
+          role 'Installs packages and k6 from the internet through the NAT, then calls the private API through the VPC\'s own execute-api endpoint.'
+          sourceId 'codebuild'
+          order '1'
+          x '188'
+          y '430'
+          w '292'
+          h '62'
+          ownership 'udp'
+        }
+      }
+  }
+
+      network_public = boundary 'public · 2 subnets' {
+        metadata {
+          type 'Subnet tier'
+          tech 'PUBLIC · /24'
+          role 'Holds the one NAT gateway and nothing else.'
+          sourceId 'public'
+          order '0'
+          x '164'
+          y '560'
+          w '340'
+          h '134'
+          boundary 'soft'
+        }
+
+        network_nat = platform 'NAT gateway · 1' {
+          #off-request-path
+          description '"single nat gateway for e2e tests"'
+          link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/vpc-construct.ts 'vpc-construct.ts'
+          metadata {
+            type 'AWS::EC2::NatGateway'
+            tech 'one, in one AZ'
+            role 'The only way to the internet, and only for the egress tier. One is a cost decision the code comments on; it is also a single point of failure for the tests.'
+            sourceId 'nat'
+            order '1'
+            x '188'
+            y '610'
+            w '292'
+            h '62'
+            ownership 'udp'
+            resources [ 'nat' ]
+            awsIcon 'vpc-nat'
+          }
+        }
+    }
+
+    network_endpoints = platform 'VPC endpoints · 10' {
+      #request-path
+      description '2 gateway · 8 interface'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/vpc-construct.ts 'vpc-construct.ts'
+      metadata {
+        type 'AWS::EC2::VPCEndpoint ×10'
+        tech 'endpoint security group · 443 from the Lambda group'
+        role 'The isolated tier\'s only way out. DynamoDB and S3 are gateway endpoints — a route, no ENI, no security group. KMS, SQS, Secrets Manager, CloudWatch Logs, execute-api, CodeBuild, ECR API and Cognito IdP are interface endpoints with an ENI in each private subnet.'
+        facts [
+          'The KMS endpoint is what makes envelope encryption possible from an isolated subnet.',
+          'Nothing in the code calls Cognito; its endpoint is provisioned anyway.'
+        ]
+        sourceId 'endpoints'
+        order '2'
+        x '580'
+        y '250'
+        w '292'
+        h '62'
+        ownership 'udp'
+        resources [ 'vpc-endpoints' ]
+        awsIcon 'vpc-endpoint'
+      }
+    }
+
+    network_internet = external 'Internet' {
+      #off-request-path
+      description 'package registries · GitHub'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/buildspec-perf.yml 'buildspec-perf.yml'
+      metadata {
+        type 'Outside'
+        tech 'via the internet gateway'
+        role 'What the test builds fetch: pnpm packages and the k6 binary.'
+        sourceId 'internet'
+        order '4'
+        x '580'
+        y '610'
+        w '292'
+        h '62'
+        ownership 'third'
+      }
+    }
+
+    network_sgs = platform 'Security groups · 3' {
+      #off-request-path
+      description 'lambda · endpoint · codebuild'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/vpc-construct.ts 'vpc-construct.ts'
+      metadata {
+        type 'AWS::EC2::SecurityGroup ×3'
+        tech 'lambda: no default outbound'
+        role 'The Lambda group may reach the endpoint group on 443 and the VPC on 53; the endpoint group admits the Lambda group; the CodeBuild group allows all outbound.'
+        facts [
+          'The Lambda group also has ingress rules — 443 from anywhere, DNS from the VPC — that nothing can use: a function ENI accepts no inbound connections.'
+        ]
+        sourceId 'sgs'
+        order '5'
+        x '1094'
+        y '250'
+        w '292'
+        h '62'
+        ownership 'udp'
+        resources [ 'sgs' ]
+        awsIcon 'vpc'
+      }
+    }
+
+    network_nacls = platform 'Network ACLs · 2' {
+      #off-request-path
+      description 'deny SSH and RDP, allow the rest'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/vpc-construct.ts 'vpc-construct.ts'
+      metadata {
+        type 'AWS::EC2::NetworkAcl ×2'
+        tech 'private tiers · public tier'
+        role 'Both deny inbound 22 and 3389 from anywhere ahead of an allow-all. The public one allows inbound from the VPC CIDR at 100 and everything else at 110 — outside production only.'
+        facts [
+          'In production the public ACL has only its two deny rules, so the public tier passes nothing. Nothing there needs to: the test projects that use the NAT do not deploy to production.'
+        ]
+        sourceId 'nacls'
+        order '6'
+        x '1094'
+        y '430'
+        w '292'
+        h '62'
+        ownership 'udp'
+        resources [ 'nacls', 'nacl-entries' ]
+        awsIcon 'vpc'
+      }
+    }
+
+    network_flowlog = platform 'VPC flow log' {
+      #off-request-path
+      description 'to CloudWatch Logs'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/vpc-construct.ts 'vpc-construct.ts'
+      metadata {
+        type 'AWS::EC2::FlowLog'
+        tech 'own log group'
+        role 'Every accepted and rejected flow in the VPC, kept for the environment\'s log retention.'
+        sourceId 'flowlog'
+        order '7'
+        x '1094'
+        y '610'
+        w '292'
+        h '62'
+        ownership 'udp'
+        resources [ 'flow-logs' ]
+        awsIcon 'cloudwatch'
+      }
+    }
+  }
+
+  network_api -> network_lambdas 'invoke' {
+    metadata {
+      protocol 'Lambda service invocation — the API does not enter the VPC'
+      auth 'The API\'s invoke permission on each function'
+      carries 'The request event'
+      order '1'
+    }
+  }
+  network_lambdas -> network_endpoints 'endpoints' {
+    metadata {
+      protocol 'HTTPS: a route-table prefix list for DynamoDB and S3, an endpoint ENI in the same subnet for the rest'
+      auth 'Function role; the endpoint security group admits the Lambda group on 443'
+      carries 'Every table read and write, the SAR export, data keys, queue messages, the purge key, log lines'
+      order '2'
+    }
+  }
+  network_nat -> network_internet 'egress' {
+    metadata {
+      protocol 'NAT to the internet gateway'
+      auth '—'
+      carries 'Package and binary downloads for the test builds'
+      order '5'
+    }
+  }
+}
+
+views {
+  view network {
+    title 'Network'
+    include network_api
+    include network_vpc, network_vpc.**
+  }
+}

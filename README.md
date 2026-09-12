@@ -5,11 +5,12 @@
 The architectures of the GOV.UK Once platforms, each documented as one interactive page and
 derived from that platform's own code rather than from prior design documents.
 
-| Architecture             | State                                                |
-| ------------------------ | ---------------------------------------------------- |
-| **FLEX** — `/flex/`      | Documented, nine tabs, rebuilt on every merge        |
-| **GOV.UK App** — `/app/` | Documented, nine tabs, read from four repositories   |
-| **UDP**, **UNS**         | Planned. Listed on the index, nothing read from them |
+| Architecture             | State                                               |
+| ------------------------ | --------------------------------------------------- |
+| **FLEX** — `/flex/`      | Documented, nine tabs, rebuilt on every merge       |
+| **GOV.UK App** — `/app/` | Documented, nine tabs, read from four repositories  |
+| **UDP** — `/udp/`        | Documented, nine tabs, synthesised from its CDK app |
+| **UNS**                  | Planned. Listed on the index, nothing read from it  |
 
 Each lives in a separate repository. This one holds the models, the pipeline that renders
 them, and the checks that keep them honest; it reads those repositories and never writes to

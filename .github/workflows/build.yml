@@ -40,6 +40,7 @@ env:
   FLEX_REF: main
   # All four of the GOV.UK App's sources track main.
   APP_REF: main
+  UDP_REF: main
 
 jobs:
   build:
@@ -103,6 +104,14 @@ jobs:
           path: .sources/app/config
           persist-credentials: false
 
+      - name: Checkout UDP
+        uses: actions/checkout@v5
+        with:
+          repository: govuk-once/user-data-platform
+          ref: ${{ env.UDP_REF }}
+          path: .sources/udp
+          persist-credentials: false
+
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
 
@@ -117,6 +126,13 @@ jobs:
       # its own dependencies resolvable. A project with no `synth` block needs no step here.
       - name: Install FLEX dependencies
         working-directory: .sources/flex
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      # UDP's CDK app loads every function from a build directory its own script writes,
+      # so `pnpm synth` runs that build first (`synth.prepare` in its config); the install
+      # here is what that build and the app need.
+      - name: Install UDP dependencies
+        working-directory: .sources/udp
         run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Install dependencies

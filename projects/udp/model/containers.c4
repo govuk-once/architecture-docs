@@ -1,0 +1,569 @@
+// UDP architecture — Containers.
+//
+// Every separately deployable part the CDK app creates per environment, grouped by the
+// stack that owns it, and the traffic between them. The VPC stack is on Network; the
+// controls — keys, WAF, alarms, backup — are on Security. C4 level 2.
+
+model {
+
+  containers_flex = internal 'FLEX · a consumer' {
+    #request-path
+    description 'SigV4 over its VPC endpoint'
+    link https://github.com/govuk-once/user-data-platform/blob/main/cdk/cdk.context.json 'cdk.context.json'
+    metadata {
+      type 'GOV.UK Once system'
+      tech 'Assumed consumer role'
+      role 'Every request comes from a consumer named in the SSM consumer config; the development context names FLEX and UNS.'
+      sourceId 'flex'
+      order '1'
+      x '350'
+      y '30'
+      w '262'
+      h '62'
+      ownership 'govuk'
+    }
+  }
+
+  containers_main = boundary 'main stack · {env}-main' {
+    metadata {
+      type 'CloudFormation stack'
+      tech 'cdk/lib/stacks/main-stack.ts'
+      role 'The API, its thirteen route functions, both tables, the queues the rights routes write to, and everything a consumer is given.'
+      facts [
+        'Tagged with <code>ServiceName</code>, <code>TeamName</code>, <code>Environment</code> and the package version the deploy wrote.',
+        'A developer or pull-request deployment prefixes every stack name: <code>pr-123-dev-main</code>.'
+      ]
+      sourceId 'main'
+      order '0'
+      x '40'
+      y '150'
+      w '1454'
+      h '400'
+      boundary 'hard'
+    }
+
+    containers_appconfig = platform 'AppConfig feature flags' {
+      #off-request-path
+      description 'one flag · nothing reads it'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/constants/appconfig-feature-flags.ts 'appconfig-feature-flags.ts'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/appconfig-construct.ts 'appconfig-construct.ts'
+      metadata {
+        type 'AWS::AppConfig::Application'
+        tech 'hosted configuration · all-at-once strategy'
+        role 'Declares <code>enableNewIdentityFlow</code>: on in development, off in staging and production.'
+        facts [
+          'No Lambda or library in the repository reads AppConfig, so the flag changes nothing yet.'
+        ]
+        sourceId 'appconfig'
+        order '2'
+        x '64'
+        y '200'
+        w '262'
+        h '62'
+        ownership 'udp'
+        resources [ 'appconfig' ]
+      }
+    }
+
+    containers_api = platform 'Private REST API' {
+      #request-path
+      description 'api-{env} · WAF · AWS_IAM'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/api-gateway-construct.ts 'api-gateway-construct.ts'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/waf-construct.ts 'waf-construct.ts'
+      metadata {
+        type 'AWS::ApiGateway::RestApi'
+        tech 'PRIVATE endpoint · stage {env} · 100 rps, burst 200'
+        role 'Thirteen methods, every one a Lambda proxy with IAM authorisation, behind a resource policy that admits only the consumers\' VPC endpoints.'
+        facts [
+          'The regional Web ACL is associated here: a 300,000-per-IP rate rule and three AWS managed rule sets, logged to <code>aws-waf-logs-…</code>.'
+        ]
+        sourceId 'api'
+        order '3'
+        x '350'
+        y '200'
+        w '262'
+        h '62'
+        ownership 'udp'
+        resources [ 'api-routes', 'web-acl' ]
+        awsIcon 'apigateway'
+      }
+    }
+
+    containers_identityfns = platform 'Identity routes · 6 Lambdas' {
+      #request-path
+      description 'user · identity · exchange · linked'
+      link https://github.com/govuk-once/user-data-platform/blob/main/libs/utils/schemas/routes/routes.ts 'routes.ts'
+      link https://github.com/govuk-once/user-data-platform/blob/main/src/createUserLambda/handler.ts 'createUserLambda/handler.ts'
+      link https://github.com/govuk-once/user-data-platform/blob/main/src/createIdentityLambda/handler.ts 'createIdentityLambda/handler.ts'
+      metadata {
+        type 'AWS::Lambda::Function ×6'
+        tech 'nodejs24.x · 512 MB · 30 s · isolated subnet'
+        role '<code>POST /v1/user</code> mints a <code>udpId</code>; <code>POST</code>, <code>GET</code>, <code>DELETE /v1/identity/{serviceName}/{identifier}</code> manage one link; <code>/exchange</code> and <code>/linked-services</code> read across links.'
+        facts [
+          'Every function gets the same VPC placement, X-Ray tracing, a one-year log group in staging and production, and reserved concurrency of 2 in development or 50 elsewhere.'
+        ]
+        sourceId 'identityfns'
+        order '4'
+        x '64'
+        y '330'
+        w '262'
+        h '62'
+        ownership 'udp'
+        resources [ 'fn-main' ]
+        awsIcon 'lambda'
+      }
+    }
+
+    containers_datafns = platform 'Data routes · 4 Lambdas' {
+      #request-path
+      description 'POST · PATCH · GET · DELETE'
+      link https://github.com/govuk-once/user-data-platform/blob/main/libs/utils/schemas/routes/routes.ts 'routes.ts'
+      link https://github.com/govuk-once/user-data-platform/blob/main/src/postDataLambda/handler.ts 'postDataLambda/handler.ts'
+      link https://github.com/govuk-once/user-data-platform/blob/main/src/getDataLambda/handler.ts 'getDataLambda/handler.ts'
+      metadata {
+        type 'AWS::Lambda::Function ×4'
+        tech 'nodejs24.x · 512 MB · 30 s · isolated subnet'
+        role 'One method each on <code>/v1/{resourcePath+}</code>: the path is the sort key, so a consumer stores anything under any name — FLEX uses <code>notifications</code> and <code>groups</code>.'
+        facts [
+          'Each first resolves the caller\'s <code>udpId</code> from the identity table by the two request headers, then reads or writes the data table under it.'
+        ]
+        sourceId 'datafns'
+        order '5'
+        x '350'
+        y '330'
+        w '262'
+        h '62'
+        ownership 'udp'
+        resources [ 'fn-total' ]
+        awsIcon 'lambda'
+      }
+    }
+
+    containers_sarfns = platform 'SAR routes · 2 Lambdas' {
+      #request-path
+      description 'POST /v1/sar · GET /v1/sar/{sarId}'
+      link https://github.com/govuk-once/user-data-platform/blob/main/src/startSarLambda/handler.ts 'startSarLambda/handler.ts'
+      link https://github.com/govuk-once/user-data-platform/blob/main/src/getSarStatusLambda/handler.ts 'getSarStatusLambda/handler.ts'
+      metadata {
+        type 'AWS::Lambda::Function ×2'
+        tech 'nodejs24.x · 512 MB · 30 s · isolated subnet'
+        role 'Start answers <code>202</code> with a <code>sarID</code> and puts the request on the SAR queue; status reads the <code>SAR/{sarId}</code> record the pipeline writes.'
+        sourceId 'sarfns'
+        order '6'
+        x '636'
+        y '330'
+        w '262'
+        h '62'
+        ownership 'udp'
+        awsIcon 'lambda'
+      }
+    }
+
+    containers_dsarfn = platform 'DSAR route · 1 Lambda' {
+      #request-path
+      description 'POST /v1/dsar'
+      link https://github.com/govuk-once/user-data-platform/blob/main/src/startDsarLambda/handler.ts 'startDsarLambda/handler.ts'
+      metadata {
+        type 'AWS::Lambda::Function'
+        tech 'nodejs24.x · 512 MB · 30 s · isolated subnet'
+        role 'Answers <code>202</code> and puts the deletion request on the DSAR queue. Nothing is deleted on the request path.'
+        sourceId 'dsarfn'
+        order '7'
+        x '922'
+        y '330'
+        w '262'
+        h '62'
+        ownership 'udp'
+        awsIcon 'lambda'
+      }
+    }
+
+    containers_identitytable = platform 'Identity table' {
+      #request-path
+      description 'udp-identity-{env}'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/dynamodb-construct.ts 'dynamodb-construct.ts'
+      link https://github.com/govuk-once/user-data-platform/blob/main/libs/data-access/services/DynamoDbIdentityService.ts 'DynamoDbIdentityService.ts'
+      metadata {
+        type 'AWS::DynamoDB::Table'
+        tech 'on demand · CMK · PITR · GSI sk-index'
+        role '<code>pk = {service}#{serviceId}</code>, <code>sk = udpId</code>; the GSI answers "every link this person has".'
+        facts [
+          'A link may carry <code>accessToken</code>, <code>idToken</code> and <code>refreshToken</code>; those three fields are envelope-encrypted in code like the data table\'s.',
+          'Deletion protection and RETAIN outside development.'
+        ]
+        sourceId 'identitytable'
+        order '8'
+        x '64'
+        y '460'
+        w '262'
+        h '62'
+        ownership 'udp'
+        awsIcon 'dynamodb'
+      }
+    }
+
+    containers_datatable = platform 'Data table' {
+      #request-path
+      description 'udp-data-{env}'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/dynamodb-construct.ts 'dynamodb-construct.ts'
+      link https://github.com/govuk-once/user-data-platform/blob/main/libs/data-access/services/DynamoDbDataService.ts 'DynamoDbDataService.ts'
+      link https://github.com/govuk-once/user-data-platform/blob/main/libs/data-access/services/EncryptionService.ts 'EncryptionService.ts'
+      metadata {
+        type 'AWS::DynamoDB::Table'
+        tech 'on demand · CMK · PITR'
+        role '<code>pk = udpId</code>, <code>sk = resourcePath</code>, or <code>SAR/{sarId}</code> for a request record.'
+        facts [
+          'The <code>data</code> field is envelope-encrypted in code before it reaches the table — a KMS data key per item, AES-256-GCM, the wrapped key stored beside it as <code>__dataKey</code> — on top of the table\'s own CMK. The same for a SAR record\'s <code>presignedURL</code>.',
+          'Only when the function has <code>KMS_KEY_ID</code>; without it the factory stores plain text.'
+        ]
+        sourceId 'datatable'
+        order '9'
+        x '350'
+        y '460'
+        w '262'
+        h '62'
+        ownership 'udp'
+        resources [ 'tables' ]
+        awsIcon 'dynamodb'
+      }
+    }
+
+    containers_sarqueue = platform 'SAR queue' {
+      #request-path
+      description 'KMS-encrypted'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/stacks/main-stack.ts 'main-stack.ts'
+      metadata {
+        type 'AWS::SQS::Queue'
+        tech 'created in main, consumed in sar'
+        role 'Decouples the <code>202</code> from the export, which reads every record the person has.'
+        sourceId 'sarqueue'
+        order '10'
+        x '636'
+        y '460'
+        w '262'
+        h '62'
+        ownership 'udp'
+        resources [ 'queues' ]
+      }
+    }
+
+    containers_dsarqueue = platform 'DSAR queue' {
+      #request-path
+      description 'KMS-encrypted'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/stacks/main-stack.ts 'main-stack.ts'
+      metadata {
+        type 'AWS::SQS::Queue'
+        tech 'created in main, consumed in sar'
+        role 'Decouples the <code>202</code> from the deletion, which is paged and fanned out.'
+        sourceId 'dsarqueue'
+        order '11'
+        x '922'
+        y '460'
+        w '262'
+        h '62'
+        ownership 'udp'
+      }
+    }
+
+    containers_consumerrole = platform 'Consumer roles' {
+      #off-request-path
+      description '{env}-consumer-{name}-role'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/iam-consumer-construct.ts 'iam-consumer-construct.ts'
+      metadata {
+        type 'AWS::IAM::Role · one per consumer'
+        tech 'trusts the consumer account'
+        role 'What a consumer assumes to sign a request: <code>execute-api:Invoke</code> on the methods its permissions map to, on every path.'
+        facts [
+          'A <code>test</code> consumer with all three permissions is hard-coded for the end-to-end CodeBuild.'
+        ]
+        sourceId 'consumerrole'
+        order '12'
+        x '1208'
+        y '200'
+        w '262'
+        h '62'
+        ownership 'udp'
+        awsIcon 'iam'
+      }
+    }
+
+    containers_consumersecret = platform 'Consumer config secrets' {
+      #off-request-path
+      description '…/consumers/{name}/config'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/consumer-config-construct.ts 'consumer-config-construct.ts'
+      metadata {
+        type 'AWS::SecretsManager::Secret · one per consumer'
+        tech 'own KMS key · cross-account resource policy'
+        role 'Region, API account, API URL, role ARN, optional external id, API key — everything a consumer needs, readable from its own account.'
+        facts [
+          'Written as plain text into the template at synth: the values are configuration, not credentials, except the API key.'
+        ]
+        sourceId 'consumersecret'
+        order '13'
+        x '1208'
+        y '330'
+        w '262'
+        h '62'
+        ownership 'udp'
+        awsIcon 'secretsmanager'
+      }
+    }
+
+    containers_usageplan = platform 'Usage plans and API keys' {
+      #off-request-path
+      description 'one per consumer · not enforced'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/consumer-usage-plan-construct.ts 'consumer-usage-plan-construct.ts'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/lambda-construct.ts 'lambda-construct.ts'
+      metadata {
+        type 'AWS::ApiGateway::UsagePlan'
+        tech '20 rps, burst 10 by default · test: 500, burst 1,000'
+        role 'A per-consumer throttle that applies to nothing, because no method requires an API key.'
+        sourceId 'usageplan'
+        order '14'
+        x '1208'
+        y '460'
+        w '262'
+        h '62'
+        ownership 'udp'
+        resources [ 'usage-plans', 'api-keys' ]
+        awsIcon 'apigateway'
+      }
+    }
+  }
+
+  containers_dvla = boundary 'dvla-pilot stack' {
+    metadata {
+      type 'CloudFormation stack'
+      tech 'cdk/lib/stacks/dvla-pilot-stack.ts'
+      role 'One function for the DVLA pilot, with no trigger.'
+      sourceId 'dvla'
+      order '0'
+      x '1534'
+      y '150'
+      w '330'
+      h '134'
+      boundary 'hard'
+    }
+
+    containers_purge = platform 'dvla-pilot-purge' {
+      #off-request-path
+      description 'invoked by hand · purge key'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/stacks/dvla-pilot-stack.ts 'dvla-pilot-stack.ts'
+      link https://github.com/govuk-once/user-data-platform/blob/main/src/dvlaPilotPurgeLambda/handler.ts 'dvlaPilotPurgeLambda/handler.ts'
+      metadata {
+        type 'AWS::Lambda::Function'
+        tech 'no event source, schedule or route'
+        role 'Deletes every DVLA link in the identity table, if the key in the event matches the secret <code>/identity/dvla/pilot/purge-key</code>.'
+        sourceId 'purge'
+        order '1'
+        x '1558'
+        y '200'
+        w '282'
+        h '62'
+        ownership 'udp'
+        resources [ 'fn-dvla' ]
+        awsIcon 'lambda'
+      }
+    }
+  }
+
+  containers_sar = boundary 'sar stack · {env}-sar' {
+    metadata {
+      type 'CloudFormation stack'
+      tech 'cdk/lib/stacks/sar-stack.ts'
+      role 'The asynchronous halves of both rights requests: four functions, one bucket, three more queues.'
+      sourceId 'sar'
+      order '0'
+      x '300'
+      y '600'
+      w '1480'
+      h '284'
+      boundary 'hard'
+    }
+
+    containers_createsar = platform 'createSarFile' {
+      #request-path
+      description 'SQS · batch 1'
+      link https://github.com/govuk-once/user-data-platform/blob/main/src/createSarFileLambda/handler.ts 'createSarFileLambda/handler.ts'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/stacks/sar-stack.ts 'sar-stack.ts'
+      metadata {
+        type 'AWS::Lambda::Function'
+        tech 'reads both tables · writes S3'
+        role 'Collects every record the person has, strips <code>pk</code>, <code>sk</code> and <code>ttl</code>, and writes one object to the bucket; a failure goes to the file dead-letter queue.'
+        sourceId 'createsar'
+        order '1'
+        x '636'
+        y '650'
+        w '262'
+        h '62'
+        ownership 'udp'
+        resources [ 'fn-sar' ]
+        awsIcon 'lambda'
+      }
+    }
+
+    containers_dsarrequest = platform 'dsarRequest' {
+      #request-path
+      description 'SQS · batch 1'
+      link https://github.com/govuk-once/user-data-platform/blob/main/src/dsarRequestLambda/handler.ts 'dsarRequestLambda/handler.ts'
+      link https://github.com/govuk-once/user-data-platform/blob/main/libs/data-access/services/DynamoDbDataService.ts 'DynamoDbDataService.ts'
+      metadata {
+        type 'AWS::Lambda::Function'
+        tech 'pages of 100 keys'
+        role 'Resolves the <code>udpId</code>, counts the person\'s records, and sends their keys to the delete queue a page at a time.'
+        sourceId 'dsarrequest'
+        order '2'
+        x '922'
+        y '650'
+        w '262'
+        h '62'
+        ownership 'udp'
+        awsIcon 'lambda'
+      }
+    }
+
+    containers_deletequeue = platform 'DSAR delete queue' {
+      #request-path
+      description 'DLQ after 3 receives'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/stacks/sar-stack.ts 'sar-stack.ts'
+      metadata {
+        type 'AWS::SQS::Queue'
+        tech 'KMS-encrypted · own dead-letter queue'
+        role 'One message per page of keys.'
+        sourceId 'deletequeue'
+        order '3'
+        x '1208'
+        y '650'
+        w '262'
+        h '62'
+        ownership 'udp'
+      }
+    }
+
+    containers_dsardelete = platform 'dsarDelete' {
+      #request-path
+      description 'SQS · batch 1'
+      link https://github.com/govuk-once/user-data-platform/blob/main/src/dsarDeleteLambda/handler.ts 'dsarDeleteLambda/handler.ts'
+      link https://github.com/govuk-once/user-data-platform/blob/main/libs/data-access/services/DynamoDbIdentityService.ts 'DynamoDbIdentityService.ts'
+      metadata {
+        type 'AWS::Lambda::Function'
+        tech 'writes both tables'
+        role 'Deletes each key in the page from the data table, then every identity record for the <code>udpId</code> — so the person\'s links go with the last page.'
+        sourceId 'dsardelete'
+        order '4'
+        x '1494'
+        y '650'
+        w '262'
+        h '62'
+        ownership 'udp'
+        awsIcon 'lambda'
+      }
+    }
+
+    containers_bucket = platform 'SAR bucket' {
+      #request-path
+      description 'govuk-udpsar-bucket'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/s3-construct.ts 's3-construct.ts'
+      metadata {
+        type 'AWS::S3::Bucket'
+        tech 'KMS · versioned · SSL only · 90-day expiry'
+        role 'One export per request; objects expire after 90 days, access logs to a sibling bucket kept 360.'
+        facts [
+          'Named <code>govuk-udpsar-bucket-{env}</code>, with a developer or pull-request prefix in front when there is one.'
+        ]
+        sourceId 'bucket'
+        order '5'
+        x '636'
+        y '780'
+        w '262'
+        h '62'
+        ownership 'udp'
+        resources [ 'buckets' ]
+        awsIcon 's3'
+      }
+    }
+
+    containers_presign = platform 'generateSarPresignedUrl' {
+      #request-path
+      description 'S3 OBJECT_CREATED'
+      link https://github.com/govuk-once/user-data-platform/blob/main/src/generateSarPresignedUrlLambda/handler.ts 'generateSarPresignedUrlLambda/handler.ts'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/stacks/sar-stack.ts 'sar-stack.ts'
+      metadata {
+        type 'AWS::Lambda::Function'
+        tech 'S3 event notification'
+        role 'Signs a 7-day download URL for the new object and writes the <code>SAR/{sarId}</code> record with it, expiring from the table with the object at 90 days.'
+        sourceId 'presign'
+        order '6'
+        x '350'
+        y '780'
+        w '262'
+        h '62'
+        ownership 'udp'
+        awsIcon 'lambda'
+      }
+    }
+  }
+
+  containers_flex -> containers_api 'HTTPS · SigV4' {
+    metadata {
+      protocol 'HTTPS through the consumer\'s execute-api endpoint'
+      auth 'SigV4 with the consumer role; the resource policy checks the endpoint'
+      carries 'All thirteen routes'
+      order '1'
+    }
+  }
+  containers_api -> containers_identityfns 'AWS_PROXY' {
+    metadata { protocol 'Lambda proxy' auth 'Invoke permission per method' carries 'user, identity, exchange and linked-services requests' order '2' }
+  }
+  containers_api -> containers_datafns 'AWS_PROXY' {
+    metadata { protocol 'Lambda proxy' auth 'Invoke permission per method' carries 'Any /v1/{resourcePath+} request' order '3' }
+  }
+  containers_api -> containers_sarfns 'AWS_PROXY' {
+    metadata { protocol 'Lambda proxy' auth 'Invoke permission per method' carries 'Start and status' order '4' }
+  }
+  containers_api -> containers_dsarfn 'AWS_PROXY' {
+    metadata { protocol 'Lambda proxy' auth 'Invoke permission per method' carries 'A deletion request' order '5' }
+  }
+  containers_identityfns -> containers_identitytable 'DynamoDB' {
+    link https://github.com/govuk-once/user-data-platform/blob/main/libs/data-access/services/DynamoDbIdentityService.ts 'DynamoDbIdentityService.ts'
+    metadata { protocol 'DynamoDB over the gateway endpoint' auth 'Function role: table and index' carries 'Put, get, delete and query of links' order '6' }
+  }
+  containers_datafns -> containers_datatable 'DynamoDB' {
+    link https://github.com/govuk-once/user-data-platform/blob/main/libs/data-access/services/DynamoDbDataService.ts 'DynamoDbDataService.ts'
+    metadata { protocol 'DynamoDB over the gateway endpoint' auth 'Function role: table; KMS for the data key' carries 'Encrypted items under the udpId' order '7' }
+  }
+  containers_sarfns -> containers_sarqueue 'SendMessage' {
+    metadata { protocol 'SQS over the interface endpoint' auth 'Function role: SendMessage' carries 'The request, with the sarID minted for it' order '8' }
+  }
+  containers_dsarfn -> containers_dsarqueue 'SendMessage' {
+    metadata { protocol 'SQS over the interface endpoint' auth 'Function role: SendMessage' carries 'The request, with the dsarID minted for it' order '9' }
+  }
+  containers_sarqueue -> containers_createsar 'event source' {
+    metadata { protocol 'SQS event source mapping' auth 'Function role: receive and delete' carries 'One request per invocation' order '10' }
+  }
+  containers_dsarqueue -> containers_dsarrequest 'event source' {
+    metadata { protocol 'SQS event source mapping' auth 'Function role: receive and delete' carries 'One request per invocation' order '11' }
+  }
+  containers_createsar -> containers_bucket 'PutObject' {
+    metadata { protocol 'S3 over the gateway endpoint' auth 'Function role: write; the bucket key' carries 'The person\'s export' order '12' }
+  }
+  containers_bucket -> containers_presign 'OBJECT_CREATED' {
+    metadata { protocol 'S3 event notification' auth 'Bucket\'s invoke permission' carries 'The new object\'s key' order '13' }
+  }
+  containers_dsarrequest -> containers_deletequeue 'SendMessage' {
+    metadata { protocol 'SQS' auth 'Function role: SendMessage' carries 'A page of up to 100 keys' order '14' }
+  }
+  containers_deletequeue -> containers_dsardelete 'event source' {
+    metadata { protocol 'SQS event source mapping · 3 receives then DLQ' auth 'Function role: receive and delete' carries 'One page per invocation' order '15' }
+  }
+}
+
+views {
+  view containers {
+    title 'Containers'
+    include containers_flex
+    include containers_main, containers_main.**
+    include containers_dvla, containers_dvla.**
+    include containers_sar, containers_sar.**
+  }
+}

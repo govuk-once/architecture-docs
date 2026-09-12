@@ -251,26 +251,26 @@ artifact, and neither can fetch a sibling file.
 `project.config.json` holds everything true of one architecture rather than of the site or
 of the renderer. The directory name is the id: it names the URL and prefixes exported files.
 
-| Field                  | What it does                                                                                                                                                                          |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `name`                 | Short name, on the index card                                                                                                                                                         |
-| `title`, `tagline`     | The browser tab and the header brand                                                                                                                                                  |
-| `blurb`                | One paragraph on the index card: what this architecture is                                                                                                                            |
-| `repo`                 | Base URL that every `code` citation links against, with one `source`                                                                                                                  |
-| `inventoryView`        | Which view is the resource inventory — `resources` here                                                                                                                               |
-| `inventoryLabel`       | What the inventory's count line calls the things it counts — "AWS resources" here                                                                                                     |
-| `iconLabel`            | Names the service-icon control, for readers and screen readers                                                                                                                        |
-| `filterHint`           | Placeholder in the Resources filter box                                                                                                                                               |
-| `softBudget`           | How much soft geometry the render check allows this project — a ratchet, zero if unset                                                                                                |
-| `placementBudget`      | The same ratchet for CANVAS.md's placement rules: upward edges, diagonals, zone tails. Zero if unset                                                                                  |
-| `stateSoftBudget`      | The soft ratchet for the composed planned-state views, counting only what an overlay _adds_ over the as-is                                                                            |
-| `statePlacementBudget` | The placement ratchet for the same. Kept apart from the as-is numbers so neither can pay for the other                                                                                |
-| `kinds`                | The ownership kinds: `id`, `label`, and the palette `colour` each uses                                                                                                                |
-| `stages`               | The stage selector: `id`, `label`, and `facts` — the name the same stage goes by in `architecture-facts.json`. `parameters`, for a template read as written, are what it deploys with |
-| `source`               | `repo`, `ref` and `root`: the repository this documents and where its checkout lands                                                                                                  |
-| `sources`              | Or several, by the name citations use, each also with the `url` it is browsed at. Exactly one of the two                                                                              |
-| `synth`                | How to run the CDK app per stage: `cwd`, `command`, `env` with `{stage}` filled, `output`. Needed for `derive`                                                                        |
-| `derive`               | Optional. `module`, the `inputs` it reads, and `counts` — what to count in the templates. No block, no facts                                                                          |
+| Field                  | What it does                                                                                                                                                                                                      |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`                 | Short name, on the index card                                                                                                                                                                                     |
+| `title`, `tagline`     | The browser tab and the header brand                                                                                                                                                                              |
+| `blurb`                | One paragraph on the index card: what this architecture is                                                                                                                                                        |
+| `repo`                 | Base URL that every `code` citation links against, with one `source`                                                                                                                                              |
+| `inventoryView`        | Which view is the resource inventory — `resources` here                                                                                                                                                           |
+| `inventoryLabel`       | What the inventory's count line calls the things it counts — "AWS resources" here                                                                                                                                 |
+| `iconLabel`            | Names the service-icon control, for readers and screen readers                                                                                                                                                    |
+| `filterHint`           | Placeholder in the Resources filter box                                                                                                                                                                           |
+| `softBudget`           | How much soft geometry the render check allows this project — a ratchet, zero if unset                                                                                                                            |
+| `placementBudget`      | The same ratchet for CANVAS.md's placement rules: upward edges, diagonals, zone tails. Zero if unset                                                                                                              |
+| `stateSoftBudget`      | The soft ratchet for the composed planned-state views, counting only what an overlay _adds_ over the as-is                                                                                                        |
+| `statePlacementBudget` | The placement ratchet for the same. Kept apart from the as-is numbers so neither can pay for the other                                                                                                            |
+| `kinds`                | The ownership kinds: `id`, `label`, and the palette `colour` each uses                                                                                                                                            |
+| `stages`               | The stage selector: `id`, `label`, and `facts` — the name the same stage goes by in `architecture-facts.json`. `parameters`, for a template read as written, are what it deploys with                             |
+| `source`               | `repo`, `ref` and `root`: the repository this documents and where its checkout lands                                                                                                                              |
+| `sources`              | Or several, by the name citations use, each also with the `url` it is browsed at. Exactly one of the two                                                                                                          |
+| `synth`                | How to run the CDK app per stage: `cwd`, `command`, `env` with `{stage}` filled, `output`; optional `context` (per-stage CDK context) and `prepare` (the source's own build, run once first). Needed for `derive` |
+| `derive`               | Optional. `module`, the `inputs` it reads, and `counts` — what to count in the templates. No block, no facts                                                                                                      |
 
 Nothing about presentation is in here — colours live in `theme.css` — and nothing that
 duplicates a view: a resource's `from` sits on the resource. The build validates the file
@@ -735,7 +735,12 @@ project. Adding one is these things and nothing else:
    not already there, in all three theme blocks. The build tells you if you miss one.
 4. **A `synth` block and `derive.counts`, or neither.** `synth` says how to run the CDK
    app — its directory, the command as an argv array, the environment with `{stage}`
-   filled per stage, and where the templates land. `counts` says what to count in them,
+   filled per stage, and where the templates land. An app that picks its environment with
+   `-c env=…` gets it from `context` instead; an app that loads its functions from a
+   build directory names the source's own build as `prepare`, run once before any stage
+   — UDP's `pnpm build:all`, which is what its pipeline runs too. The app is also handed
+   the committed `cdk.context.json`, so a lookup gets the cached answer rather than a
+   dummy. `counts` says what to count in them,
    in a closed vocabulary: `type`, `template` and `logicalId` regexes, `hasProperty` for a
    control that is a property of a resource, `perTemplate` for
    one record per matching stack, `templatesContaining` to count stacks rather than

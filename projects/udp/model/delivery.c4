@@ -1,0 +1,531 @@
+// UDP architecture — Delivery.
+//
+// Three zones: what a pull request gets, what a merge to main ships and where it stops,
+// and the test infrastructure in the account that both use. Every step is a GitHub
+// Actions job or a CodeBuild project; read each zone top to bottom.
+
+model {
+
+  delivery_pr = boundary 'Pull request · into main' {
+    metadata {
+      type 'GitHub Actions'
+      tech 'ci.yml · pr-deploy.yml · pr-cleanup.yml'
+      role 'Every pull request is checked, deployed as its own set of stacks, tested against them, and torn down when it closes.'
+      sourceId 'pr'
+      order '0'
+      x '40'
+      y '30'
+      w '600'
+      h '654'
+      boundary 'soft'
+    }
+
+    delivery_push = internal '1. Push · git hooks' {
+      #off-request-path
+      description 'pre-commit · pre-push · commit-msg'
+      link https://github.com/govuk-once/user-data-platform/blob/main/.pre-commit-config.yaml '.pre-commit-config.yaml'
+      link https://github.com/govuk-once/user-data-platform/blob/main/git-hooks/pre-push 'git-hooks/pre-push'
+      link https://github.com/govuk-once/user-data-platform/blob/main/git-hooks/commit-msg 'git-hooks/commit-msg'
+      metadata {
+        type 'Local'
+        tech 'pre-commit framework · core.hooksPath git-hooks'
+        role 'Before a commit: secrets scan, type check, OpenAPI regeneration, format, lint. Before a push: full build, Checkov, unit tests, Semgrep. Commit messages must be conventional.'
+        facts [
+          'The hooks exit at once under <code>CI</code> or CodeBuild; the same checks run again in the workflow.'
+        ]
+        sourceId 'push'
+        order '1'
+        x '64'
+        y '80'
+        w '262'
+        h '62'
+        ownership 'udp'
+      }
+    }
+
+    delivery_validate = internal '2. validate-pr' {
+      #off-request-path
+      description 'title must be TICKET-123: …'
+      link https://github.com/govuk-once/user-data-platform/blob/main/.github/workflows/__validate-pr.yml '__validate-pr.yml'
+      metadata {
+        type 'Reusable workflow'
+        tech 'regex on the PR title · Dependabot skipped'
+        role 'Both ci.yml and pr-deploy.yml call it first; nothing else in either runs until it passes.'
+        sourceId 'validate'
+        order '2'
+        x '64'
+        y '210'
+        w '262'
+        h '62'
+        ownership 'udp'
+      }
+    }
+
+    delivery_ci = internal '3. ci' {
+      #off-request-path
+      description 'lint · build · test · scans'
+      link https://github.com/govuk-once/user-data-platform/blob/main/.github/workflows/ci.yml 'ci.yml'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/.checkov.yaml '.checkov.yaml'
+      link https://github.com/govuk-once/user-data-platform/blob/main/.semgrep-args.txt '.semgrep-args.txt'
+      metadata {
+        type 'GitHub Actions job · 60 min'
+        tech 'pnpm lint:all · build:all · test:all'
+        role 'Pre-commit hygiene, dependency review failing on high severity, at least one conventional commit, every project linted, built and unit-tested, then a synth with development credentials for Checkov and a Semgrep scan with six rule packs.'
+        facts [
+          'Checkov\'s one custom check, KMS rotation within 90 days, has Python syntax errors and cannot load; the built-in checks run.',
+          '<code>cdk-nag</code> is a dependency and is imported nowhere.'
+        ]
+        sourceId 'ci'
+        order '3'
+        x '350'
+        y '210'
+        w '262'
+        h '62'
+        ownership 'udp'
+      }
+    }
+
+    delivery_sonarpr = internal 'sonar-scan' {
+      #off-request-path
+      description 'quality gate waited on'
+      link https://github.com/govuk-once/user-data-platform/blob/main/.github/workflows/sonar-scan.yml 'sonar-scan.yml'
+      link https://github.com/govuk-once/user-data-platform/blob/main/sonar-project.properties 'sonar-project.properties'
+      metadata {
+        type 'Reusable workflow'
+        tech 'runs the unit tests again for coverage'
+        role 'Needs only validate-pr. Uploads lcov from every project, excludes <code>cdk/**</code> from coverage, and fails if the server\'s gate does within two minutes.'
+        sourceId 'sonarpr'
+        order '4'
+        x '350'
+        y '340'
+        w '262'
+        h '62'
+        ownership 'udp'
+      }
+    }
+
+    delivery_prdeploy = internal '4. pr-deploy' {
+      #off-request-path
+      description 'pr-{n}-dev-* stacks'
+      link https://github.com/govuk-once/user-data-platform/blob/main/.github/workflows/pr-deploy.yml 'pr-deploy.yml'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/bin/app.ts 'cdk/bin/app.ts'
+      metadata {
+        type 'GitHub Actions job'
+        tech 'OIDC to DEV_DEPLOYMENT_ROLE · nx cdk:deploy:dev'
+        role 'A full copy of every stack except the VPC, prefixed <code>pr-{n}-dev</code>, in the development account. Needs validate-pr, not ci: the deploy does not wait for the checks.'
+        sourceId 'prdeploy'
+        order '5'
+        x '64'
+        y '340'
+        w '262'
+        h '62'
+        ownership 'udp'
+      }
+    }
+
+    delivery_pre2e = internal '5. e2e-tests · target pr' {
+      #off-request-path
+      description 'CodeBuild · commented on the PR'
+      link https://github.com/govuk-once/user-data-platform/blob/main/.github/workflows/pr-deploy.yml 'pr-deploy.yml'
+      link https://github.com/govuk-once/user-data-platform/blob/main/e2e/project.json 'e2e/project.json'
+      metadata {
+        type 'GitHub Actions job'
+        tech 'zips the checkout to S3 · polls CodeBuild every 30 s'
+        role 'Runs the Cucumber suite in the PR\'s own e2e project against the PR\'s own API, and posts the outcome as a comment.'
+        facts [
+          'A perf smoke test starts alongside from the same job set and does not block anything.'
+        ]
+        sourceId 'pre2e'
+        order '6'
+        x '64'
+        y '470'
+        w '262'
+        h '62'
+        ownership 'udp'
+      }
+    }
+
+    delivery_cleanup = internal '6. pr-cleanup · on close' {
+      #off-request-path
+      description 'nx cdk:destroy:dev'
+      link https://github.com/govuk-once/user-data-platform/blob/main/.github/workflows/pr-cleanup.yml 'pr-cleanup.yml'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/project.json 'cdk/project.json'
+      metadata {
+        type 'GitHub Actions job'
+        tech 'cdk destroy --exclusively, by name'
+        role 'Destroys the PR\'s stacks in a fixed order. The list names a <code>-dsar</code> stack the app never creates.'
+        facts [
+          'The step id it reads the role ARN from is misspelt, so <code>CDK_DEPLOYMENT_ROLE_ARN</code> is empty during the destroy.'
+        ]
+        sourceId 'cleanup'
+        order '7'
+        x '64'
+        y '600'
+        w '262'
+        h '62'
+        ownership 'udp'
+      }
+    }
+  }
+
+  delivery_release = boundary 'Release · push to main' {
+    metadata {
+      type 'GitHub Actions'
+      tech 'release.yml → version, __deploy-env, __e2e, __perf-test'
+      role 'One workflow from a merge to production, with a GitHub environment per stage and the tests between. No manual approval is in the YAML; environment protection, if any, is configured outside the repository.'
+      sourceId 'release'
+      order '0'
+      x '676'
+      y '30'
+      w '620'
+      h '1044'
+      boundary 'soft'
+    }
+
+    delivery_merge = internal '1. Merge to main' {
+      #off-request-path
+      description 'or workflow_dispatch'
+      link https://github.com/govuk-once/user-data-platform/blob/main/.github/workflows/release.yml 'release.yml'
+      metadata {
+        type 'Trigger'
+        tech 'no concurrency group'
+        role 'Two merges in quick succession run two releases side by side; nothing serialises them.'
+        sourceId 'merge'
+        order '1'
+        x '724'
+        y '80'
+        w '262'
+        h '62'
+        ownership 'udp'
+      }
+    }
+
+    delivery_version = internal '2. version · semantic-release' {
+      #off-request-path
+      description 'tag v{x.y.z} · GitHub release'
+      link https://github.com/govuk-once/user-data-platform/blob/main/.github/workflows/version.yml 'version.yml'
+      link https://github.com/govuk-once/user-data-platform/blob/main/release.config.js 'release.config.js'
+      metadata {
+        type 'Reusable workflow'
+        tech 'conventional commits · GitHub App token'
+        role 'Works out the next version from the commits since the last tag — <code>chore</code> and <code>revert</code> count as patches — tags it, and writes release notes. Nothing is committed back: <code>package.json</code> stays at 1.25.1 while the tag is v1.56.2.'
+        sourceId 'version'
+        order '2'
+        x '724'
+        y '210'
+        w '262'
+        h '62'
+        ownership 'udp'
+      }
+    }
+
+    delivery_sonarmain = internal 'sonar-scan' {
+      #off-request-path
+      description 'in parallel with version'
+      link https://github.com/govuk-once/user-data-platform/blob/main/.github/workflows/release.yml 'release.yml'
+      metadata {
+        type 'Reusable workflow'
+        tech 'same scan as the pull request'
+        role 'deploy-dev needs both this and version.'
+        sourceId 'sonarmain'
+        order '3'
+        x '1010'
+        y '210'
+        w '262'
+        h '62'
+        ownership 'udp'
+      }
+    }
+
+    delivery_dev = internal '3. deploy-dev' {
+      #off-request-path
+      description 'dev · {version}-rc.{sha}'
+      link https://github.com/govuk-once/user-data-platform/blob/main/.github/workflows/__deploy-env.yml '__deploy-env.yml'
+      link https://github.com/govuk-once/user-data-platform/blob/main/.github/workflows/release.yml 'release.yml'
+      metadata {
+        type 'Reusable workflow · GitHub environment'
+        tech 'OIDC to DEV_DEPLOYMENT_ROLE · nx cdk:deploy:dev'
+        role 'Writes the release-candidate version into <code>package.json</code> so it lands as the <code>Version</code> tag on every stack, deploys all stacks, and reads the e2e project name back from the stack outputs.'
+        sourceId 'dev'
+        order '4'
+        x '724'
+        y '340'
+        w '262'
+        h '62'
+        ownership 'udp'
+      }
+    }
+
+    delivery_perfdev = internal 'perf-test-dev · smoke' {
+      #off-request-path
+      description 'fire and forget'
+      link https://github.com/govuk-once/user-data-platform/blob/main/.github/workflows/__perf-test.yml '__perf-test.yml'
+      metadata {
+        type 'Reusable workflow · continue-on-error'
+        tech 'starts the perf CodeBuild and returns'
+        role 'Cannot fail the release: the job does not wait for the build, and is allowed to fail anyway. A failed build publishes to the warning topic.'
+        sourceId 'perfdev'
+        order '5'
+        x '1010'
+        y '340'
+        w '262'
+        h '62'
+        ownership 'udp'
+      }
+    }
+
+    delivery_e2edev = internal '4. e2e-dev' {
+      #off-request-path
+      description 'CodeBuild · target release'
+      link https://github.com/govuk-once/user-data-platform/blob/main/.github/workflows/__e2e.yml '__e2e.yml'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/buildspec.yml 'cdk/buildspec.yml'
+      metadata {
+        type 'Reusable workflow'
+        tech 'polls until the build ends'
+        role 'The gate to staging: 49 Cucumber scenarios against the deployed development API, the one <code>@kms</code> scenario excluded.'
+        facts [
+          'The two consumer-config scenarios report themselves skipped because the stack passes no secret ARN into the build.'
+        ]
+        sourceId 'e2edev'
+        order '6'
+        x '724'
+        y '470'
+        w '262'
+        h '62'
+        ownership 'udp'
+      }
+    }
+
+    delivery_staging = internal '5. deploy-staging' {
+      #off-request-path
+      description 'environment staging · prefix stag'
+      link https://github.com/govuk-once/user-data-platform/blob/main/.github/workflows/release.yml 'release.yml'
+      metadata {
+        type 'Reusable workflow · GitHub environment'
+        tech 'OIDC to STAGING_DEPLOYMENT_ROLE · nx cdk:deploy:stag'
+        role 'Needs e2e-dev and version — not the development perf test.'
+        sourceId 'staging'
+        order '7'
+        x '724'
+        y '600'
+        w '262'
+        h '62'
+        ownership 'udp'
+      }
+    }
+
+    delivery_perfstag = internal 'perf-test-staging · baseline' {
+      #off-request-path
+      description '100 rps for 15 minutes'
+      link https://github.com/govuk-once/user-data-platform/blob/main/.github/workflows/__perf-test.yml '__perf-test.yml'
+      link https://github.com/govuk-once/user-data-platform/blob/main/performance/src/scenarios/baseline.ts 'baseline.ts'
+      metadata {
+        type 'Reusable workflow · continue-on-error'
+        tech 'k6 · p95 under 200 ms · errors under 0.1%'
+        role 'deploy-prod lists this as a dependency, but a job that returns before its build runs and may fail cannot hold anything back.'
+        sourceId 'perfstag'
+        order '8'
+        x '1010'
+        y '600'
+        w '262'
+        h '62'
+        ownership 'udp'
+      }
+    }
+
+    delivery_e2estag = internal '6. e2e-staging' {
+      #off-request-path
+      description 'the real gate to production'
+      link https://github.com/govuk-once/user-data-platform/blob/main/.github/workflows/release.yml 'release.yml'
+      metadata {
+        type 'Reusable workflow'
+        tech 'same suite, staging API'
+        role 'The last thing that can stop a release.'
+        sourceId 'e2estag'
+        order '9'
+        x '724'
+        y '730'
+        w '262'
+        h '62'
+        ownership 'udp'
+      }
+    }
+
+    delivery_prod = internal '7. deploy-prod' {
+      #off-request-path
+      description 'production · bare version'
+      link https://github.com/govuk-once/user-data-platform/blob/main/.github/workflows/release.yml 'release.yml'
+      metadata {
+        type 'Reusable workflow · GitHub environment'
+        tech 'OIDC to PRODUCTION_DEPLOYMENT_ROLE · nx cdk:deploy:prod'
+        role 'No e2e or perf stacks are created here, so nothing tests production after the deploy. Rollback is a redeploy; the tables are RETAIN.'
+        sourceId 'prod'
+        order '10'
+        x '724'
+        y '860'
+        w '262'
+        h '62'
+        ownership 'udp'
+      }
+    }
+
+    delivery_notify = internal '8. Slack release note' {
+      #off-request-path
+      description 'major and minor only'
+      link https://github.com/govuk-once/user-data-platform/blob/main/.github/workflows/slack-release-notification.yml 'slack-release-notification.yml'
+      link https://github.com/govuk-once/user-data-platform/blob/main/scripts/build-release-notification.ts 'build-release-notification.ts'
+      metadata {
+        type 'Reusable workflow · continue-on-error'
+        tech 'gh release view → SNS → Chatbot'
+        role 'The release notes, cut to 1,500 characters, published to the release topic the main stack creates, for the Slack channel the SSM parameter names.'
+        sourceId 'notify'
+        order '11'
+        x '724'
+        y '990'
+        w '262'
+        h '62'
+        ownership 'udp'
+      }
+    }
+  }
+
+  delivery_account = boundary 'Test stacks · dev and staging' {
+    metadata {
+      type 'CloudFormation stacks · {prefix}-e2e · {prefix}-perf'
+      tech 'created by the same deploy they test'
+      role 'CodeBuild in the egress tier, fed by a zip of the checkout the workflow uploads.'
+      sourceId 'account'
+      order '0'
+      x '1332'
+      y '290'
+      w '310'
+      h '394'
+      boundary 'hard'
+    }
+
+    delivery_perfbuild = platform 'CodeBuild · perf' {
+      #off-request-path
+      description 'k6 · 8 nx targets'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/buildspec-perf.yml 'buildspec-perf.yml'
+      link https://github.com/govuk-once/user-data-platform/blob/main/performance/project.json 'performance/project.json'
+      link https://github.com/govuk-once/user-data-platform/blob/main/performance/src/config.ts 'performance/src/config.ts'
+      metadata {
+        type 'AWS::CodeBuild::Project'
+        tech 'signs SigV4 with its own role · metrics to UDP/PerformanceTests'
+        role 'Smoke, baseline, spike, three stress scenarios, write burst and cold start. Spike and stress run by hand against staging from their own workflows.'
+        facts [
+          'Only six scenarios write the summary the metrics step reads, and neither smoke nor baseline — the two the pipeline runs — is among them.'
+        ]
+        sourceId 'perfbuild'
+        order '1'
+        x '1356'
+        y '340'
+        w '262'
+        h '62'
+        ownership 'udp'
+      }
+    }
+
+    delivery_e2ebuild = platform 'CodeBuild · e2e' {
+      #off-request-path
+      description 'Cucumber · 51 scenarios'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/codebuild-e2e-construct.ts 'codebuild-e2e-construct.ts'
+      link https://github.com/govuk-once/user-data-platform/blob/main/e2e/cucumber.cjs 'e2e/cucumber.cjs'
+      link https://github.com/govuk-once/user-data-platform/blob/main/e2e/src/helpers/sigv4-signer.ts 'sigv4-signer.ts'
+      metadata {
+        type 'AWS::CodeBuild::Project'
+        tech '30-minute timeout · private subnets'
+        role 'Calls the API through the VPC\'s execute-api endpoint as the hard-coded <code>test</code> consumer, whose API key the stack passes in as a plain environment variable. Cleans up the users it created afterwards.'
+        sourceId 'e2ebuild'
+        order '2'
+        x '1356'
+        y '470'
+        w '262'
+        h '62'
+        ownership 'udp'
+        resources [ 'codebuild', 'e2e-stacks' ]
+      }
+    }
+
+    delivery_sourcebucket = platform 'Source bucket' {
+      #off-request-path
+      description '{prefix}-e2e-source-{account}'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/stacks/e2e-stack.ts 'e2e-stack.ts'
+      link https://github.com/govuk-once/user-data-platform/blob/main/.github/workflows/__e2e.yml '__e2e.yml'
+      metadata {
+        type 'AWS::S3::Bucket'
+        tech 'objects expire after 7 days'
+        role 'Where the workflow puts <code>source.zip</code> — the checkout with its pnpm store — for both projects to build from.'
+        sourceId 'sourcebucket'
+        order '3'
+        x '1356'
+        y '600'
+        w '262'
+        h '62'
+        ownership 'udp'
+        awsIcon 's3'
+      }
+    }
+  }
+
+  delivery_push -> delivery_validate 'opens a PR' {
+    metadata { protocol 'GitHub' auth '—' carries 'The branch' order '1' }
+  }
+  delivery_validate -> delivery_ci 'needs' {
+    metadata { protocol 'GitHub Actions job dependency' auth '—' carries 'A pass' order '2' }
+  }
+  delivery_validate -> delivery_prdeploy 'needs' {
+    metadata { protocol 'GitHub Actions job dependency' auth '—' carries 'A pass' order '3' }
+  }
+  delivery_prdeploy -> delivery_pre2e 'needs' {
+    metadata { protocol 'GitHub Actions job dependency' auth '—' carries 'The e2e project name and source bucket from the stack outputs' order '4' }
+  }
+  delivery_pre2e -> delivery_cleanup 'on close' {
+    metadata { protocol 'pull_request closed' auth '—' carries 'The PR number' edgeStyle 'dash' order '5' }
+  }
+  delivery_merge -> delivery_version 'triggers' {
+    metadata { protocol 'push to main' auth 'GitHub App token, contents: write' carries 'The commits since the last tag' order '6' }
+  }
+  delivery_version -> delivery_dev 'needs' {
+    metadata { protocol 'GitHub Actions job dependency' auth '—' carries 'version and type' order '7' }
+  }
+  delivery_dev -> delivery_perfdev 'needs' {
+    metadata { protocol 'GitHub Actions job dependency' auth '—' carries 'Nothing it waits for' edgeStyle 'dash' order '8' }
+  }
+  delivery_dev -> delivery_e2edev 'needs' {
+    metadata { protocol 'GitHub Actions job dependency' auth '—' carries 'The e2e project name and source bucket' order '9' }
+  }
+  delivery_e2edev -> delivery_staging 'needs' {
+    metadata { protocol 'GitHub Actions job dependency' auth '—' carries 'A pass' order '10' }
+  }
+  delivery_staging -> delivery_perfstag 'needs' {
+    metadata { protocol 'GitHub Actions job dependency' auth '—' carries 'Nothing it waits for' edgeStyle 'dash' order '11' }
+  }
+  delivery_staging -> delivery_e2estag 'needs' {
+    metadata { protocol 'GitHub Actions job dependency' auth '—' carries 'The staging e2e project name' order '12' }
+  }
+  delivery_e2estag -> delivery_prod 'needs' {
+    metadata { protocol 'GitHub Actions job dependency' auth '—' carries 'A pass' order '13' }
+  }
+  delivery_prod -> delivery_notify 'needs' {
+    metadata { protocol 'GitHub Actions job dependency' auth 'OIDC to the production role' carries 'The release notes' order '14' }
+  }
+  delivery_perfdev -> delivery_perfbuild 'StartBuild' {
+    metadata { protocol 'CodeBuild API' auth 'OIDC to the deployment role' carries 'PERF_TARGET' order '15' }
+  }
+  delivery_e2edev -> delivery_e2ebuild 'StartBuild' {
+    metadata { protocol 'CodeBuild API, then polling' auth 'OIDC to the deployment role' carries 'The zip in S3; the build status back' order '16' }
+  }
+  delivery_perfstag -> delivery_sourcebucket 'PutObject' {
+    metadata { protocol 'S3' auth 'OIDC to the deployment role' carries 'source.zip' edgeStyle 'dash' order '17' }
+  }
+}
+
+views {
+  view delivery {
+    title 'Delivery'
+    include delivery_pr, delivery_pr.**
+    include delivery_release, delivery_release.**
+    include delivery_account, delivery_account.**
+  }
+}

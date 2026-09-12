@@ -51,21 +51,43 @@ function synthProject(project: Project): void {
       `projects/${project.id}: synth.cwd "${synth.cwd}" is outside the checkout`,
     );
 
-  // cdk.json context is what the CLI would have passed; the two aws: flags are what it
+  // cdk.json context is what the CLI would have passed, and cdk.context.json beside it is
+  // what the CLI would have cached from earlier lookups — an app that looks a value up
+  // gets the committed answer rather than a dummy. The two aws: flags are what the CLI
   // would have added. Path metadata is required by the derivation, not optional.
-  const cdkJson = path.join(cwd, "cdk.json");
-  const declared = existsSync(cdkJson)
-    ? ((
-        JSON.parse(readFileSync(cdkJson, "utf8")) as {
-          context?: Record<string, unknown>;
-        }
-      ).context ?? {})
-    : {};
+  const readJson = (file: string): Record<string, unknown> =>
+    existsSync(file)
+      ? (JSON.parse(readFileSync(file, "utf8")) as Record<string, unknown>)
+      : {};
+  const declared = (readJson(path.join(cwd, "cdk.json")).context ??
+    {}) as Record<string, unknown>;
+  const cached = readJson(path.join(cwd, "cdk.context.json"));
   const context = {
+    ...cached,
     ...declared,
     "aws:cdk:bundling-stacks": [],
     "aws:cdk:enable-path-metadata": true,
   };
+
+  // What the app needs built before it can be run: UDP loads every function from a
+  // build directory its own script writes. Run once, in the checkout, as the source
+  // defines it — the same command its pipeline runs — never a stand-in for it.
+  if (synth.prepare) {
+    const at = locateOrThrow(project, synth.prepare.cwd, "synth.prepare.cwd");
+    const prepCwd = path.resolve(at.source.dir, at.path);
+    if (at.source !== locateOrThrow(project, synth.cwd, "synth.cwd").source)
+      throw new Error(
+        `projects/${project.id}: synth.prepare.cwd must be in the same source as synth.cwd`,
+      );
+    const [cmd, ...args] = synth.prepare.command;
+    const started = Date.now();
+    process.stdout.write(`  prepare: ${synth.prepare.command.join(" ")} … `);
+    execFileSync(cmd ?? "", args, {
+      cwd: prepCwd,
+      stdio: ["ignore", "ignore", "inherit"],
+    });
+    console.log(`${((Date.now() - started) / 1000).toFixed(0)}s`);
+  }
 
   for (const st of project.config.stages.filter((s) => s.synth)) {
     const outAt = locateOrThrow(
@@ -85,7 +107,12 @@ function synthProject(project: Project): void {
         Object.entries(synth.env).map(([k, v]) => [k, fill(v, st)]),
       ),
       CDK_OUTDIR: out,
-      CDK_CONTEXT_JSON: JSON.stringify(context),
+      CDK_CONTEXT_JSON: JSON.stringify({
+        ...context,
+        ...Object.fromEntries(
+          Object.entries(synth.context ?? {}).map(([k, v]) => [k, fill(v, st)]),
+        ),
+      }),
     };
     const [cmd, ...args] = synth.command;
     const started = Date.now();
