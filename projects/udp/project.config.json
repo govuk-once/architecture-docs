@@ -2,7 +2,7 @@
   "name": "UDP",
   "title": "UDP Architecture Explorer",
   "tagline": "User Data Platform",
-  "blurb": "GOV.UK Once’s system of record for a person: identity links to other services, the data those services hand over, and the subject access and deletion requests the law entitles a person to. Reached only through FLEX, over a VPC endpoint.",
+  "blurb": "GOV.UK Once’s system of record for a person: identity links to other services, the data those services hand over, and the subject access and deletion requests the law entitles a person to. Reached only by sibling systems — FLEX and UNS — each through its own VPC endpoint.",
   "repo": "https://github.com/govuk-once/user-data-platform/blob/main/",
   "inventoryView": "resources",
   "inventoryLabel": "AWS resources",

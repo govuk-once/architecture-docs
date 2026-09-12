@@ -1056,14 +1056,18 @@ const repoName = (url: string) =>
 function sourceMeta(project: Project): string[] {
   const states = readStates(project);
   const day = (iso: string) => esc(iso.slice(0, 10));
+  // A project with no `derive` block derives nothing: its recorded commit is the one the
+  // model was read against, and its counts are prose. The card must not say "derived".
+  const from = project.derive ? "derived from" : "read at";
   if (!project.qualified) {
     const [only] = project.sources;
     const state = only ? states[only.id] : null;
     return [
       only ? `<span>${esc(repoName(only.repo))}</span>` : "",
       state
-        ? `<span>derived from <b>${esc(short(state.derived.sha))}</b> · ${day(state.derived.committed)}</span>`
+        ? `<span>${from} <b>${esc(short(state.derived.sha))}</b> · ${day(state.derived.committed)}</span>`
         : "",
+      project.derive ? "" : "<span>counts read, not synthesised</span>",
       state?.read
         ? `<span>read to <b>${esc(short(state.read.sha))}</b> · ${day(state.read.committed)}</span>`
         : "",
@@ -1075,7 +1079,7 @@ function sourceMeta(project: Project): string[] {
   const n = String(project.sources.length);
   return [
     `<span><b>${n}</b> repositories</span>`,
-    derived.length ? `<span>derived · ${day(derived.at(-1) ?? "")}</span>` : "",
+    derived.length ? `<span>${from} · ${day(derived.at(-1) ?? "")}</span>` : "",
     read.length
       ? `<span>read to <b>${String(read.length)} of ${n}</b> · ${day(read[0] ?? "")}</span>`
       : "",
