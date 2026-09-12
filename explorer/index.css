@@ -73,17 +73,139 @@ main {
   color: var(--accent);
 }
 
+/*
+ * The sketch of who calls whom, above the cards. Static SVG the build writes; the boxes
+ * that are documented systems are links, the parties outside the programme are not, and
+ * every line is a link to the tab that proves it. Sized by the viewBox so it scales with
+ * the column and stays legible on a phone, where the grid below stacks to one column.
+ */
+.fit {
+  margin-top: 28px;
+}
+.fit .eyebrow {
+  display: block;
+  margin-bottom: 10px;
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+/* On a phone the sketch scrolls sideways inside its own box rather than shrinking to a
+   smudge; the page itself never scrolls horizontally. Same rule the tables follow. */
+.fit .scroll {
+  overflow-x: auto;
+}
+.fit svg {
+  display: block;
+  width: 100%;
+  max-width: 1060px;
+  height: auto;
+  overflow: visible;
+}
+@media (max-width: 720px) {
+  .fit svg {
+    min-width: 640px;
+  }
+}
+/*
+ * The same drawing as the diagrams inside each page, down to the rules: colour carries
+ * ownership through --kind, every box wears the 4px bar, and an edge label sits on its
+ * line over a patch of the page ground. Class names match app.js so the two stay legible
+ * as one design rather than two that happen to look alike.
+ */
+.fit .node.sys {
+  --kind: var(--legend-blue);
+}
+.fit .node.out {
+  --kind: var(--legend-amber);
+}
+.fit .node .box {
+  fill: var(--surface);
+  stroke: var(--kind);
+  stroke-width: 1.5;
+}
+.fit .node .bar {
+  fill: var(--kind);
+}
+.fit .node .t {
+  fill: var(--ink);
+  font:
+    600 13px/1 "IBM Plex Sans",
+    sans-serif;
+}
+.fit .node .s {
+  fill: var(--muted);
+  font:
+    400 10.5px/1 "IBM Plex Mono",
+    monospace;
+}
+.fit a.node:hover .box,
+.fit a.node:focus-visible .box {
+  stroke-width: 3;
+}
+.fit a.node:hover .t,
+.fit a.node:focus-visible .t {
+  fill: var(--accent);
+}
+.fit .edge .line {
+  fill: none;
+  stroke: var(--line-strong);
+  stroke-width: 1.6;
+}
+.fit #fit-arrow path {
+  fill: var(--line-strong);
+}
+.fit .edge .lblbg {
+  fill: var(--bg);
+}
+.fit .edge .lbl {
+  fill: var(--muted);
+  font:
+    400 10.5px/1 "IBM Plex Mono",
+    monospace;
+  text-anchor: middle;
+}
+.fit a.edge:hover .line,
+.fit a.edge:focus-visible .line {
+  stroke: var(--accent);
+  stroke-width: 3;
+}
+.fit a.edge:hover .lbl,
+.fit a.edge:focus-visible .lbl {
+  fill: var(--accent);
+  font-weight: 600;
+}
+.fit .note {
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
   gap: 18px;
-  margin-top: 32px;
+  margin-top: 14px;
+}
+.pages {
+  margin-top: 40px;
+  padding-top: 24px;
+  border-top: 1px solid var(--line);
+}
+.pages .eyebrow {
+  display: block;
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--muted);
 }
 
 .card {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   padding: 22px 22px 18px;
   background: var(--surface);
   border: 1px solid var(--line);

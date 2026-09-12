@@ -308,7 +308,11 @@ the error names the project and the fix rather than quietly producing an empty p
 
 The site's own config, [`../explorer.config.json`](../explorer.config.json), holds only what
 is true of the whole site: its title and blurb, where the site is assembled, which projects
-it publishes, and which it lists as planned but not yet documented.
+it publishes, which it lists as planned but not yet documented, and `fit` — the overall
+architecture sketched above the cards, one system per box. A `fit` node that names a `project` is a door to that
+page; one that does not is a party outside the programme. Every `fit` edge names the tab
+that proves it as `see: "<project>#<view>"`, and the build refuses one that names a tab it
+did not build: a line on the front door is a claim like any other.
 
 ---
 

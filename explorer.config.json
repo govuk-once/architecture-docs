@@ -9,5 +9,115 @@
     "url": "https://govuk-once.github.io/architecture-docs/"
   },
   "projects": ["app", "flex", "udp", "uns"],
-  "planned": []
+  "planned": [],
+  "fit": {
+    "title": "Overall architecture",
+    "note": "How the systems fit together. Each line is proven on the tab it links to, where the mechanism is set out in full; each box opens that system's page.",
+    "nodes": [
+      {
+        "id": "backend",
+        "project": "app",
+        "label": "GOV.UK App backend",
+        "sub": "built only for the app",
+        "col": 0,
+        "row": 0
+      },
+      {
+        "id": "app",
+        "project": "app",
+        "label": "GOV.UK App",
+        "sub": "a person's phone",
+        "col": 0,
+        "row": 1
+      },
+      {
+        "id": "flex",
+        "project": "flex",
+        "label": "FLEX",
+        "sub": "the app's API layer",
+        "col": 1,
+        "row": 1
+      },
+      {
+        "id": "udp",
+        "project": "udp",
+        "label": "UDP",
+        "sub": "who a person is",
+        "col": 2,
+        "row": 1
+      },
+      {
+        "id": "onesignal",
+        "label": "OneSignal",
+        "sub": "push provider, outside",
+        "col": 0,
+        "row": 2
+      },
+      {
+        "id": "uns",
+        "project": "uns",
+        "label": "UNS",
+        "sub": "notifications",
+        "col": 1,
+        "row": 2
+      },
+      {
+        "id": "departments",
+        "label": "Departments",
+        "sub": "DVLA, Foreign Travel Advice",
+        "col": 1,
+        "row": 3
+      }
+    ],
+    "edges": [
+      {
+        "from": "app",
+        "to": "backend",
+        "label": "sign-in, chat and config",
+        "see": "app#containers"
+      },
+      {
+        "from": "app",
+        "to": "flex",
+        "label": "what other services hold",
+        "see": "app#context"
+      },
+      {
+        "from": "flex",
+        "to": "udp",
+        "label": "looks a person up",
+        "see": "udp#request"
+      },
+      {
+        "from": "flex",
+        "to": "uns",
+        "label": "their notifications",
+        "see": "uns#flex"
+      },
+      {
+        "from": "uns",
+        "to": "udp",
+        "label": "which device to reach",
+        "see": "uns#send"
+      },
+      {
+        "from": "departments",
+        "to": "uns",
+        "label": "a message to send",
+        "see": "uns#send"
+      },
+      {
+        "from": "uns",
+        "to": "onesignal",
+        "label": "sends it on",
+        "see": "uns#send"
+      },
+      {
+        "from": "onesignal",
+        "to": "app",
+        "label": "the notification",
+        "see": "uns#context"
+      }
+    ]
+  }
 }

@@ -48,6 +48,39 @@ export interface PlannedProject {
   seenFrom?: string;
 }
 
+/**
+ * One box on the index's "how they fit" sketch. A node that names a `project` is one of
+ * the documented systems and links to its page; one that does not is a party outside the
+ * programme, drawn but not a door. `col` and `row` place it on a grid.
+ */
+export interface FitNode {
+  id: string;
+  project?: string;
+  label: string;
+  sub: string;
+  col: number;
+  row: number;
+}
+
+/**
+ * One line on the sketch. `see` is `<project>#<view>`: the tab that proves the line. The
+ * build refuses a tab that does not exist, because a line on the front door is a claim
+ * like any other and must name where it is argued.
+ */
+export interface FitEdge {
+  from: string;
+  to: string;
+  label: string;
+  see: string;
+}
+
+export interface FitSketch {
+  title: string;
+  note: string;
+  nodes: FitNode[];
+  edges: FitEdge[];
+}
+
 export interface SiteConfig {
   title: string;
   tagline: string;
@@ -58,6 +91,8 @@ export interface SiteConfig {
   /** Directory names under projects/, in the order they appear on the index. */
   projects: string[];
   planned: PlannedProject[];
+  /** How the documented systems call one another, drawn above the cards. Optional. */
+  fit?: FitSketch;
 }
 
 function readSiteConfig(): SiteConfig {
@@ -111,6 +146,47 @@ function readSiteConfig(): SiteConfig {
       `explorer.config.json: ${clash.map((p) => p.id).join(", ")} is both built and ` +
         `planned — a project that exists is not planned.`,
     );
+  const fit = parsed.fit;
+  if (fit) {
+    if (!fit.title || !Array.isArray(fit.nodes) || !Array.isArray(fit.edges))
+      throw new Error(
+        `explorer.config.json: "fit" needs title, nodes and edges — the sketch of how the ` +
+          `documented systems call one another.`,
+      );
+    const ids = new Set<string>();
+    for (const n of fit.nodes) {
+      if (
+        !n.id ||
+        !n.label ||
+        typeof n.col !== "number" ||
+        typeof n.row !== "number"
+      )
+        throw new Error(
+          `explorer.config.json: fit node ${JSON.stringify(n)} needs id, label, col and row`,
+        );
+      if (ids.has(n.id))
+        throw new Error(
+          `explorer.config.json: fit node ${n.id} is listed twice`,
+        );
+      ids.add(n.id);
+      if (n.project && !parsed.projects.includes(n.project))
+        throw new Error(
+          `explorer.config.json: fit node ${n.id} names project ${n.project}, which the ` +
+            `site does not publish`,
+        );
+    }
+    for (const e of fit.edges) {
+      if (!ids.has(e.from) || !ids.has(e.to))
+        throw new Error(
+          `explorer.config.json: fit edge ${e.from} → ${e.to} names a node that is not listed`,
+        );
+      if (!/^[a-z][a-z0-9-]*#[a-z][a-z0-9-]*$/.test(e.see))
+        throw new Error(
+          `explorer.config.json: fit edge ${e.from} → ${e.to} needs see: "<project>#<view>", ` +
+            `the tab that proves it`,
+        );
+    }
+  }
   return { ...(parsed as SiteConfig), planned };
 }
 

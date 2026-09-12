@@ -1094,8 +1094,8 @@ function projectCard(built: Built): string {
   ].filter(Boolean);
   return (
     `<a class="card" href="${esc(project.href)}">` +
-    `<span class="tagline">${esc(project.config.tagline)}</span>` +
     `<h2>${esc(project.config.name)}</h2>` +
+    `<span class="tagline">${esc(project.config.tagline)}</span>` +
     `<p>${esc(project.config.blurb)}</p>` +
     `<div class="meta">${meta.join("")}</div>` +
     `</a>`
@@ -1117,11 +1117,205 @@ function plannedCard(
     : "";
   return (
     `<div class="card planned">` +
-    `<span class="tagline">${esc(p.tagline)}</span>` +
     `<h2>${esc(p.name)}</h2>` +
+    `<span class="tagline">${esc(p.tagline)}</span>` +
     `<p>${esc(p.blurb)}</p>` +
     `<div class="meta"><span class="badge">Not yet documented</span>${from}</div>` +
     `</div>`
+  );
+}
+
+/*
+ * The sketch above the cards: the documented systems and who calls whom. Static SVG,
+ * routed on a grid — same row is a horizontal, same column a vertical, anything else
+ * runs horizontally to the target's column and then turns. Every line links to the tab
+ * that proves it, and a link to a tab that was not built fails the build here rather
+ * than dangling on the front door.
+ */
+/*
+ * Box and type metrics are the ones the diagrams inside each page use, so the sketch is
+ * the same drawing at the same size: a 62-high box, the name on the centre line less 2,
+ * the sub-label 15 below it, both inset 16 past the 4px ownership bar.
+ */
+const FIT = { w: 214, h: 62, gapX: 196, gapY: 72, pad: 16 };
+/* IBM Plex Mono 10.5px, the advance the build's own canvas rules use. */
+const FIT_ADVANCE = 6.7;
+/* The first control-point multiplier app.js tries, and the one every line here takes. */
+const FIT_MULT = 0.42;
+
+type FitSide = "t" | "b" | "l" | "r";
+interface FitAnchor {
+  x: number;
+  y: number;
+  nx: number;
+  ny: number;
+}
+
+/* app.js's anchors(): the midpoint of each side, and the normal pointing out of it. */
+function fitAnchors(p: { x: number; y: number }): Record<FitSide, FitAnchor> {
+  return {
+    t: { x: p.x + FIT.w / 2, y: p.y, nx: 0, ny: -1 },
+    b: { x: p.x + FIT.w / 2, y: p.y + FIT.h, nx: 0, ny: 1 },
+    l: { x: p.x, y: p.y + FIT.h / 2, nx: -1, ny: 0 },
+    r: { x: p.x + FIT.w, y: p.y + FIT.h / 2, nx: 1, ny: 0 },
+  };
+}
+
+/* app.js's pickSides(), in grid terms — every box is the same size, so the difference in
+   centres is the difference in cells. The 1.15 bias keeps a near-diagonal pair leaving
+   through the side that genuinely faces the target. */
+function fitSides(
+  a: { col: number; row: number },
+  b: { col: number; row: number },
+): [FitSide, FitSide] {
+  const dx = (b.col - a.col) * (FIT.w + FIT.gapX);
+  const dy = (b.row - a.row) * (FIT.h + FIT.gapY);
+  if (Math.abs(dx) > Math.abs(dy) * 1.15)
+    return dx > 0 ? ["r", "l"] : ["l", "r"];
+  return dy > 0 ? ["b", "t"] : ["t", "b"];
+}
+
+/*
+ * The browser-side router tries several curves and keeps whichever clips the fewest
+ * unrelated boxes, which needs a laid-out DOM to sample. Here the grid is fixed and every
+ * line takes the natural pair, so the only question is whether that one runs through a box
+ * it has nothing to do with. That is a placement mistake in the config, and the build says
+ * so rather than drawing it.
+ */
+function fitClips(
+  p: FitAnchor,
+  c1: { x: number; y: number },
+  c2: { x: number; y: number },
+  q: FitAnchor,
+  others: { id: string; x: number; y: number }[],
+): string | null {
+  for (let i = 1; i < 40; i++) {
+    const t = i / 40;
+    const u = 1 - t;
+    const x =
+      u * u * u * p.x +
+      3 * u * u * t * c1.x +
+      3 * u * t * t * c2.x +
+      t * t * t * q.x;
+    const y =
+      u * u * u * p.y +
+      3 * u * u * t * c1.y +
+      3 * u * t * t * c2.y +
+      t * t * t * q.y;
+    for (const o of others)
+      if (x > o.x && x < o.x + FIT.w && y > o.y && y < o.y + FIT.h) return o.id;
+  }
+  return null;
+}
+
+function fitSketch(built: Built[]): string {
+  const fit = SITE_CONFIG.fit;
+  if (!fit) return "";
+  const views = new Map(
+    built.map((b) => [b.project.id, new Set(b.views.map((v) => v.id))]),
+  );
+  for (const e of fit.edges) {
+    const [pid, vid] = e.see.split("#");
+    if (!views.get(pid ?? "")?.has(vid ?? ""))
+      throw new Error(
+        `explorer.config.json: fit edge ${e.from} → ${e.to} cites ${e.see}, and no such tab ` +
+          `was built`,
+      );
+  }
+  const at = (n: (typeof fit.nodes)[number]) => ({
+    x: FIT.pad + n.col * (FIT.w + FIT.gapX),
+    y: FIT.pad + n.row * (FIT.h + FIT.gapY),
+  });
+  const byId = new Map(fit.nodes.map((n) => [n.id, n]));
+  const width =
+    FIT.pad * 2 +
+    (Math.max(...fit.nodes.map((n) => n.col)) + 1) * FIT.w +
+    Math.max(...fit.nodes.map((n) => n.col)) * FIT.gapX;
+  const height =
+    FIT.pad * 2 +
+    (Math.max(...fit.nodes.map((n) => n.row)) + 1) * FIT.h +
+    Math.max(...fit.nodes.map((n) => n.row)) * FIT.gapY;
+
+  const edges = fit.edges
+    .map((e) => {
+      const a = byId.get(e.from);
+      const b = byId.get(e.to);
+      if (!a || !b) return "";
+      /*
+       * The same bezier the diagrams inside each page draw: out of the side facing the
+       * target, with each control point pushed along that anchor's own normal, so a line
+       * leaves and arrives square. Straight where the boxes line up, one easy S where they
+       * do not — nothing here turns a corner, because nothing there does.
+       */
+      const [sa, sb] = fitSides(a, b);
+      const p = fitAnchors(at(a))[sa];
+      const q = fitAnchors(at(b))[sb];
+      const dist = Math.hypot(q.x - p.x, q.y - p.y);
+      const o = Math.max(34, Math.min(190, dist * FIT_MULT));
+      const c1 = { x: p.x + p.nx * o, y: p.y + p.ny * o };
+      const c2 = { x: q.x + q.nx * o, y: q.y + q.ny * o };
+      const d =
+        `M ${String(p.x)} ${String(p.y)} C ${String(c1.x)} ${String(c1.y)}, ` +
+        `${String(c2.x)} ${String(c2.y)}, ${String(q.x)} ${String(q.y)}`;
+      const through = fitClips(
+        p,
+        c1,
+        c2,
+        q,
+        fit.nodes
+          .filter((n) => n.id !== a.id && n.id !== b.id)
+          .map((n) => ({ id: n.id, ...at(n) })),
+      );
+      if (through !== null)
+        throw new Error(
+          `explorer.config.json: the fit line ${e.from} → ${e.to} runs through ` +
+            `${through}. Move a node — on this grid a line leaves and arrives square, ` +
+            `and nothing routes around.`,
+        );
+      /* The midpoint of a cubic, which is where app.js puts a label before it starts
+         sliding it clear of its neighbours. */
+      const lx = (p.x + 3 * c1.x + 3 * c2.x + q.x) / 8;
+      const ly = (p.y + 3 * c1.y + 3 * c2.y + q.y) / 8 + 3.5;
+      const href = e.see.replace("#", "/#tab=");
+      const bw = e.label.length * FIT_ADVANCE + 12;
+      return (
+        `<a href="${esc(href)}" class="edge"><title>${esc(e.label)} — proven on ${esc(e.see)}</title>` +
+        `<path class="line" d="${d}" marker-end="url(#fit-arrow)"/>` +
+        `<rect class="lblbg" x="${String(lx - bw / 2)}" y="${String(ly - 11)}" ` +
+        `width="${String(bw)}" height="15" rx="3"/>` +
+        `<text class="lbl" x="${String(lx)}" y="${String(ly)}">${esc(e.label)}</text></a>`
+      );
+    })
+    .join("");
+
+  const nodes = fit.nodes
+    .map((n) => {
+      const p = at(n);
+      /*
+       * Colour carries ownership, exactly as it does inside a page: a system this site
+       * documents takes the in-scope blue, a party outside the programme the third-party
+       * amber. Nothing is dashed — inside a page the dash means off the request path, and
+       * every box here is on it.
+       */
+      const box =
+        `<rect class="box" x="${String(p.x)}" y="${String(p.y)}" width="${String(FIT.w)}" height="${String(FIT.h)}" rx="8"/>` +
+        `<rect class="bar" x="${String(p.x)}" y="${String(p.y)}" width="4" height="${String(FIT.h)}" rx="2"/>` +
+        `<text class="t" x="${String(p.x + 16)}" y="${String(p.y + FIT.h / 2 - 2)}">${esc(n.label)}</text>` +
+        `<text class="s" x="${String(p.x + 16)}" y="${String(p.y + FIT.h / 2 + 15)}">${esc(n.sub)}</text>`;
+      return n.project
+        ? `<a href="${esc(n.project)}/" class="node sys"><title>${esc(n.label)} — open its page</title>${box}</a>`
+        : `<g class="node out">${box}</g>`;
+    })
+    .join("");
+
+  return (
+    `<span class="eyebrow">${esc(fit.title)}</span>` +
+    `<div class="scroll"><svg viewBox="0 0 ${String(width)} ${String(height)}" role="img" aria-label="${esc(fit.title)}: who calls whom among the documented systems">` +
+    `<defs><marker id="fit-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0.5 L7.5 4 L0 7.5 Z"/></marker></defs>` +
+    edges +
+    nodes +
+    `</svg></div>` +
+    `<p class="note">${esc(fit.note)}</p>`
   );
 }
 
@@ -1149,6 +1343,7 @@ function buildIndex(built: Built[]): string {
         `<h1>${esc(SITE_CONFIG.title)}</h1>` +
         `<p>${esc(SITE_CONFIG.blurb)}</p>`,
     )
+    .replace("<!--FIT-->", fitSketch(built))
     .replace("<!--CARDS-->", cards)
     .replace("<!--FOOTER-->", footer)
     .replace(
