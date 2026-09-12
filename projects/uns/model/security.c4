@@ -1,0 +1,591 @@
+// UNS architecture — Security and operations.
+//
+// The controls that bound every box on the other tabs, in five columns: who may call,
+// what is encrypted and with which key, what records, what wakes someone, and what
+// survives. Nothing here is on the request path; each column reads top to bottom.
+
+model {
+
+  security_access = boundary '1 · Access' {
+    metadata {
+      type 'Controls'
+      tech 'mTLS · IAM · API keys · WAF'
+      role 'Two doors with different locks: certificates for departments, IAM and a VPC endpoint for FLEX. An API key on both.'
+      sourceId 'access'
+      order '0'
+      x '40'
+      y '30'
+      w '310'
+      h '654'
+      boundary 'soft'
+    }
+
+    security_mtls = platform 'mTLS at the PSO gateway' {
+      #off-request-path
+      description 'truststore · revocation table'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/constructs/UNSMTLS.ts 'UNSMTLS.ts'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/lambdas/pso/http.mtlsCertificateRevocationAuthorizer/handler.ts 'mtlsCertificateRevocationAuthorizer/handler.ts'
+      metadata {
+        type 'API Gateway mutual TLS + REQUEST authorizer'
+        tech 'private CA · sha256 of the certificate as the key'
+        role 'The gateway checks the signature and expiry; the authorizer checks the hash is known, not revoked, and names an organisation. Result caching is off, so every request pays for the lookup.'
+        facts [
+          'Revocation is a flag on a row; the custom resource that writes rows never deletes one.'
+        ]
+        sourceId 'mtls'
+        order '1'
+        x '64'
+        y '80'
+        w '262'
+        h '62'
+        ownership 'uns'
+        awsIcon 'acm'
+      }
+    }
+
+    security_flexauth = platform 'IAM on the FLEX private API' {
+      #off-request-path
+      description 'Deny unless aws:SourceVpce'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/constructs/bases/UNSApiGatewayConstruct.ts 'UNSApiGatewayConstruct.ts'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/constructs/UNSFlexResources.ts 'UNSFlexResources.ts'
+      metadata {
+        type 'Resource policy · AuthorizationType.IAM · invoker role'
+        tech 'only when SSM names FLEX\'s account and endpoints'
+        role 'A resource policy that denies any endpoint but FLEX\'s, IAM on every method, and a role FLEX\'s account may assume to invoke.'
+        facts [
+          'Without those parameters the gateway synthesises regional and keyless apart from the API key. Which environments have them set is outside the repository.'
+        ]
+        sourceId 'flexauth'
+        order '2'
+        x '64'
+        y '210'
+        w '262'
+        h '62'
+        ownership 'uns'
+        awsIcon 'iam'
+      }
+    }
+
+    security_apikeys = platform 'API keys and usage plans' {
+      #off-request-path
+      description 'required on every method'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/constructs/bases/UNSApiGatewayConstruct.ts 'UNSApiGatewayConstruct.ts'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/constructs/UNSPSOResources.ts 'UNSPSOResources.ts'
+      metadata {
+        type 'AWS::ApiGateway::UsagePlan · one per consumer organisation'
+        tech 'PSO 500 rps, 20,000 a day · FLEX 100 rps, 100,000 a day'
+        role 'Unlike UDP\'s, these are enforced: <code>apiKeyRequired</code> is set whenever usage-plan defaults exist, which is always.'
+        facts [
+          'The burst fallback reads the rate limit, so effective bursts are 500 and 100, not the 1,000 and 200 written.'
+        ]
+        sourceId 'apikeys'
+        order '3'
+        x '64'
+        y '340'
+        w '262'
+        h '62'
+        ownership 'uns'
+        awsIcon 'apigateway'
+      }
+    }
+
+    security_waf = platform 'Web ACLs · one per gateway' {
+      #off-request-path
+      description 'Common · KnownBadInputs'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/constructs/bases/UNSApiGatewayConstruct.ts 'UNSApiGatewayConstruct.ts'
+      metadata {
+        type 'AWS::WAFv2::WebACL · REGIONAL'
+        tech 'default allow · logged a year'
+        role 'Two managed rule sets on each gateway, the private one included. The anonymous-IP list is commented out because it blocked the tests from GitHub Actions.'
+        sourceId 'waf'
+        order '4'
+        x '64'
+        y '470'
+        w '262'
+        h '62'
+        ownership 'uns'
+        awsIcon 'waf'
+      }
+    }
+
+    security_consumers = platform 'Consumer secrets, cross-account' {
+      #off-request-path
+      description 'tls/{id}/crt · tls/{id}/private-key'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/constructs/bases/UNSClientCertificateConstruct.ts 'UNSClientCertificateConstruct.ts'
+      metadata {
+        type 'AWS::SecretsManager::Secret ×2 per consumer'
+        tech 'shared to the account /{ns}/certificate/consumers names'
+        role 'How a department gets its certificate: it reads its own two secrets from UNS\'s account, under a key policy that names it.'
+        sourceId 'consumers'
+        order '5'
+        x '64'
+        y '600'
+        w '262'
+        h '62'
+        ownership 'uns'
+        awsIcon 'secretsmanager'
+      }
+    }
+  }
+
+  security_encryption = boundary '2 · Encryption' {
+    metadata {
+      type 'Controls'
+      tech 'KMS · SSE-S3 · code signing'
+      role 'One main key for almost everything; buckets are the exception.'
+      sourceId 'encryption'
+      order '0'
+      x '362'
+      y '30'
+      w '310'
+      h '654'
+      boundary 'soft'
+    }
+
+    security_mainkey = platform 'Main key' {
+      #off-request-path
+      description 'kms-main · rotation on'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/constructs/UNSCommon.ts 'UNSCommon.ts'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/constructs/bases/UNSKMSConstruct.ts 'UNSKMSConstruct.ts'
+      metadata {
+        type 'AWS::KMS::Key'
+        tech '30-day pending window'
+        role 'Every table, queue and dead-letter queue, every log group, the cache, the alert topic, and each function\'s environment variables.'
+        sourceId 'mainkey'
+        order '1'
+        x '386'
+        y '80'
+        w '262'
+        h '62'
+        ownership 'uns'
+        awsIcon 'kms'
+      }
+    }
+
+    security_otherkeys = platform 'Two consumer keys' {
+      #off-request-path
+      description 'flex · mTLS consumers'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/constructs/UNSFlexResources.ts 'UNSFlexResources.ts'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/constructs/UNSMTLS.ts 'UNSMTLS.ts'
+      metadata {
+        type 'AWS::KMS::Key ×2'
+        tech 'decrypt granted to other accounts'
+        role 'One for the secret FLEX reads, one for the certificate secrets departments read. Cross-account access is on these, never on the main key.'
+        sourceId 'otherkeys'
+        order '2'
+        x '386'
+        y '210'
+        w '262'
+        h '62'
+        ownership 'uns'
+        awsIcon 'kms'
+      }
+    }
+
+    security_buckets = platform 'Buckets · SSE-S3' {
+      #off-request-path
+      description 'not KMS · no object lock'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/constructs/bases/UNSS3BucketConstruct.ts 'UNSS3BucketConstruct.ts'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/config.ts 'config.ts'
+      metadata {
+        type 'AWS::S3::Bucket'
+        tech 'BLOCK_ALL · SSL enforced · versioned'
+        role 'The truststore, the analytics export, the access logs and the flow logs use S3-managed keys.'
+        facts [
+          'A 30-day compliance object lock is computed in config and passed by no bucket.'
+        ]
+        sourceId 'buckets'
+        order '3'
+        x '386'
+        y '340'
+        w '262'
+        h '62'
+        ownership 'uns'
+        awsIcon 's3'
+      }
+    }
+
+    security_incode = internal 'In code: none' {
+      #off-request-path
+      description 'no field-level encryption'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/common/repositories/dynamodbRepository.ts 'dynamodbRepository.ts'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/common/ioc.ts 'ioc.ts'
+      metadata {
+        type 'Code'
+        tech 'titles and bodies stored as sent'
+        role 'Encryption is the table\'s key. What the code does instead is redact: the logger masks titles, bodies, certificates, tokens and keys.'
+        sourceId 'incode'
+        order '4'
+        x '386'
+        y '470'
+        w '262'
+        h '62'
+        ownership 'uns'
+      }
+    }
+
+    security_signing = platform 'Code signing · WARN' {
+      #off-request-path
+      description 'SHA384 ECDSA profile'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/constructs/UNSCommon.ts 'UNSCommon.ts'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/constructs/bases/UNSCustomResourceConstruct.ts 'UNSCustomResourceConstruct.ts'
+      metadata {
+        type 'AWS::Signer::SigningProfile · AWS::Lambda::CodeSigningConfig'
+        tech 'untrustedArtifactOnDeployment: WARN'
+        role 'Every application function carries the signing config; an unsigned artefact warns rather than fails. The six custom-resource functions accept the config and never apply it.'
+        sourceId 'signing'
+        order '5'
+        x '386'
+        y '600'
+        w '262'
+        h '62'
+        ownership 'uns'
+        resources [ 'signing' ]
+      }
+    }
+  }
+
+  security_detection = boundary '3 · Detection' {
+    metadata {
+      type 'Controls'
+      tech 'logs · X-Ray · WAF · Checkov'
+      role 'What records, whether or not anyone is looking.'
+      sourceId 'detection'
+      order '0'
+      x '684'
+      y '30'
+      w '310'
+      h '654'
+      boundary 'soft'
+    }
+
+    security_logs = platform 'Log groups · a year' {
+      #off-request-path
+      description 'functions · gateways · WAF · export'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/constructs/bases/UNSLambdaConstruct.ts 'UNSLambdaConstruct.ts'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/config.ts 'config.ts'
+      metadata {
+        type 'AWS::Logs::LogGroup · KMS'
+        tech 'ONE_YEAR in dev, staging and production'
+        role 'One per function, one access log per gateway with a JSON format, one WAF log per gateway, and the analytics export group.'
+        facts [
+          'Development is a main environment here: it keeps logs a year and retains its resources like production.'
+        ]
+        sourceId 'logs'
+        order '1'
+        x '708'
+        y '80'
+        w '262'
+        h '62'
+        ownership 'uns'
+        resources [ 'log-groups' ]
+        awsIcon 'cloudwatch'
+      }
+    }
+
+    security_xray = platform 'X-Ray · metrics' {
+      #off-request-path
+      description 'ACTIVE · Powertools'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/constructs/bases/UNSLambdaConstruct.ts 'UNSLambdaConstruct.ts'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/common/services/observabilityService.ts 'observabilityService.ts'
+      metadata {
+        type 'Lambda tracing · custom metrics'
+        tech 'namespace NOTIFICATIONS_UNS-{ENV}'
+        role 'Every function traces, and the pipeline emits the metrics the alarms watch: durations, failures, batch-item failures, provider calls and errors, breaker state, mTLS outcomes.'
+        sourceId 'xray'
+        order '2'
+        x '708'
+        y '210'
+        w '262'
+        h '62'
+        ownership 'uns'
+        awsIcon 'cloudwatch'
+      }
+    }
+
+    security_flowlogs = platform 'VPC flow logs · stg and prod' {
+      #off-request-path
+      description 'to S3 · none in development'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/constructs/bases/UNSVpcConstruct.ts 'UNSVpcConstruct.ts'
+      metadata {
+        type 'AWS::EC2::FlowLog'
+        tech 'ALL · bucket expires objects after 365 days'
+        role 'Only outside development.'
+        sourceId 'flowlogs'
+        order '3'
+        x '708'
+        y '340'
+        w '262'
+        h '62'
+        ownership 'uns'
+        resources [ 'flow-logs' ]
+        awsIcon 'vpc-flowlogs'
+      }
+    }
+
+    security_checkov = internal 'Checkov · inline suppressions' {
+      #off-request-path
+      description 'soft-fail in CI'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/utils/applyCheckovSkip.ts 'applyCheckovSkip.ts'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/.github/workflows/pr.yml 'pr.yml'
+      metadata {
+        type 'Scan'
+        tech 'skips written into the templates as metadata'
+        role 'Runs on the synthesised templates in every pull request and cannot fail it; findings go to code scanning. No cdk-nag.'
+        sourceId 'checkov'
+        order '4'
+        x '708'
+        y '470'
+        w '262'
+        h '62'
+        ownership 'uns'
+      }
+    }
+
+    security_exposure = internal 'Exposure and PII tags' {
+      #off-request-path
+      description 'four exposure classes · PII flag'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/utils/applyExposureTag.ts 'applyExposureTag.ts'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/utils/applyPiiTag.ts 'applyPiiTag.ts'
+      metadata {
+        type 'Tags'
+        tech 'per resource, beside eleven default tags'
+        role 'Every resource carries an exposure class and a PII flag; the messages table and the queues are <code>unknown</code>.'
+        sourceId 'exposure'
+        order '5'
+        x '708'
+        y '600'
+        w '262'
+        h '62'
+        ownership 'uns'
+      }
+    }
+  }
+
+  security_alerting = boundary '4 · Alerting' {
+    metadata {
+      type 'Controls'
+      tech 'uns-{env}-alarms-stack'
+      role 'About fifty-seven alarms, all to one topic, prioritised P1 to P3 in their names.'
+      sourceId 'alerting'
+      order '0'
+      x '1006'
+      y '30'
+      w '310'
+      h '654'
+      boundary 'soft'
+    }
+
+    security_p1 = platform 'P1 · someone is paged' {
+      #off-request-path
+      description 'provider down · breaker · 5xx'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/constructs/alarmsConstructs/UNSIntegrationAlarmsConstruct.ts 'UNSIntegrationAlarmsConstruct.ts'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/constructs/alarmsConstructs/UNSApiGatewayAlarmsConstruct.ts 'UNSApiGatewayAlarmsConstruct.ts'
+      metadata {
+        type 'AWS::CloudWatch::Alarm'
+        tech '1 of 1 five-minute period, mostly'
+        role 'OneSignal or UDP error rate over 40% in a minute; the circuit breaker open; API 5xx over 1%; and a cold-start count over 20 in five minutes, per function.'
+        sourceId 'p1'
+        order '1'
+        x '1030'
+        y '80'
+        w '262'
+        h '62'
+        ownership 'uns'
+        awsIcon 'cloudwatch'
+      }
+    }
+
+    security_p2 = platform 'P2 · pipeline health' {
+      #off-request-path
+      description 'depth · failures · p95 · mTLS · WAF'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/constructs/alarmsConstructs/UNSOperationalAlarmsConstruct.ts 'UNSOperationalAlarmsConstruct.ts'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/constructs/alarmsConstructs/UNSAuthenticationAlarmsConstruct.ts 'UNSAuthenticationAlarmsConstruct.ts'
+      metadata {
+        type 'AWS::CloudWatch::Alarm'
+        tech 'thresholds in the constructs'
+        role 'Any queue over 1,000 visible for five minutes; a stage failing over 5% of its events; p95 over 2, 3 or 5 seconds for validation, processing, dispatch; rate limiting enforced; mTLS denials over 10%, a revoked certificate, unknown certificates; a WAF block anomaly; a function error rate over 1%.'
+        sourceId 'p2'
+        order '2'
+        x '1030'
+        y '210'
+        w '262'
+        h '62'
+        ownership 'uns'
+        awsIcon 'cloudwatch'
+      }
+    }
+
+    security_p3 = platform 'P3 · something was dropped' {
+      #off-request-path
+      description 'batch and publish failures'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/constructs/alarmsConstructs/UNSOperationalAlarmsConstruct.ts 'UNSOperationalAlarmsConstruct.ts'
+      metadata {
+        type 'AWS::CloudWatch::Alarm'
+        tech 'any non-zero count'
+        role 'A record that failed within a batch at validation, processing or dispatch; a publish to the processing, dispatch or analytics queue that failed.'
+        sourceId 'p3'
+        order '3'
+        x '1030'
+        y '340'
+        w '262'
+        h '62'
+        ownership 'uns'
+        awsIcon 'cloudwatch'
+      }
+    }
+
+    security_flexalarms = platform 'FLEX side · fewer' {
+      #off-request-path
+      description 'API rates · WAF · function errors'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/constructs/UNSAlarmsStack.ts 'UNSAlarmsStack.ts'
+      metadata {
+        type 'AWS::CloudWatch::Alarm'
+        tech 'against the private gateway'
+        role 'The 5xx and 4xx rates, a WAF anomaly, and an error-rate alarm per function. No queue, duration or authentication alarms: there is no pipeline on this side.'
+        sourceId 'flexalarms'
+        order '4'
+        x '1030'
+        y '470'
+        w '262'
+        h '62'
+        ownership 'uns'
+        awsIcon 'cloudwatch'
+      }
+    }
+
+    security_topic = platform 'Alert topic → Slack' {
+      #off-request-path
+      description 'sns-topic-alerts · Chatbot'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/constructs/UNSCommon.ts 'UNSCommon.ts'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/constructs/bases/UNSSlackIntegration.ts 'UNSSlackIntegration.ts'
+      metadata {
+        type 'AWS::SNS::Topic · AWS::Chatbot::SlackChannelConfiguration'
+        tech 'workspace and channel from SSM · ReadOnlyAccess guardrail'
+        role 'Every alarm publishes here. The Slack channel exists only when both SSM ids resolve; with the synth defaults there is no subscriber at all.'
+        sourceId 'topic'
+        order '5'
+        x '1030'
+        y '600'
+        w '262'
+        h '62'
+        ownership 'uns'
+        awsIcon 'sns'
+      }
+    }
+  }
+
+  security_data = boundary '5 · Data' {
+    metadata {
+      type 'Controls'
+      tech 'retention, recovery and deletion'
+      role 'What survives a mistake, and what does not.'
+      sourceId 'data'
+      order '0'
+      x '1328'
+      y '30'
+      w '310'
+      h '524'
+      boundary 'soft'
+    }
+
+    security_pitr = platform 'Point-in-time recovery · 30 d' {
+      #off-request-path
+      description 'every table · deletion protection'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/constructs/bases/UNSDynamoDBConstruct.ts 'UNSDynamoDBConstruct.ts'
+      metadata {
+        type 'DynamoDB settings'
+        tech 'recoveryPeriodInDays: 30'
+        role 'On every table in every main environment, with deletion protection. There is no AWS Backup plan in the repository.'
+        sourceId 'pitr'
+        order '1'
+        x '1352'
+        y '80'
+        w '262'
+        h '62'
+        ownership 'uns'
+        awsIcon 'dynamodb'
+      }
+    }
+
+    security_retain = platform 'RETAIN everywhere that matters' {
+      #off-request-path
+      description 'dev, staging and production'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/config.ts 'config.ts'
+      metadata {
+        type 'CDK removal policy'
+        tech 'DESTROY only in a developer sandbox'
+        role 'Tables, buckets, keys and log groups outlive their stack in all three named environments.'
+        sourceId 'retain'
+        order '2'
+        x '1352'
+        y '210'
+        w '262'
+        h '62'
+        ownership 'uns'
+      }
+    }
+
+    security_ttl = platform 'Notifications expire' {
+      #off-request-path
+      description 'TTL 30 days · reset on dispatch'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/constructs/UNSCommon.ts 'UNSCommon.ts'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/common/repositories/dynamodbRepository.ts 'dynamodbRepository.ts'
+      metadata {
+        type 'DynamoDB TTL'
+        tech 'ExpirationDateTime · RequestedDaysToExpire overrides'
+        role 'A department may ask for fewer days. The value is written as an ISO string, which DynamoDB\'s TTL does not read; the FLEX handlers filter expired items themselves.'
+        sourceId 'ttl'
+        order '3'
+        x '1352'
+        y '340'
+        w '262'
+        h '62'
+        ownership 'uns'
+        awsIcon 'dynamodb'
+      }
+    }
+
+    security_soft = platform 'Delete is a HIDDEN event' {
+      #off-request-path
+      description 'nothing is erased on request'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/lambdas/flex/http.deleteNotification/handler.ts 'http.deleteNotification/handler.ts'
+      metadata {
+        type 'Code'
+        tech 'DELETE /notifications/{id} → analytics event'
+        role 'The app\'s delete hides the notification from its own reads; the item and its history stay until the TTL. There is no subject-deletion route on this API.'
+        sourceId 'soft'
+        order '4'
+        x '1352'
+        y '470'
+        w '262'
+        h '62'
+        ownership 'uns'
+      }
+    }
+  }
+
+  security_mtls -> security_flexauth 'the other door' {
+    metadata { protocol '—' auth '—' carries 'Nothing: two callers, two mechanisms' edgeStyle 'dash' order '1' }
+  }
+  security_mainkey -> security_otherkeys 'never shared' {
+    metadata { protocol '—' auth '—' carries 'Cross-account grants live only on the two consumer keys' edgeStyle 'dash' order '2' }
+  }
+  security_p1 -> security_p2 'then' {
+    metadata { protocol '—' auth '—' carries 'Priority order in the alarm names' edgeStyle 'dash' order '3' }
+  }
+  security_p2 -> security_p3 'then' {
+    metadata { protocol '—' auth '—' carries 'Priority order in the alarm names' edgeStyle 'dash' order '4' }
+  }
+}
+
+views {
+  view security {
+    title 'Security'
+    include security_access, security_access.**
+    include security_encryption, security_encryption.**
+    include security_detection, security_detection.**
+    include security_alerting, security_alerting.**
+    include security_data, security_data.**
+  }
+}

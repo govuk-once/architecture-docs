@@ -41,6 +41,7 @@ env:
   # All four of the GOV.UK App's sources track main.
   APP_REF: main
   UDP_REF: main
+  UNS_REF: main
 
 jobs:
   build:
@@ -110,6 +111,18 @@ jobs:
           repository: govuk-once/user-data-platform
           ref: ${{ env.UDP_REF }}
           path: .sources/udp
+          persist-credentials: false
+
+      # UNS is read and never installed or synthesised: its CDK app imports a package
+      # that lives only in a private CodeArtifact registry, so its counts are prose in
+      # the model rather than derived from templates. A read role for that registry is
+      # what it would take to add a `synth` block and bind them.
+      - name: Checkout UNS
+        uses: actions/checkout@v5
+        with:
+          repository: govuk-once/gds-unified-notification-service
+          ref: ${{ env.UNS_REF }}
+          path: .sources/uns
           persist-credentials: false
 
       - name: Setup pnpm

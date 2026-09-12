@@ -8,14 +8,6 @@
     "page": "index.html",
     "url": "https://govuk-once.github.io/architecture-docs/"
   },
-  "projects": ["flex", "app", "udp"],
-  "planned": [
-    {
-      "id": "uns",
-      "name": "UNS",
-      "tagline": "GOV.UK Once · notify",
-      "blurb": "System of record for notification records and group subscriptions. Described here only as FLEX sees it; nothing has been read from UNS’s own repository yet.",
-      "seenFrom": "flex"
-    }
-  ]
+  "projects": ["flex", "app", "udp", "uns"],
+  "planned": []
 }

@@ -97,7 +97,7 @@ model {
         tech 'AWS · consumer of the private API'
         role 'The second consumer the development context names, as <code>gdsuns</code>.'
         facts [
-          'Same three permissions and its own VPC endpoint id. What it calls is not in this repository; UNS\'s page is planned.'
+          'Same three permissions and its own VPC endpoint id. What it calls is not in this repository; UNS is documented on its own page.'
         ]
         sourceId 'uns'
         order '4'

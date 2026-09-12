@@ -1,0 +1,13 @@
+{
+  "repo": "https://github.com/govuk-once/gds-unified-notification-service.git",
+  "ref": "main",
+  "derived": {
+    "sha": "99e6b89b786ba9400a1be53ddfab1b9501527e1a",
+    "subject": "refactor(NOT-292): Refactored initialize function to a static create function (#310)",
+    "committed": "2026-09-11T11:44:10+01:00",
+    "builtFrom": "nothing derived — this project's counts are prose",
+    "derivation": "af35b68e0ec835a9",
+    "facts": ""
+  },
+  "read": null
+}

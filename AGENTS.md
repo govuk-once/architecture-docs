@@ -5,10 +5,12 @@ lives elsewhere. It holds a LikeC4 model per platform, the pipeline that renders
 interactive page, an index over them, and the checks that keep model and code in step. It
 reads those repositories and never writes to them.
 
-Today that is **FLEX**, the **GOV.UK App** and **UDP**, with UNS listed as planned. One
+Today that is **FLEX**, the **GOV.UK App**, **UDP** and **UNS**. One
 directory per architecture under `projects/`; one renderer in `explorer/` that knows about
 none of them. Every command below takes an optional project id and acts on all of them when
-you give none. FLEX and UDP are each read from one repository; the GOV.UK App from four.
+you give none. FLEX, UDP and UNS are each read from one repository; the GOV.UK App from
+four. UNS is the one whose CDK app cannot be synthesised here — it imports a package from
+a private CodeArtifact registry — so its counts are prose, not derived.
 
 This file is for anyone — person or coding agent — making changes here. It is a router and an
 operating manual: it says how to run the loop, and where the real instructions live.
