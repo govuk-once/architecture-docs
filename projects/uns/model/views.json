@@ -7,7 +7,89 @@
     "blurb": "UNS among the systems it talks to: the departments that send, the two GOV.UK Once systems it reads from and is read by, and the push provider that reaches a phone. C4 level 1 — runtime only.",
     "note": "Nothing here is derived from CloudFormation. UNS's CDK app imports a package that only a private registry serves, so this page is read from the source and every count on it is prose.",
     "w": 1060,
-    "h": 560
+    "h": 560,
+    "tables": [
+      {
+        "name": "Consumer organisations, per environment",
+        "code": [
+          ["devConsumers.ts", "infrastructure/cdk/consumers/devConsumers.ts"],
+          [
+            "stagingConsumers.ts",
+            "infrastructure/cdk/consumers/stagingConsumers.ts"
+          ],
+          [
+            "productionConsumers.ts",
+            "infrastructure/cdk/consumers/productionConsumers.ts"
+          ],
+          [
+            "consumersMetadata.ts",
+            "infrastructure/cdk/consumers/consumersMetadata.ts"
+          ]
+        ],
+        "cols": [
+          "Environment",
+          "Organisation · OU · CN",
+          "Certificate valid",
+          "Gets"
+        ],
+        "rows": [
+          [
+            "Development",
+            "UNS · developers · <code>dev.2026-Q2-Q3</code>",
+            "27 May 2026 – 31 Sep 2026, as written",
+            "channels All, retention one month"
+          ],
+          [
+            "Development",
+            "DVLA · dvla · <code>dvla.2026-Q2-Q3</code>",
+            "27 May 2026 – 31 Sep 2026, as written",
+            "channels None, retention not allowed"
+          ],
+          [
+            "Development",
+            "EventsAggregator · ea · <code>ea.2026-Q2-Q3</code>",
+            "27 May 2026 – 31 Sep 2026, as written",
+            "channels Standard; shown as Foreign Travel Advice"
+          ],
+          [
+            "Staging",
+            "UNS · uns · <code>dev.2026-Q2-Q3</code>",
+            "27 May 2026 – 31 Sep 2026, as written",
+            "as above"
+          ],
+          [
+            "Staging",
+            "DVLA · dvla",
+            "27 May 2026 – 31 Sep 2026, as written",
+            "as above"
+          ],
+          [
+            "Staging",
+            "pentest · pentest · <code>pentest.2026-Q2</code>",
+            "2 – 16 June 2026",
+            "no organisation metadata: the authorizer refuses it"
+          ],
+          [
+            "Staging",
+            "EventsAggregator · ea · <code>ea.2026-Q2-Q4</code>",
+            "24 Aug 2026 – 31 Dec 2026",
+            "as above"
+          ],
+          [
+            "Production",
+            "UNS · uns · <code>dev.2026-Q2-Q3</code>",
+            "13 Jul 2026 – 13 Oct 2026",
+            "as above"
+          ],
+          [
+            "Production",
+            "DVLA · dvla · <code>dvla.2026-Q2-Q3</code>",
+            "13 Jul 2026 – 13 Oct 2026",
+            "as above"
+          ]
+        ]
+      }
+    ]
   },
   "send": {
     "name": "Send path",
@@ -87,6 +169,70 @@
             "—"
           ]
         ]
+      },
+      {
+        "name": "Configuration the pipeline reads at runtime, and the value a fresh environment gets",
+        "code": [
+          ["cdk.predeploy.ssm.ts", "infrastructure/cdk/cdk.predeploy.ssm.ts"],
+          ["parameters.ts", "src/common/utils/parameters.ts"],
+          [
+            "circuitBreakerService.ts",
+            "src/common/services/circuitBreakerService.ts"
+          ]
+        ],
+        "cols": ["SSM parameter under /{prefix}/", "Default", "Read by"],
+        "rows": [
+          [
+            "<code>config/{validation,processing,groupProcessingWorker,dispatch}/enabled</code>",
+            "<code>true</code>",
+            "Each SQS handler, before every batch"
+          ],
+          [
+            "<code>config/processing/adapter</code>",
+            "<code>VOID</code> — maps the user id to itself",
+            "sqs.processing; <code>OneSignal</code> is the only other value the enum allows, and means UDP"
+          ],
+          [
+            "<code>config/dispatch/adapter</code> · <code>config/dispatch/onesignal/appId</code>",
+            "<code>VOID</code> · <code>placeholder</code>",
+            "sqs.dispatch"
+          ],
+          [
+            "<code>config/common/cache/notificationsProviderRateLimitPerMinute</code>",
+            "5",
+            "sqs.dispatch, against the cache counter"
+          ],
+          [
+            "<code>config/dispatch/circuitBreaker/{threshold,windowDuration,halfOpenAfter,rateLimitWhenOpen}</code>",
+            "5 failures · 60 s · 30 s · 5 a minute",
+            "The breaker: closed → open at the threshold, half-open after the wait, probing at the limit"
+          ],
+          [
+            "<code>config/featureFlag/{deeplinkUrl,messageRetention,channelControls}</code>",
+            "<code>true</code>; <code>false</code> in production",
+            "Dispatch and validation"
+          ],
+          [
+            "<code>content/allowed/protocols</code> · <code>urlHostnames</code>",
+            "<code>govuk:,https:</code> · <code>*.gov.uk</code>",
+            "Validation of deeplinks"
+          ],
+          [
+            "<code>notification/deeplinkTemplate</code>",
+            "<code>govuk://app.gov.uk/notificationcentre/detail?id:{id}</code>",
+            "The default deeplink when a message has none"
+          ],
+          [
+            "<code>group/dispatch/{workerCount,workerBatchSize}</code>",
+            "5 · 100",
+            "postGroupMessage and the worker"
+          ],
+          [
+            "<code>queue/*/url</code> · <code>table/*/attributes</code>",
+            "Written by the stack",
+            "Every queue service and repository"
+          ]
+        ]
       }
     ],
     "w": 1300,
@@ -100,7 +246,70 @@
     "blurb": "Every separately deployable part the CDK app creates per environment, grouped by the construct tree that owns it. One stack holds everything; a second holds the alarms. C4 level 2.",
     "note": "Feature-flagged parts — the group store, the group queue, the group functions — exist in development and staging and not in production. Edges to the analytics queue are omitted: every function sends to it.",
     "w": 1560,
-    "h": 1150
+    "h": 1150,
+    "tables": [
+      {
+        "name": "What differs by environment",
+        "code": [
+          ["config.ts", "infrastructure/cdk/config.ts"],
+          [
+            "UNSVpcConstruct.ts",
+            "infrastructure/cdk/constructs/bases/UNSVpcConstruct.ts"
+          ],
+          [
+            "UNSFlexResources.ts",
+            "infrastructure/cdk/constructs/UNSFlexResources.ts"
+          ],
+          [
+            "UNSLambdaConstruct.ts",
+            "infrastructure/cdk/constructs/bases/UNSLambdaConstruct.ts"
+          ]
+        ],
+        "cols": [
+          "Setting",
+          "Development",
+          "Staging",
+          "Production",
+          "Developer sandbox"
+        ],
+        "rows": [
+          [
+            "Name prefix",
+            "<code>uns-dev-</code>",
+            "<code>uns-stg-</code>",
+            "<code>uns-</code>",
+            "<code>uns-{name}-{hash}-</code>"
+          ],
+          [
+            "Groups feature: table, queue, four functions, two routes",
+            "yes",
+            "yes",
+            "—",
+            "yes"
+          ],
+          ["Deeplink, retention and channel flags", "on", "on", "off", "on"],
+          ["Public FLEX gateway for the tests", "yes", "—", "—", "yes"],
+          ["VPC", "own", "own", "own", "imports dev's"],
+          ["VPC flow logs", "—", "to S3, 365 days", "to S3, 365 days", "—"],
+          [
+            "Certificate authority",
+            "own, to 2036",
+            "own, to 2036",
+            "own, to 2036",
+            "dev's, week-long certificates"
+          ],
+          [
+            "Removal policy · deletion protection · log retention",
+            "RETAIN · on · 1 year",
+            "the same",
+            "the same",
+            "DESTROY · off · 1 month"
+          ],
+          ["<code>LOG_LEVEL</code>", "DEBUG", "DEBUG", "INFO", "DEBUG"],
+          ["Consumer certificates", "3", "4", "2", "1"]
+        ]
+      }
+    ]
   },
   "components": {
     "name": "Components",
@@ -111,7 +320,66 @@
     "note": "Dependencies are resolved inside the handler on every invocation, so a cold start pays nothing for them and a warm one pays every time.",
     "dashMeans": "a hand-off inside the library, not a call the handler makes",
     "w": 1480,
-    "h": 1100
+    "h": 1100,
+    "tables": [
+      {
+        "name": "How an error becomes a response",
+        "code": [
+          [
+            "httpErrorHandlerMiddleware.ts",
+            "src/common/middlewares/httpErrorHandlerMiddleware.ts"
+          ],
+          ["BaseError.ts", "src/common/models/Errors/BaseError.ts"],
+          [
+            "requestValidatorMiddleware.ts",
+            "src/common/middlewares/requestValidatorMiddleware.ts"
+          ],
+          [
+            "responseValidatorMiddleware.ts",
+            "src/common/middlewares/responseValidatorMiddleware.ts"
+          ]
+        ],
+        "cols": ["Error class", "Status", "Body"],
+        "rows": [
+          [
+            "<code>BadRequestError</code> — request or authorizer schema failed",
+            "400",
+            "<code>{ Status, HttpError, Errors }</code>"
+          ],
+          ["<code>UnauthorisedError</code>", "401", "the same shape"],
+          [
+            "<code>NotFoundError</code> — no record, or another person's",
+            "404",
+            "the same shape"
+          ],
+          [
+            "<code>ExpectationFailedError</code> — the response failed its own schema",
+            "417",
+            "the same shape"
+          ],
+          [
+            "<code>TooManyRequestsError</code> — the provider rate limit",
+            "429",
+            "the same shape; in a queue handler, the record returns to the queue"
+          ],
+          [
+            "<code>InternalServerError</code> · <code>SimulatedError</code>",
+            "500",
+            "the same shape"
+          ],
+          [
+            "<code>BadGatewayError</code> — the provider answered badly",
+            "502",
+            "the same shape"
+          ],
+          [
+            "Anything not a <code>BaseError</code>",
+            "500",
+            "<code>An unexpected error occurred</code>"
+          ]
+        ]
+      }
+    ]
   },
   "flex": {
     "name": "Read-back API",
@@ -192,7 +460,55 @@
     "blurb": "One VPC per main environment, two tiers, and which functions are in it. Most are not: the HTTP handlers run outside the VPC; only the pipeline functions and the cache are inside.",
     "note": "There is no isolated tier. The functions inside the VPC have a route to the internet through the NAT gateways, which is how OneSignal and UDP are reached.",
     "w": 1560,
-    "h": 580
+    "h": 580,
+    "tables": [
+      {
+        "name": "The thirteen endpoints",
+        "code": [
+          ["UNSCommon.ts", "infrastructure/cdk/constructs/UNSCommon.ts"],
+          [
+            "UNSFlexResources.ts",
+            "infrastructure/cdk/constructs/UNSFlexResources.ts"
+          ]
+        ],
+        "cols": ["Service", "Type", "Reached by the code"],
+        "rows": [
+          ["DynamoDB", "Gateway", "Every repository"],
+          [
+            "S3",
+            "Gateway",
+            "Nothing directly: the export is a CloudWatch Logs task"
+          ],
+          ["SQS", "Interface", "Every queue service"],
+          [
+            "KMS",
+            "Interface",
+            "Table, queue and environment-variable decryption"
+          ],
+          ["SSM", "Interface", "The configuration service, every invocation"],
+          ["Secrets Manager", "Interface", "The OneSignal key, UDP's bundle"],
+          [
+            "CloudWatch Logs",
+            "Interface",
+            "Function logs; the analytics log stream"
+          ],
+          ["X-Ray", "Interface", "Active tracing"],
+          [
+            "API Gateway",
+            "Interface",
+            "The private FLEX gateway is bound to it, so the account's own tests can reach it"
+          ],
+          ["Lambda", "Interface", "No SDK client in the code"],
+          [
+            "CloudWatch Monitoring",
+            "Interface",
+            "No SDK client; metrics leave as embedded-metric log lines"
+          ],
+          ["Application Insights", "Interface", "No caller in the code"],
+          ["Network Firewall", "Interface", "No caller in the code"]
+        ]
+      }
+    ]
   },
   "security": {
     "name": "Security",
@@ -295,6 +611,53 @@
           ],
           ["Rate limiting enforced", "P2", "≥ 1, two periods", "PSO"],
           ["Batch item failures · queue publish failures", "P3", "any", "PSO"]
+        ]
+      },
+      {
+        "name": "Secrets, and who reads them",
+        "code": [
+          [
+            "UNSPSOResources.ts",
+            "infrastructure/cdk/constructs/UNSPSOResources.ts"
+          ],
+          [
+            "UNSFlexResources.ts",
+            "infrastructure/cdk/constructs/UNSFlexResources.ts"
+          ],
+          [
+            "UNSClientCertificateConstruct.ts",
+            "infrastructure/cdk/constructs/bases/UNSClientCertificateConstruct.ts"
+          ],
+          ["cdk.postdeploy.ssm.ts", "infrastructure/cdk/cdk.postdeploy.ssm.ts"],
+          ["secrets.ts", "src/common/utils/secrets.ts"]
+        ],
+        "cols": ["Secret", "Written by", "Read by"],
+        "rows": [
+          [
+            "<code>{prefix}/config/dispatch/onesignal/apiKey</code>",
+            "by hand",
+            "sqs.dispatch"
+          ],
+          [
+            "<code>{prefix}/flex/consumer</code>",
+            "the post-deploy script: URL, key, role, region",
+            "FLEX's account, under a key policy that names it"
+          ],
+          [
+            "<code>{prefix}/tls/{id}/private-key</code> · <code>/crt</code>",
+            "the CSR custom resource, then ACM PCA",
+            "the department's account named in <code>certificate/consumers</code>; the e2e tests read UNS's own"
+          ],
+          [
+            "<code>{prefix}/bigquery/export/key/{id,secret}</code>",
+            "the stack, from the IAM user's access key",
+            "whoever configures BigQuery"
+          ],
+          [
+            "UDP's consumer secret, in UDP's account",
+            "UDP",
+            "sqs.processing, through the ARN in <code>udp/config/sm</code>"
+          ]
         ]
       }
     ],

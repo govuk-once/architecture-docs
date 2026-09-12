@@ -301,6 +301,25 @@ model {
         ownership 'third'
       }
     }
+    send_status = platform 'Status routes · 2' {
+      #request-path
+      description 'notification · campaign'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/lambdas/pso/http.getNotificationStatus/handler.ts 'http.getNotificationStatus/handler.ts'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/lambdas/pso/http.getCampaignStatus/handler.ts 'http.getCampaignStatus/handler.ts'
+      metadata {
+        type 'AWS::Lambda::Function ×2'
+        tech 'through the same gateway and authorizer'
+        role 'One reads the record\'s <code>Events</code> list, sorted by time; the other the campaign\'s counters by <code>organisation/department/campaign</code>, with <code>RECEIVED</code> as the sum of the two validated states. Both answer only what the analytics function has already written.'
+        sourceId 'status'
+        order '14'
+        x '350'
+        y '990'
+        w '262'
+        h '62'
+        ownership 'uns'
+        awsIcon 'lambda'
+      }
+    }
   }
 
   send_group = boundary 'A group message · POST /v1/send-to-group' {

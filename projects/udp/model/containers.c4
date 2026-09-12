@@ -75,7 +75,8 @@ model {
         tech 'PRIVATE endpoint · stage {env} · 100 rps, burst 200'
         role 'Thirteen methods, every one a Lambda proxy with IAM authorisation, behind a resource policy that admits only the consumers\' VPC endpoints.'
         facts [
-          'The regional Web ACL is associated here: a 300,000-per-IP rate rule and three AWS managed rule sets, logged to <code>aws-waf-logs-…</code>.'
+          'The regional Web ACL is associated here: a 300,000-per-IP rate rule and three AWS managed rule sets, logged to <code>aws-waf-logs-…</code>.',
+          'The stage logs every method at INFO to a JSON access log, with metrics and X-Ray on and data tracing off.'
         ]
         sourceId 'api'
         order '3'

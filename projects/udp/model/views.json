@@ -109,6 +109,62 @@
             "Queues a deletion; see Rights requests"
           ]
         ]
+      },
+      {
+        "name": "What a consumer is given, and what every data route needs",
+        "code": [
+          [
+            "consumer-config-construct.ts",
+            "cdk/lib/constructs/consumer-config-construct.ts"
+          ],
+          [
+            "iam-consumer-construct.ts",
+            "cdk/lib/constructs/iam-consumer-construct.ts"
+          ],
+          ["data/defaults.ts", "libs/utils/schemas/endpoints/data/defaults.ts"],
+          [
+            "api-gateway-construct.ts",
+            "cdk/lib/constructs/api-gateway-construct.ts"
+          ]
+        ],
+        "cols": ["Item", "Where it comes from", "What it is for"],
+        "rows": [
+          [
+            "<code>consumerRoleArn</code>",
+            "The consumer secret",
+            "The role to assume; trusts the consumer's account, with an external id when configured"
+          ],
+          [
+            "<code>apiUrl</code> · <code>apiAccountId</code> · <code>region</code>",
+            "The consumer secret",
+            "Where to send the SigV4 request"
+          ],
+          [
+            "<code>apiKey</code>",
+            "The consumer secret",
+            "Sent as <code>x-api-key</code>; no method checks it"
+          ],
+          [
+            "VPC endpoint id",
+            "Written into the SSM consumer config by hand",
+            "Must appear in the API's <code>aws:sourceVpce</code> allow list, or the call is denied before authorisation"
+          ],
+          [
+            "<code>requesting-service</code>",
+            "A header on every data route",
+            "Which service is asking — <code>GOVUKAPP</code> in the schema example, <code>dvla</code> from UNS"
+          ],
+          [
+            "<code>requesting-service-user-id</code>",
+            "A header on every data route",
+            "That service's own id for the person; resolved to a <code>udpId</code> in the identity table"
+          ],
+          [
+            "Stage throttle",
+            "<code>api-gateway-construct.ts</code>",
+            "100 requests a second, burst 200, for all consumers together; the only throttle in force"
+          ]
+        ]
       }
     ],
     "w": 840,
@@ -122,7 +178,46 @@
     "blurb": "Every separately deployable part the CDK app creates per environment, grouped by the stack that owns it, and the traffic between them. C4 level 2.",
     "note": "The VPC stack is on Network; the monitoring, backup, Macie and test stacks are on Security and Delivery. Counts on the boxes are of functions as deployed; the Resources tab binds them to the synthesised templates.",
     "w": 1900,
-    "h": 920
+    "h": 920,
+    "tables": [
+      {
+        "name": "What differs by environment",
+        "code": [
+          ["lambda-construct.ts", "cdk/lib/constructs/lambda-construct.ts"],
+          ["environment.ts", "cdk/constants/environment.ts"],
+          ["cdk/bin/app.ts", "cdk/bin/app.ts"],
+          ["vpc-construct.ts", "cdk/lib/constructs/vpc-construct.ts"],
+          ["main-stack.ts", "cdk/lib/stacks/main-stack.ts"]
+        ],
+        "cols": ["Setting", "Development", "Staging", "Production"],
+        "rows": [
+          ["Reserved concurrency per function", "2", "50", "50"],
+          ["Log retention", "1 month", "1 year", "1 year"],
+          [
+            "Removal policy and deletion protection",
+            "destroy",
+            "RETAIN, protected",
+            "RETAIN, protected"
+          ],
+          ["Backup stack", "—", "vault, 3 plans", "vault, 3 plans"],
+          ["End-to-end and performance stacks", "yes", "yes", "—"],
+          ["Public network ACL allow rules", "yes", "yes", "deny rules only"],
+          ["API caching", "off", "off", "off — forced in the stack"],
+          [
+            "Stack name prefix",
+            "<code>dev-</code>, or <code>pr-{n}-dev-</code>",
+            "<code>stag-</code>",
+            "<code>prod-</code>"
+          ],
+          [
+            "Slack alarm channel",
+            "from SSM <code>…/udp/monitoring</code>, when set",
+            "the same",
+            "the same"
+          ]
+        ]
+      }
+    ]
   },
   "components": {
     "name": "Components",
@@ -133,7 +228,45 @@
     "note": "Read the chain top to bottom for a request coming in, and bottom to top for the response going out: the serialiser and sanitiser are <code>after</code> middleware, so they run on the way back.",
     "dashMeans": "a hand-off inside the library, not a call the handler makes",
     "w": 1480,
-    "h": 1360
+    "h": 1360,
+    "tables": [
+      {
+        "name": "How an error becomes a response",
+        "code": [
+          ["udpErrorHandling.ts", "libs/utils/middleware/udpErrorHandling.ts"],
+          ["zodValidator.ts", "libs/utils/middleware/zodValidator.ts"]
+        ],
+        "cols": ["Thrown", "Status", "Body"],
+        "rows": [
+          [
+            "<code>ZodValidationError</code> — the request failed its route schema",
+            "400",
+            "<code>errorCode</code> 400 and the validation issues"
+          ],
+          [
+            "<code>IdentityRecordNotFoundError</code> — no link for the two headers",
+            "404",
+            "identity not found"
+          ],
+          [
+            "<code>DataRecordNotFoundError</code> — nothing under that resource path",
+            "404",
+            "data not found"
+          ],
+          [
+            "<code>SarNotFoundError</code> — no record for that sarId under this person",
+            "404",
+            "SAR not found"
+          ],
+          [
+            "Any other <code>BaseUDPError</code>",
+            "500",
+            "<code>errorCode</code> 500"
+          ],
+          ["Anything else", "500", "a generic body; the error is logged"]
+        ]
+      }
+    ]
   },
   "rights": {
     "name": "Rights requests",
@@ -360,6 +493,106 @@
             "—",
             "smoke, not waited for",
             "smoke on dev, baseline on staging, neither waited for"
+          ]
+        ]
+      },
+      {
+        "name": "The end-to-end features, as Cucumber runs them",
+        "code": [
+          ["e2e/project.json", "e2e/project.json"],
+          ["identity-api.feature", "e2e/src/features/identity-api.feature"],
+          ["sar.feature", "e2e/src/features/sar.feature"],
+          ["dsar.feature", "e2e/src/features/dsar.feature"],
+          [
+            "consumer-config-steps.ts",
+            "e2e/src/step-definitions/consumer-config-steps.ts"
+          ]
+        ],
+        "cols": ["Feature", "Scenarios", "Note"],
+        "rows": [
+          [
+            "Identity API",
+            "14",
+            "Create, read, exchange, delete, linked services"
+          ],
+          ["SAR API", "12", "Start, poll, download"],
+          ["DSAR API", "9", "Start, then verify the records are gone"],
+          [
+            "Patch data",
+            "8",
+            "Merge semantics on <code>PATCH /v1/{resourcePath+}</code>"
+          ],
+          ["User data API", "5", "Post, get, delete"],
+          [
+            "Consumer config API access",
+            "2",
+            "Report themselves skipped: the stack passes no secret ARN into the build"
+          ],
+          [
+            "KMS key rotation",
+            "1",
+            "Tagged <code>@kms</code>; every target excludes it"
+          ]
+        ]
+      },
+      {
+        "name": "The performance scenarios, as k6 runs them",
+        "code": [
+          ["performance/project.json", "performance/project.json"],
+          ["config.ts", "performance/src/config.ts"],
+          ["smoke-test.ts", "performance/src/smoke-test.ts"],
+          ["baseline.ts", "performance/src/scenarios/baseline.ts"],
+          [
+            "read-heavy-spike.ts",
+            "performance/src/scenarios/read-heavy-spike.ts"
+          ],
+          ["stress-reads.ts", "performance/src/scenarios/stress-reads.ts"],
+          [
+            "write-heavy-burst.ts",
+            "performance/src/scenarios/write-heavy-burst.ts"
+          ],
+          [
+            "cold-start-impact.ts",
+            "performance/src/scenarios/cold-start-impact.ts"
+          ]
+        ],
+        "cols": ["Scenario", "Load", "Passes when", "Runs"],
+        "rows": [
+          [
+            "smoke",
+            "1 user, 1 iteration",
+            "no failed request, p95 under 2 s",
+            "every dev deploy, every PR"
+          ],
+          [
+            "baseline",
+            "100 requests a second for 15 minutes",
+            "p95 under 200 ms, errors under 0.1%",
+            "every staging deploy"
+          ],
+          [
+            "read-heavy-spike",
+            "ramps 10 → 150 a second over 10 minutes",
+            "the NFR thresholds",
+            "by hand, staging"
+          ],
+          [
+            "stress-reads · stress-writes · stress-deletes",
+            "one-minute steps of 10 a second, up to 300",
+            "the NFR thresholds; aborts on failure",
+            "by hand, staging"
+          ],
+          [
+            "write-heavy-burst",
+            "10 → 50 → 150 a second over 13 minutes",
+            "p95 under 200 ms, p99 under 400 ms on writes",
+            "by hand"
+          ],
+          [
+            "cold-start-impact",
+            "100 then 200 a second with a cool-down",
+            "thresholds keyed to a scenario name that does not match; the nx target points at a file the build does not produce",
+            "by hand — broken as committed"
           ]
         ]
       }
