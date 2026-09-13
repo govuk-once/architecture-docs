@@ -1057,7 +1057,7 @@ function sourceMeta(project: Project): string[] {
   const states = readStates(project);
   const day = (iso: string) => esc(iso.slice(0, 10));
   // A project with no `derive` block derives nothing: its recorded commit is the one the
-  // model was read against, and its counts are prose. The card must not say "derived".
+  // model was read against, and its counts are prose. The row must not say "derived".
   const from = project.derive ? "derived from" : "read at";
   if (!project.qualified) {
     const [only] = project.sources;
@@ -1086,16 +1086,21 @@ function sourceMeta(project: Project): string[] {
   ];
 }
 
-function projectCard(built: Built): string {
+/**
+ * One system, one row: name and tagline, what it is, and where its reading stands. A grid
+ * of cards cannot tile five systems evenly, and the number only grows; a list is even at
+ * any count, and its fixed columns let the tab counts and dates be compared down the page.
+ */
+function systemRow(built: Built): string {
   const { project, views } = built;
   const meta = [
     `<span><b>${String(views.length)}</b> tabs</span>`,
     ...sourceMeta(project),
   ].filter(Boolean);
   return (
-    `<a class="card" href="${esc(project.href)}">` +
-    `<h2>${esc(project.config.name)}</h2>` +
-    `<span class="tagline">${esc(project.config.tagline)}</span>` +
+    `<a class="row" href="${esc(project.href)}">` +
+    `<div class="who"><h2>${esc(project.config.name)}</h2>` +
+    `<span class="tagline">${esc(project.config.tagline)}</span></div>` +
     `<p>${esc(project.config.blurb)}</p>` +
     `<div class="meta">${meta.join("")}</div>` +
     `</a>`
@@ -1103,12 +1108,12 @@ function projectCard(built: Built): string {
 }
 
 /**
- * A planned architecture gets the same card and no link. It is worth showing that the
- * site intends to cover it — but the card must not read as a door, and it must say where
+ * A planned architecture gets the same row and no link. It is worth showing that the
+ * site intends to cover it — but the row must not read as a door, and it must say where
  * its description came from: a description of UDP written while reading FLEX is evidence
  * about FLEX.
  */
-function plannedCard(
+function plannedRow(
   p: (typeof SITE_CONFIG.planned)[number],
   named: Map<string, string>,
 ): string {
@@ -1116,9 +1121,9 @@ function plannedCard(
     ? `<span>as ${esc(named.get(p.seenFrom) ?? p.seenFrom)} sees it</span>`
     : "";
   return (
-    `<div class="card planned">` +
-    `<h2>${esc(p.name)}</h2>` +
-    `<span class="tagline">${esc(p.tagline)}</span>` +
+    `<div class="row planned">` +
+    `<div class="who"><h2>${esc(p.name)}</h2>` +
+    `<span class="tagline">${esc(p.tagline)}</span></div>` +
     `<p>${esc(p.blurb)}</p>` +
     `<div class="meta"><span class="badge">Not yet documented</span>${from}</div>` +
     `</div>`
@@ -1126,7 +1131,7 @@ function plannedCard(
 }
 
 /*
- * The sketch above the cards: the documented systems and who calls whom. Static SVG,
+ * The sketch above the list: the documented systems and who calls whom. Static SVG,
  * routed on a grid — same row is a horizontal, same column a vertical, anything else
  * runs horizontally to the target's column and then turns. Every line links to the tab
  * that proves it, and a link to a tab that was not built fails the build here rather
@@ -1320,14 +1325,14 @@ function fitSketch(built: Built[]): string {
 }
 
 function buildIndex(built: Built[]): string {
-  // A planned card credits the project whose model its description came from, by the
+  // A planned row credits the project whose model its description came from, by the
   // name that project calls itself rather than by its directory.
   const named = new Map(
     built.map((b) => [b.project.id, b.project.config.name]),
   );
-  const cards =
-    built.map((b) => projectCard(b)).join("\n") +
-    SITE_CONFIG.planned.map((p) => plannedCard(p, named)).join("\n");
+  const rows =
+    built.map((b) => systemRow(b)).join("\n") +
+    SITE_CONFIG.planned.map((p) => plannedRow(p, named)).join("\n");
 
   const counted =
     `${String(built.length)} documented` +
@@ -1344,7 +1349,7 @@ function buildIndex(built: Built[]): string {
         `<p>${esc(SITE_CONFIG.blurb)}</p>`,
     )
     .replace("<!--FIT-->", fitSketch(built))
-    .replace("<!--CARDS-->", cards)
+    .replace("<!--SYSTEMS-->", rows)
     .replace("<!--FOOTER-->", footer)
     .replace(
       "<script>",
@@ -1431,7 +1436,7 @@ async function main() {
   /*
    * The index lists every project the site publishes, not only the ones just built, so a
    * one-project rebuild cannot quietly drop the others off the front page. Rebuilding a
-   * card needs that project's views, so the ones not asked for are loaded here.
+   * row needs that project's views, so the ones not asked for are loaded here.
    */
   const shown =
     asked.length === loadProjects().length

@@ -877,9 +877,17 @@ hr {
   gap: 6px;
   margin-top: 12px;
 }
+/* Every row is its own grid container, so a content-sized track is measured per row: the
+   third column took whatever that row's tags needed, the two flexible columns divided a
+   different remainder each time, and the count landed at a different x on every line —
+   four separate positions down the Decisions tab, and "varies" pulled 37px left of the
+   "3×" rows on Resources. Fixed tracks make every row agree on where the count starts,
+   and hand the name the slack the old flexible count column was wasting on 304px of
+   whitespace. The count track fits the longest thing that column ever says, which is
+   "none in development", not the "3×" that is in most of them. */
 .row {
   display: grid;
-  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) 140px minmax(0, 260px);
   gap: 14px;
   align-items: center;
   width: 100%;

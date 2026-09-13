@@ -68,7 +68,8 @@ Then `pnpm sync <id>`, `pnpm synth <id>`, `pnpm build`, `pnpm check`.
 
 ### A project read from several repositories
 
-The GOV.UK App is two apps, a backend and a config repository, and one page. Its config
+The GOV.UK App is two apps, a backend, a config repository and the shared Swift library
+the iOS app depends on — five repositories, one page. Its config
 declares `sources` in place of `source` and the project-wide `repo`:
 
 ```json
@@ -133,6 +134,16 @@ under [_Tab order and grouping_](#tab-order-and-grouping). Write each tab by rea
 [`AGENTS.md`](../AGENTS.md): the synthesised templates for what deploys, the stacks for
 why, and cite as you go. Add `synth` and `derive.counts` to the config as soon as there is
 a number worth gating; until then the counts are prose.
+
+Context is the one tab whose audience is not an engineer, and its wording should say so. A
+line there says what the relationship _is_ — "who they are", "a message", "what other
+services hold" — not how it travels. The mechanism is not lost: it stays in that edge's
+`protocol`, `auth` and `carries`, which the inspector shows on click, and in full on the tab
+that proves it. Nothing enforces this, so it is worth reading by eye — `SigV4`, `mTLS` or
+`JWT` on a Context tab is a sign the wording drifted back toward the code. Two gates do bite
+when you reword, though: the build refuses a sub-label too wide for its box, and the render
+check counts a label that lands on one. A shorter label is not automatically safer, because
+the renderer slides labels along their line to find a clear slot.
 
 The one thing no template gives you is the model itself. FLEX's is 9,944 lines across the
 eight tabs it derives from code, and it took a verification pass that found 80 wrong claims
@@ -253,9 +264,9 @@ of the renderer. The directory name is the id: it names the URL and prefixes exp
 
 | Field                  | What it does                                                                                                                                                                                                      |
 | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `name`                 | Short name, on the index card                                                                                                                                                                                     |
+| `name`                 | Short name, on the index row                                                                                                                                                                                      |
 | `title`, `tagline`     | The browser tab and the header brand                                                                                                                                                                              |
-| `blurb`                | One paragraph on the index card: what this architecture is                                                                                                                                                        |
+| `blurb`                | One paragraph on the index row: what this architecture is                                                                                                                                                         |
 | `repo`                 | Base URL that every `code` citation links against, with one `source`                                                                                                                                              |
 | `inventoryView`        | Which view is the resource inventory — `resources` here                                                                                                                                                           |
 | `inventoryLabel`       | What the inventory's count line calls the things it counts — "AWS resources" here                                                                                                                                 |
@@ -309,7 +320,7 @@ the error names the project and the fix rather than quietly producing an empty p
 The site's own config, [`../explorer.config.json`](../explorer.config.json), holds only what
 is true of the whole site: its title and blurb, where the site is assembled, which projects
 it publishes, which it lists as planned but not yet documented, and `fit` — the overall
-architecture sketched above the cards, one system per box. A `fit` node that names a `project` is a door to that
+architecture sketched above the list, one system per box. A `fit` node that names a `project` is a door to that
 page; one that does not is a party outside the programme. Every `fit` edge names the tab
 that proves it as `see: "<project>#<view>"`, and the build refuses one that names a tab it
 did not build: a line on the front door is a claim like any other.

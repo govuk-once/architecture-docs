@@ -35,7 +35,7 @@ export interface SiteContract {
 /**
  * An architecture this site intends to document and does not yet.
  *
- * It earns a card on the index so the scope is visible, and the card says plainly that
+ * It earns a row on the index so the scope is visible, and the row says plainly that
  * nothing has been read from that repository. `seenFrom` names the project whose model
  * the description was taken from, because a description of UDP written while reading
  * FLEX is evidence about FLEX, not about UDP.
@@ -91,7 +91,7 @@ export interface SiteConfig {
   /** Directory names under projects/, in the order they appear on the index. */
   projects: string[];
   planned: PlannedProject[];
-  /** How the documented systems call one another, drawn above the cards. Optional. */
+  /** How the documented systems call one another, drawn above the list. Optional. */
   fit?: FitSketch;
 }
 

@@ -135,7 +135,7 @@ async function main() {
 
   /**
    * The index is the site's front door and carries no diagram, so it gets the checks that
-   * apply to any page — it renders, it has no console errors, and every card that looks
+   * apply to any page — it renders, it has no console errors, and every row that looks
    * like a link is one — rather than the geometry pass.
    */
   async function checkIndex(): Promise<void> {
@@ -150,11 +150,11 @@ async function main() {
     });
     await page.goto("file://" + SITE_INDEX);
     const seen = await page.evaluate(() => ({
-      cards: document.querySelectorAll(".card").length,
-      links: [...document.querySelectorAll("a.card")].map(
+      systems: document.querySelectorAll(".row").length,
+      links: [...document.querySelectorAll("a.row")].map(
         (a) => a.getAttribute("href") ?? "",
       ),
-      planned: document.querySelectorAll(".card.planned").length,
+      planned: document.querySelectorAll(".row.planned").length,
       themed: !!document.getElementById("themetoggle")?.textContent.trim(),
     }));
     const dead = seen.links.filter(
@@ -162,16 +162,16 @@ async function main() {
         !existsSync(path.join(path.dirname(SITE_INDEX), href, "index.html")),
     );
     console.log(
-      `[index] ${String(seen.cards)} cards · ${String(seen.links.length)} link to a built page · ` +
+      `[index] ${String(seen.systems)} systems · ${String(seen.links.length)} link to a built page · ` +
         `${String(seen.planned)} planned · theme toggle ${seen.themed ? "renders" : "BLANK"}`,
     );
-    if (!seen.cards) {
+    if (!seen.systems) {
       console.log("  FAIL — the index lists nothing");
       index.hard++;
     }
     if (dead.length) {
       console.log(
-        `  FAIL — card links to a page that was not built: ${dead.join(", ")}`,
+        `  FAIL — a row links to a page that was not built: ${dead.join(", ")}`,
       );
       index.hard += dead.length;
     }

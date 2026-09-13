@@ -120,12 +120,12 @@ export interface SynthContract {
 
 /** Everything true of one architecture rather than of the site or of the renderer. */
 export interface ProjectConfig {
-  /** Short name, for the index card and the tab title. */
+  /** Short name, for the index row and the tab title. */
   name: string;
   /** Long name, for the browser tab and the header brand. */
   title: string;
   tagline: string;
-  /** One paragraph on the index card: what this architecture is. */
+  /** One paragraph on the index row: what this architecture is. */
   blurb: string;
   /** Base URL every `code` citation links against, with one `source`. */
   repo?: string;
