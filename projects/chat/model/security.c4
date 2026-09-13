@@ -1,0 +1,309 @@
+// GOV.UK Chat architecture — Security.
+//
+// The chain of authority on each API: what admits a caller, what the code then runs as,
+// and what that identity may reach. Two chains, because the two APIs are guarded in
+// completely different ways.
+//
+// Each chain is drawn inside its own zone, including the credential at the top of it, so
+// that no line crosses a zone edge and no line's label lands on a zone title.
+//
+// What is absent is as much of this tab as what is present, and the absences are in the
+// reference table rather than drawn as boxes: nothing in this repository creates a
+// customer-managed key, point-in-time recovery, deletion protection, a Web ACL, a log
+// retention period, a tracing configuration, a secret or a parameter.
+
+model {
+
+  security_tszone = boundary 'TypeScript API' {
+    metadata {
+      type 'Chain of authority'
+      tech 'Cognito, then two roles'
+      role 'What guards the TypeScript API, and what the code behind it may reach.'
+      sourceId 'tszone'
+      order '0'
+      x '40'
+      y '40'
+      w '310'
+      h '520'
+      boundary 'hard'
+    }
+
+    security_tscred = internal 'A Cognito access token' {
+      #request-path
+      description 'one scope, one hour'
+      link https://github.com/govuk-once/govuk-chat-v2/blob/main/cdk/src/stacks/chat-api-ts-stack.ts 'chat-api-ts-stack.ts'
+      metadata {
+        type 'OAuth 2.0 client credentials'
+        tech 'issued by this system\'s own pool'
+        role 'What a caller presents to the TypeScript API. Minted by the pool this stack creates, using the client credentials flow and an app client with a generated secret.'
+        facts [
+          'The pool has self sign-up disabled and no other OAuth flow, so there is no person in it and no sign-in screen anywhere in this system.',
+          'A token lasts an hour in staging and production and a day in an ephemeral environment, which the code explains as saving developers from refreshing so often.'
+        ]
+        sourceId 'tscred'
+        order '1'
+        x '64'
+        y '90'
+        w '262'
+        h '62'
+        ownership 'govuk'
+      }
+    }
+
+    security_tsapi = platform 'TypeScript REST API' {
+      #request-path
+      description 'a scope on every method'
+      link https://github.com/govuk-once/govuk-chat-v2/blob/main/cdk/src/stacks/chat-api-ts-stack.ts 'chat-api-ts-stack.ts'
+      metadata {
+        type 'AWS::ApiGateway::RestApi'
+        tech 'Cognito authorizer · scope chat-api/invoke'
+        role 'Checks the token and the scope before the function runs. The check is a default on the API rather than on the method, so a route added later inherits it.'
+        facts [
+          'The resource server declares one scope, <code>invoke</code>, so there is nothing finer to grant: a caller admitted at all is admitted to everything this API does.',
+          'No Web ACL is associated with this API, and no rate limit or usage plan is declared for it anywhere in the repository.'
+        ]
+        sourceId 'tsapi'
+        order '2'
+        x '64'
+        y '220'
+        w '262'
+        h '62'
+        ownership 'chat'
+        resources [ 'user-pool' ]
+        awsIcon 'cognito'
+      }
+    }
+
+    security_tsrole = platform 'Invoke function role' {
+      #request-path
+      description 'one table, one runtime'
+      link https://github.com/govuk-once/govuk-chat-v2/blob/main/cdk/src/stacks/chat-api-ts-stack.ts 'chat-api-ts-stack.ts'
+      metadata {
+        type 'AWS::IAM::Role'
+        tech 'granted in the stack, not by hand'
+        role 'What the TypeScript function runs as. It may read and write its own table, and invoke its own agent runtime. Nothing else.'
+        facts [
+          'The AgentCore grant names the runtime ARN and a wildcard beneath it, because the service needs the sub-path as well as the runtime itself.',
+          'This role is not granted any Bedrock model permission. The model call is made further along the chain, by the agent, not by the API.'
+        ]
+        sourceId 'tsrole'
+        order '3'
+        x '64'
+        y '350'
+        w '262'
+        h '62'
+        ownership 'chat'
+        awsIcon 'iam'
+      }
+    }
+
+    security_aguirole = platform 'AG-UI runtime role' {
+      #request-path
+      description 'any model, any region'
+      link https://github.com/govuk-once/govuk-chat-v2/blob/main/cdk/src/stacks/agui-agent-stack.ts 'agui-agent-stack.ts'
+      metadata {
+        type 'AWS::IAM::Role'
+        tech 'the agent\'s own identity'
+        role 'What the AG-UI agent runs as. It may call Bedrock models and read and write its own memory.'
+        facts [
+          'The Bedrock grant is two wildcards: every inference profile in this account, and <code>arn:aws:bedrock:*::foundation-model/*</code> — every foundation model in every region. The agent names one model in code; the role permits all of them.',
+          'The memory grant is narrow by comparison: <code>CreateEvent</code>, <code>GetEvent</code> and <code>ListEvents</code>, on this memory alone.'
+        ]
+        sourceId 'aguirole'
+        order '4'
+        x '64'
+        y '480'
+        w '262'
+        h '62'
+        ownership 'chat'
+        awsIcon 'iam'
+      }
+    }
+  }
+
+  security_pyzone = boundary 'Python API' {
+    metadata {
+      type 'Chain of authority'
+      tech 'IAM, then two roles'
+      role 'What guards the Python API, and what the code behind it may reach.'
+      sourceId 'pyzone'
+      order '0'
+      x '396'
+      y '40'
+      w '310'
+      h '520'
+      boundary 'hard'
+    }
+
+    security_pycred = internal 'A signed AWS request' {
+      #request-path
+      description 'AWS IAM, no token'
+      link https://github.com/govuk-once/govuk-chat-v2/blob/main/cdk/src/stacks/chat-api-fastapi-stack.ts 'chat-api-fastapi-stack.ts'
+      metadata {
+        type 'AWS SigV4'
+        tech 'the caller\'s own AWS identity'
+        role 'What a caller presents to the Python API. There is no pool and no token here: the caller signs the request with an AWS identity and the gateway checks the signature.'
+        facts [
+          'Because authorisation is <code>AWS_IAM</code> and the gateway is a catch-all proxy, one permission admits a caller to every route on that API at once.'
+        ]
+        sourceId 'pycred'
+        order '5'
+        x '420'
+        y '90'
+        w '262'
+        h '62'
+        ownership 'govuk'
+      }
+    }
+
+    security_pyapi = platform 'Python REST API' {
+      #request-path
+      description 'IAM on every method'
+      link https://github.com/govuk-once/govuk-chat-v2/blob/main/cdk/src/stacks/chat-api-fastapi-stack.ts 'chat-api-fastapi-stack.ts'
+      metadata {
+        type 'AWS::ApiGateway::RestApi'
+        tech 'proxy: true · AuthorizationType.IAM'
+        role 'Checks a signed request before the function runs. Every path and method is the same single proxy resource, so the guard is the same for all of them.'
+        facts [
+          'Fifteen routes sit behind this one guard, including two that are demonstrations rather than product routes.',
+          'No Web ACL is associated with this API either.'
+        ]
+        sourceId 'pyapi'
+        order '6'
+        x '420'
+        y '220'
+        w '262'
+        h '62'
+        ownership 'chat'
+        awsIcon 'apigateway'
+      }
+    }
+
+    security_pyrole = platform 'FastAPI function role' {
+      #request-path
+      description 'models and both agents'
+      link https://github.com/govuk-once/govuk-chat-v2/blob/main/cdk/src/stacks/chat-api-fastapi-stack.ts 'chat-api-fastapi-stack.ts'
+      metadata {
+        type 'AWS::IAM::Role'
+        tech 'wider than the TypeScript one'
+        role 'What the Python function runs as. It may read and write its table, invoke and stop its agent runtime, and call Bedrock models directly.'
+        facts [
+          'Unlike the TypeScript function, this one is granted <code>bedrock:InvokeModel</code> and <code>InvokeModelWithResponseStream</code> itself, on the same two wildcards the agents get.',
+          'It also holds <code>StopRuntimeSession</code>, which the TypeScript function does not, because this API exposes a route for stopping a stream in progress.'
+        ]
+        sourceId 'pyrole'
+        order '7'
+        x '420'
+        y '350'
+        w '262'
+        h '62'
+        ownership 'chat'
+        awsIcon 'iam'
+      }
+    }
+
+    security_examplerole = platform 'Example runtime role' {
+      #request-path
+      description 'any model, any region'
+      link https://github.com/govuk-once/govuk-chat-v2/blob/main/cdk/src/stacks/example-agent-stack.ts 'example-agent-stack.ts'
+      metadata {
+        type 'AWS::IAM::Role'
+        tech 'the agent\'s own identity'
+        role 'What the example agent runs as. The same two grants as the other agent, written the same way in the other stack.'
+        facts [
+          'The two agent stacks grant identical permissions. Neither narrows the model wildcard to the one model its agent actually names.'
+        ]
+        sourceId 'examplerole'
+        order '8'
+        x '420'
+        y '480'
+        w '262'
+        h '62'
+        ownership 'chat'
+        awsIcon 'iam'
+      }
+    }
+  }
+
+  security_token = external 'The prompts token' {
+    #off-request-path
+    description 'build time only'
+    link https://github.com/govuk-once/govuk-chat-v2/blob/main/cdk/bin/app.ts 'cdk/bin/app.ts'
+    link https://github.com/govuk-once/govuk-chat-v2/blob/main/cdk/src/bundling/python.ts 'bundling/python.ts'
+    metadata {
+      type 'GitHub token'
+      tech 'an environment variable at synth'
+      role 'Not on any request path. It is what fetches the private prompts package while an agent is being built, and the reason only this repository\'s own CI can synthesise the app.'
+      facts [
+        'The app refuses to synthesise at all without it: <code>cdk/bin/app.ts</code> throws when <code>GITHUB_TOKEN</code> is unset, before any stack is constructed.',
+        'During bundling it is written into git\'s configuration with an <code>insteadOf</code> rule, so every GitHub fetch in that container carries it.',
+        'In CI it is the only secret used, and it is not an AWS credential. No workflow in the repository holds AWS access at all.'
+      ]
+      sourceId 'token'
+      order '9'
+      x '752'
+      y '350'
+      w '262'
+      h '62'
+      ownership 'third'
+    }
+  }
+
+  security_tscred -> security_tsapi 'admits the caller' {
+    metadata {
+      protocol 'HTTPS, with the token as a bearer credential'
+      auth 'The authorizer verifies the token against the pool and checks the scope'
+      carries 'The access token on every method'
+      order '1'
+    }
+  }
+  security_tsapi -> security_tsrole 'runs as' {
+    metadata {
+      protocol 'Lambda execution role'
+      auth 'Assumed by the function, not by the caller'
+      carries 'Read and write on one table; invoke on one agent runtime'
+      order '2'
+    }
+  }
+  security_tsrole -> security_aguirole 'may invoke' {
+    metadata {
+      protocol 'bedrock-agentcore:InvokeAgentRuntime'
+      auth 'The runtime then acts under its own role, not the caller\'s'
+      carries 'The identity changes here: nothing of the caller is passed on but the end user id'
+      order '3'
+    }
+  }
+  security_pycred -> security_pyapi 'admits the caller' {
+    metadata {
+      protocol 'HTTPS with a SigV4 signature'
+      auth 'AWS IAM, checked by the gateway on every method'
+      carries 'The signed request'
+      order '4'
+    }
+  }
+  security_pyapi -> security_pyrole 'runs as' {
+    metadata {
+      protocol 'Lambda execution role'
+      auth 'Assumed by the function, not by the caller'
+      carries 'Read and write on one table; Bedrock models; invoke and stop on one runtime'
+      order '5'
+    }
+  }
+  security_pyrole -> security_examplerole 'may invoke' {
+    metadata {
+      protocol 'bedrock-agentcore:InvokeAgentRuntime and StopRuntimeSession'
+      auth 'The runtime then acts under its own role'
+      carries 'The question and the ids for the person and session'
+      order '6'
+    }
+  }
+}
+
+views {
+  view security {
+    title 'Security'
+    include security_tszone, security_tszone.**
+    include security_pyzone, security_pyzone.**
+    include security_token
+  }
+}
