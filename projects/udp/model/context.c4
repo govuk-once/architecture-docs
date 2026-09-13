@@ -111,7 +111,7 @@ model {
 
     context_udp = platform 'UDP' {
       #request-path
-      description 'software system in scope'
+      description 'what this page is about'
       link https://github.com/govuk-once/user-data-platform/blob/main/cdk/bin/app.ts 'cdk/bin/app.ts'
       link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/api-gateway-construct.ts 'api-gateway-construct.ts'
       link https://github.com/govuk-once/user-data-platform/blob/main/README.md 'README.md'
@@ -143,7 +143,7 @@ model {
       order '1'
     }
   }
-  context_app -> context_flex 'HTTPS + JWT' {
+  context_app -> context_flex 'what other services hold' {
     metadata {
       protocol 'HTTPS'
       auth 'Cognito access token, verified by FLEX'
@@ -154,7 +154,7 @@ model {
       order '2'
     }
   }
-  context_flex -> context_udp 'SigV4 over a VPC endpoint' {
+  context_flex -> context_udp 'who this person is' {
     link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/iam-consumer-construct.ts 'iam-consumer-construct.ts'
     link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/api-gateway-construct.ts 'api-gateway-construct.ts'
     metadata {
@@ -168,7 +168,7 @@ model {
       order '3'
     }
   }
-  context_uns -> context_udp 'SigV4 over a VPC endpoint' {
+  context_uns -> context_udp 'which device to reach' {
     link https://github.com/govuk-once/user-data-platform/blob/main/cdk/cdk.context.json 'cdk.context.json'
     metadata {
       protocol 'HTTPS to the private API'

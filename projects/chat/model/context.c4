@@ -1,0 +1,228 @@
+// GOV.UK Chat architecture — Context.
+//
+// The model. Presentation that a LikeC4 view cannot hold — tab order, audience,
+// reference tables — is in views.json beside this file.
+
+model {
+
+  context_user = actor 'A person' {
+    #request-path
+    description 'asking a question'
+    link https://github.com/govuk-once/govuk-chat-v2/blob/main/README.md 'README.md'
+    metadata {
+      type 'Person'
+      tech '—'
+      role 'Asks government guidance a question in their own words. Never reaches this system directly.'
+      sourceId 'user'
+      order '1'
+      x '64'
+      y '30'
+      w '262'
+      h '62'
+      ownership 'person'
+    }
+  }
+
+  context_govukonce = boundary 'GOV.UK Once' {
+    metadata {
+      type 'Ownership boundary'
+      tech '—'
+      role 'The app a person holds, and the backend that carries its questions here.'
+      facts [
+        'Which caller reaches this system is not provable from either repository: the app backend forwards to whatever the SSM parameter <code>/{config}/chat/api-url</code> names.'
+      ]
+      sourceId 'govukonce'
+      order '0'
+      x '40'
+      y '140'
+      w '310'
+      h '364'
+      boundary 'hard'
+    }
+
+    context_app = internal 'GOV.UK App' {
+      #request-path
+      description 'a person\'s phone'
+      link https://github.com/govuk-once/govuk-chat-v2/blob/main/README.md 'README.md'
+      metadata {
+        type 'GOV.UK Once system'
+        tech 'iOS and Android'
+        role 'Where a question is typed. Documented on its own page.'
+        sourceId 'app'
+        order '2'
+        x '64'
+        y '160'
+        w '262'
+        h '62'
+        ownership 'govuk'
+      }
+    }
+
+    context_proxy = internal 'The app\'s chat proxy' {
+      #request-path
+      description 'in the app backend'
+      link https://github.com/govuk-once/govuk-chat-v2/blob/main/README.md 'README.md'
+      metadata {
+        type 'GOV.UK Once system'
+        tech 'forwards to an SSM-named URL'
+        role 'The app never calls this system directly: its own backend proxies the request. Documented on the GOV.UK App page.'
+        sourceId 'proxy'
+        order '3'
+        x '64'
+        y '290'
+        w '262'
+        h '62'
+        ownership 'govuk'
+      }
+    }
+
+    context_chat = platform 'GOV.UK Chat' {
+      #request-path
+      description 'what this page is about'
+      link https://github.com/govuk-once/govuk-chat-v2/blob/main/README.md 'README.md'
+      link https://github.com/govuk-once/govuk-chat-v2/blob/main/cdk/bin/app.ts 'cdk/bin/app.ts'
+      link https://github.com/govuk-once/govuk-chat-v2/blob/main/docs/adr/0002-use-python-for-ai-and-typescript-elsewhere.md 'adr 0002'
+      metadata {
+        type 'Software system · in scope'
+        tech 'AWS · TypeScript and Python · four stacks · eu-west-1'
+        role 'Turns a question into an answer, streamed back a token at a time, and keeps the conversation so it can be continued.'
+        facts [
+          'Two APIs, each with an agent of its own: a TypeScript API behind Cognito, and a Python one behind IAM. Both stream server-sent events.',
+          'The successor to GOV.UK Chat V1, and agentic rather than a single prompt — the decision and its alternatives are recorded as ADRs in the repository.',
+          'Nothing here searches or retrieves GOV.UK content: there is no index, no vector store and no content API client anywhere in this repository.'
+        ]
+        resources [ 'rest-apis', 'lambdas', 'tables', 'user-pool', 'agent-runtimes', 'agent-memory' ]
+        sourceId 'chat'
+        order '4'
+        x '64'
+        y '420'
+        w '262'
+        h '62'
+        ownership 'chat'
+      }
+    }
+  }
+
+  context_agentcore = external 'Bedrock AgentCore' {
+    #request-path
+    description 'where the agents run'
+    link https://github.com/govuk-once/govuk-chat-v2/blob/main/cdk/src/stacks/agui-agent-stack.ts 'agui-agent-stack.ts'
+    link https://github.com/govuk-once/govuk-chat-v2/blob/main/services/agui-agent/src/agui_agent/main.py 'agui_agent/main.py'
+    metadata {
+      type 'AWS service'
+      tech 'Runtime · Memory'
+      role 'Hosts each agent as a runtime an API invokes, and remembers the turns of a conversation against a session and the person asking.'
+      facts [
+        'Memory events expire after 90 days, set in the stack that creates them.',
+        'A conversation is keyed by a session id and an actor id — the end user the caller asserted.'
+      ]
+      sourceId 'agentcore'
+      order '5'
+      x '64'
+      y '560'
+      w '262'
+      h '62'
+      ownership 'third'
+    }
+  }
+
+  context_bedrock = external 'Amazon Bedrock' {
+    #request-path
+    description 'the models'
+    link https://github.com/govuk-once/govuk-chat-v2/blob/main/services/agui-agent/src/agui_agent/main.py 'agui_agent/main.py'
+    link https://github.com/govuk-once/govuk-chat-v2/blob/main/services/example-agent/src/example_agent/main.py 'example_agent/main.py'
+    metadata {
+      type 'AWS service · outside GOV.UK Once'
+      tech 'Claude, through inference profiles'
+      role 'Answers. Two agents name two different models, and a third is used only to title a conversation.'
+      facts [
+        'The agents are granted <code>bedrock:InvokeModel</code> and <code>InvokeModelWithResponseStream</code> on inference profiles and foundation models.'
+      ]
+      sourceId 'bedrock'
+      order '6'
+      x '64'
+      y '690'
+      w '262'
+      h '62'
+      ownership 'third'
+    }
+  }
+
+  context_prompts = external 'govuk-chat-v2-private' {
+    #off-request-path
+    description 'the prompts · build time only'
+    link https://github.com/govuk-once/govuk-chat-v2/blob/main/services/agui-agent/pyproject.toml 'agui-agent/pyproject.toml'
+    link https://github.com/govuk-once/govuk-chat-v2/blob/main/cdk/src/bundling/python.ts 'bundling/python.ts'
+    link https://github.com/govuk-once/govuk-chat-v2/blob/main/AGENTS.md 'AGENTS.md'
+    metadata {
+      type 'Private repository'
+      tech 'a pinned git dependency'
+      role 'Holds every production prompt, deliberately outside this repository. Each agent loads them at import; what they say cannot be read here.'
+      facts [
+        'Fetched during the Docker bundling of each agent, using a GitHub token the build rewrites into git\'s URLs. That token is why nothing outside this repository\'s own CI can synthesise it.',
+        'The repository\'s own working agreement is the reason: it says not to write or commit production prompts.'
+      ]
+      sourceId 'prompts'
+      order '7'
+      x '420'
+      y '420'
+      w '262'
+      h '62'
+      ownership 'govuk'
+    }
+  }
+
+  context_user -> context_app 'asks' {
+    metadata { protocol '—' auth '—' carries 'A question, in their own words' order '1' }
+  }
+  context_app -> context_proxy 'the question' {
+    metadata {
+      protocol 'HTTPS'
+      auth 'A Cognito access token, verified by the app backend'
+      carries 'The question'
+      order '2'
+    }
+  }
+  context_proxy -> context_chat 'forwards' {
+    metadata {
+      protocol 'HTTPS to the URL an SSM parameter names'
+      auth 'Whatever that endpoint requires — a Cognito client credential, or a signed AWS request'
+      carries 'The question, and an id for the person'
+      order '3'
+    }
+  }
+  context_chat -> context_agentcore 'invokes the agent' {
+    metadata {
+      protocol 'bedrock-agentcore:InvokeAgentRuntime, streamed as server-sent events'
+      auth 'The calling function\'s IAM role'
+      carries 'The conversation so far; the answer back, a token at a time'
+      order '4'
+    }
+  }
+  context_agentcore -> context_bedrock 'asks the model' {
+    metadata {
+      protocol 'Bedrock InvokeModelWithResponseStream'
+      auth 'The agent runtime\'s own role'
+      carries 'The prompt and the conversation; generated text back'
+      order '5'
+    }
+  }
+  context_prompts -> context_chat 'built into each agent' {
+    metadata {
+      protocol 'A git dependency, resolved during bundling'
+      auth 'A GitHub token with access to a private repository'
+      carries 'The system prompts'
+      edgeStyle 'dash'
+      order '6'
+    }
+  }
+}
+
+views {
+  view context {
+    title 'Context'
+    include context_user
+    include context_govukonce, context_govukonce.**
+    include context_agentcore, context_bedrock, context_prompts
+  }
+}

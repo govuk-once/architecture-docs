@@ -75,7 +75,7 @@ model {
 
     context_signin = internal 'Sign-in and tokens' {
       #request-path
-      description 'Cognito · token proxy'
+      description 'keeps the app signed in'
       link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/template.yaml 'backend · services/auth/template.yaml'
       link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/proxy/proxy.ts 'backend · proxy.ts'
       metadata {
@@ -99,7 +99,7 @@ model {
 
     context_chat = internal 'Chat proxy' {
       #request-path
-      description 'API Gateway · authorizer'
+      description 'carries questions to Chat'
       link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/chat/template.yaml 'backend · services/chat/template.yaml'
       link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/chat/authorizer/client/authorizer-client.ts 'backend · authorizer-client.ts'
       metadata {
@@ -122,7 +122,7 @@ model {
 
     context_config = internal 'Remote config' {
       #request-path
-      description 'signed JSON on S3'
+      description 'settings the app fetches'
       link https://github.com/alphagov/govuk-mobile-backend-config/blob/main/.github/workflows/deploy-integration.yaml 'config · deploy-integration.yaml'
       link https://github.com/alphagov/govuk-mobile-backend-config/blob/main/.github/workflows/deploy-production.yaml 'config · deploy-production.yaml'
       metadata {
@@ -146,16 +146,19 @@ model {
 
   context_firebase = external 'Firebase' {
     #request-path
-    description 'App Check · analytics'
+    description 'proves the app is genuine'
     link https://github.com/govuk-once/govuk-mobile-android-app/blob/main/app/src/main/kotlin/uk/gov/govuk/MainActivity.kt 'android · MainActivity.kt'
     link https://github.com/govuk-once/govuk-mobile-ios-app/blob/main/Production/govuk_ios/Services/AppAttest/GovUKProviderFactory.swift 'ios · GovUKProviderFactory.swift'
+    link https://github.com/govuk-once/govuk-mobile-ios-gov-kit/blob/main/GovKit/Sources/Analytics/AnalyticsServiceInterface.swift 'govkit · AnalyticsServiceInterface.swift'
+    link https://github.com/govuk-once/govuk-mobile-ios-app/blob/main/Production/govuk_ios/Clients/Analytics/FirebaseClient.swift 'ios · FirebaseClient.swift'
     metadata {
       type 'Third party · Google'
       tech 'Firebase SDKs'
       role 'Issues the attestation token the app sends when it asks for tokens, and collects analytics and crash reports.'
       facts [
         'App Check is backed by Play Integrity on Android and App Attest on iOS release builds; iOS staging builds use a provider that returns an empty token.',
-        'Analytics and Crashlytics are off until the user consents, on both platforms.'
+        'Analytics and Crashlytics are off until the user consents, on both platforms.',
+        'On iOS the analytics contract — the permission state, the event and the screen types — is defined in GovKit, the shared library the app depends on; the app supplies the Firebase, Crashlytics and Qualtrics clients behind it.'
       ]
       sourceId 'firebase'
       order '6'
@@ -262,7 +265,7 @@ model {
 
   context_onelogin = external 'GOV.UK One Login' {
     #request-path
-    description 'OIDC provider'
+    description 'the government sign-in'
     link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/template.yaml 'backend · services/auth/template.yaml'
     metadata {
       type 'Outside GOV.UK Once'
@@ -284,7 +287,7 @@ model {
 
   context_chatapi = external 'Chat API' {
     #request-path
-    description 'upstream · URL from SSM'
+    description 'answers the questions'
     link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/chat/template.yaml 'backend · services/chat/template.yaml'
     metadata {
       type 'Upstream · owner not stated'
@@ -315,7 +318,7 @@ model {
       order '1'
     }
   }
-  context_app -> context_firebase 'attests · reports' {
+  context_app -> context_firebase 'proves it is the real app' {
     link https://github.com/govuk-once/govuk-mobile-android-app/blob/main/data/src/main/kotlin/uk/gov/govuk/data/auth/AuthRepo.kt 'android · AuthRepo.kt'
     metadata {
       protocol 'Firebase SDKs'
@@ -388,7 +391,7 @@ model {
       order '7'
     }
   }
-  context_app -> context_flex 'HTTPS + JWT' {
+  context_app -> context_flex 'what other services hold' {
     link https://github.com/govuk-once/govuk-mobile-android-app/blob/main/data/src/main/kotlin/uk/gov/govuk/data/remote/AuthorizationInterceptor.kt 'android · AuthorizationInterceptor.kt'
     link https://github.com/govuk-once/govuk-mobile-ios-app/blob/main/Production/govuk_ios/Networking/APIServiceClient.swift 'ios · APIServiceClient.swift'
     metadata {
@@ -414,7 +417,7 @@ model {
       order '9'
     }
   }
-  context_signin -> context_onelogin 'federates' {
+  context_signin -> context_onelogin 'checks who they are' {
     link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/template.yaml 'backend · services/auth/template.yaml'
     metadata {
       protocol 'OIDC redirect from the hosted UI'

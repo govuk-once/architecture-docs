@@ -42,6 +42,7 @@ env:
   APP_REF: main
   UDP_REF: main
   UNS_REF: main
+  CHAT_REF: main
 
 jobs:
   build:
@@ -105,6 +106,16 @@ jobs:
           path: .sources/app/config
           persist-credentials: false
 
+      # GovKit is the shared Swift library the iOS app depends on, so a change there can
+      # falsify a claim this page makes about iOS. Read, never installed.
+      - name: Checkout the GOV.UK App · GovKit
+        uses: actions/checkout@v5
+        with:
+          repository: govuk-once/govuk-mobile-ios-gov-kit
+          ref: ${{ env.APP_REF }}
+          path: .sources/app/govkit
+          persist-credentials: false
+
       - name: Checkout UDP
         uses: actions/checkout@v5
         with:
@@ -114,15 +125,26 @@ jobs:
           persist-credentials: false
 
       # UNS is read and never installed or synthesised: its CDK app imports a package
-      # that lives only in a private CodeArtifact registry, so its counts are prose in
-      # the model rather than derived from templates. A read role for that registry is
-      # what it would take to add a `synth` block and bind them.
+      # whose source is public and builds cleanly, but which is published only to a
+      # private CodeArtifact registry — so its counts are prose rather than derived.
+      # Publishing that package, or a read role for the registry, is the whole of what a
+      # `synth` block needs: with it resolved, the app synthesises here without credentials.
       - name: Checkout UNS
         uses: actions/checkout@v5
         with:
           repository: govuk-once/gds-unified-notification-service
           ref: ${{ env.UNS_REF }}
           path: .sources/uns
+          persist-credentials: false
+
+      # GOV.UK Chat is read and never installed or synthesised: its CDK app bundles every
+      # Lambda in Docker against a private git dependency, so only its own CI can synth it.
+      - name: Checkout GOV.UK Chat
+        uses: actions/checkout@v5
+        with:
+          repository: govuk-once/govuk-chat-v2
+          ref: ${{ env.CHAT_REF }}
+          path: .sources/chat
           persist-credentials: false
 
       - name: Setup pnpm

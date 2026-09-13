@@ -8,7 +8,11 @@
         {
           "id": "rest-apis",
           "name": "REST APIs",
-          "n": { "dev": 3, "stg": 2, "prod": 2 },
+          "n": {
+            "dev": 3,
+            "stg": 2,
+            "prod": 2
+          },
           "meta": ["PSO public", "FLEX private", "FLEX public in dev"],
           "d": {
             "type": "AWS::ApiGateway::RestApi",
@@ -28,11 +32,18 @@
         {
           "id": "routes",
           "name": "Routes",
-          "n": { "dev": 11, "stg": 11, "prod": 8 },
-          "meta": ["PSO 5 · 4 in prod", "FLEX 6 · 4 in prod", "per gateway"],
+          "n": {
+            "dev": 17,
+            "stg": 11,
+            "prod": 8
+          },
+          "meta": [
+            "counted as API Gateway methods",
+            "3 gateways in dev, 2 elsewhere"
+          ],
           "d": {
             "type": "AWS::ApiGateway::Method",
-            "role": "Counted once per route: the FLEX routes are registered on both FLEX gateways in development.",
+            "role": "One method resource per route per gateway — so development counts the FLEX routes twice, once on the private gateway and once on the public one the tests use.",
             "code": [
               [
                 "UNSPSOResources.ts",
@@ -48,7 +59,11 @@
         {
           "id": "web-acls",
           "name": "Web ACLs",
-          "n": { "dev": 3, "stg": 2, "prod": 2 },
+          "n": {
+            "dev": 3,
+            "stg": 2,
+            "prod": 2
+          },
           "meta": ["one per gateway", "REGIONAL"],
           "d": {
             "type": "AWS::WAFv2::WebACL",
@@ -64,7 +79,11 @@
         {
           "id": "usage-plans",
           "name": "Usage plans and API keys",
-          "n": { "dev": 5, "stg": 5, "prod": 3 },
+          "n": {
+            "dev": 5,
+            "stg": 5,
+            "prod": 3
+          },
           "meta": ["one per consumer organisation", "flex", "e2e in dev"],
           "d": {
             "type": "AWS::ApiGateway::UsagePlan · AWS::ApiGateway::ApiKey",
@@ -81,15 +100,19 @@
         {
           "id": "domains",
           "name": "Custom domains and DNS records",
-          "n": { "dev": 2, "stg": 1, "prod": 1 },
+          "n": {
+            "dev": 2,
+            "stg": 1,
+            "prod": 1
+          },
           "meta": [
             "pso.{zone}",
             "flex.{zone} in dev",
-            "needs the hosted-zone parameter"
+            "none without the hosted-zone parameter"
           ],
           "d": {
             "type": "AWS::ApiGateway::DomainName · AWS::Route53::RecordSet",
-            "role": "Created only when SSM supplies the hosted zone and certificate; the private gateway has none.",
+            "role": "Created only when SSM supplies the hosted zone and certificate, so a synthesis without credentials produces none at all; the private gateway never has one.",
             "code": [
               [
                 "UNSApiGatewayConstruct.ts",
@@ -108,7 +131,11 @@
         {
           "id": "fn-pso",
           "name": "PSO functions",
-          "n": { "dev": 12, "stg": 12, "prod": 10 },
+          "n": {
+            "dev": 12,
+            "stg": 12,
+            "prod": 10
+          },
           "meta": ["5 http", "5 sqs", "1 schedule", "1 authorizer"],
           "d": {
             "type": "AWS::Lambda::Function",
@@ -124,7 +151,11 @@
         {
           "id": "fn-flex",
           "name": "FLEX functions",
-          "n": { "dev": 6, "stg": 6, "prod": 4 },
+          "n": {
+            "dev": 6,
+            "stg": 6,
+            "prod": 4
+          },
           "meta": ["4 notifications", "2 groups, flagged"],
           "d": {
             "type": "AWS::Lambda::Function",
@@ -139,7 +170,11 @@
         {
           "id": "fn-cr",
           "name": "Custom-resource functions",
-          "n": { "dev": 6, "stg": 6, "prod": 6 },
+          "n": {
+            "dev": 6,
+            "stg": 6,
+            "prod": 6
+          },
           "meta": ["NodejsFunction", "not code-signed"],
           "d": {
             "type": "AWS::Lambda::Function",
@@ -156,7 +191,11 @@
         {
           "id": "schedules",
           "name": "EventBridge rules",
-          "n": { "dev": 1, "stg": 1, "prod": 1 },
+          "n": {
+            "dev": 1,
+            "stg": 1,
+            "prod": 1
+          },
           "meta": ["cron 30 * * * *"],
           "d": {
             "type": "AWS::Events::Rule",
@@ -179,7 +218,11 @@
         {
           "id": "tables",
           "name": "Tables",
-          "n": { "dev": 5, "stg": 5, "prod": 4 },
+          "n": {
+            "dev": 5,
+            "stg": 5,
+            "prod": 4
+          },
           "meta": ["on demand", "main key", "PITR 30 d", "group store flagged"],
           "d": {
             "type": "AWS::DynamoDB::Table",
@@ -196,7 +239,11 @@
         {
           "id": "queues",
           "name": "Queues, with dead-letter queues",
-          "n": { "dev": 10, "stg": 10, "prod": 8 },
+          "n": {
+            "dev": 10,
+            "stg": 10,
+            "prod": 8
+          },
           "meta": ["5 + 5 DLQ", "KMS", "10 s delay", "2 KB"],
           "d": {
             "type": "AWS::SQS::Queue",
@@ -216,7 +263,11 @@
         {
           "id": "buckets",
           "name": "Buckets",
-          "n": { "dev": 3, "stg": 4, "prod": 4 },
+          "n": {
+            "dev": 3,
+            "stg": 4,
+            "prod": 4
+          },
           "meta": ["SSE-S3", "versioned", "flow-log bucket outside dev"],
           "d": {
             "type": "AWS::S3::Bucket",
@@ -236,7 +287,11 @@
         {
           "id": "cache",
           "name": "ElastiCache serverless caches",
-          "n": { "dev": 1, "stg": 1, "prod": 1 },
+          "n": {
+            "dev": 1,
+            "stg": 1,
+            "prod": 1
+          },
           "meta": ["Valkey 8", "IAM user", "10 GB · 5,000 ECPU"],
           "d": {
             "type": "AWS::ElastiCache::ServerlessCache",
@@ -251,7 +306,11 @@
         {
           "id": "kms-keys",
           "name": "KMS keys",
-          "n": { "dev": 3, "stg": 3, "prod": 3 },
+          "n": {
+            "dev": 3,
+            "stg": 3,
+            "prod": 3
+          },
           "meta": ["main", "flex-consumer", "mtls-external-consumer"],
           "d": {
             "type": "AWS::KMS::Key",
@@ -267,7 +326,11 @@
         {
           "id": "secrets",
           "name": "Secrets",
-          "n": { "dev": 10, "stg": 12, "prod": 8 },
+          "n": {
+            "dev": 10,
+            "stg": 12,
+            "prod": 8
+          },
           "meta": [
             "2 per consumer certificate",
             "OneSignal key",
@@ -299,7 +362,11 @@
         {
           "id": "subnets",
           "name": "Subnets",
-          "n": { "dev": 6, "stg": 6, "prod": 6 },
+          "n": {
+            "dev": 6,
+            "stg": 6,
+            "prod": 6
+          },
           "meta": ["3 AZs", "/23", "public and private"],
           "d": {
             "type": "AWS::EC2::Subnet",
@@ -314,7 +381,11 @@
         {
           "id": "nat",
           "name": "NAT gateways",
-          "n": { "dev": 3, "stg": 3, "prod": 3 },
+          "n": {
+            "dev": 3,
+            "stg": 3,
+            "prod": 3
+          },
           "meta": ["one per AZ"],
           "d": {
             "type": "AWS::EC2::NatGateway",
@@ -329,7 +400,11 @@
         {
           "id": "endpoints",
           "name": "VPC endpoints",
-          "n": { "dev": 13, "stg": 13, "prod": 13 },
+          "n": {
+            "dev": 13,
+            "stg": 13,
+            "prod": 13
+          },
           "meta": ["11 interface", "2 gateway"],
           "d": {
             "type": "AWS::EC2::VPCEndpoint",
@@ -341,7 +416,11 @@
         {
           "id": "sgs",
           "name": "Security groups",
-          "n": { "dev": 2, "stg": 2, "prod": 2 },
+          "n": {
+            "dev": 2,
+            "stg": 2,
+            "prod": 2
+          },
           "meta": ["privateEgress", "privateIsolated"],
           "d": {
             "type": "AWS::EC2::SecurityGroup",
@@ -356,7 +435,11 @@
         {
           "id": "flow-logs",
           "name": "Flow logs",
-          "n": { "dev": 0, "stg": 1, "prod": 1 },
+          "n": {
+            "dev": 0,
+            "stg": 1,
+            "prod": 1
+          },
           "meta": ["to S3", "not in development"],
           "d": {
             "type": "AWS::EC2::FlowLog",
@@ -378,7 +461,11 @@
         {
           "id": "ca",
           "name": "Private certificate authorities",
-          "n": { "dev": 1, "stg": 1, "prod": 1 },
+          "n": {
+            "dev": 1,
+            "stg": 1,
+            "prod": 1
+          },
           "meta": ["ACM PCA", "ROOT", "RSA 4096"],
           "d": {
             "type": "AWS::ACMPCA::CertificateAuthority",
@@ -393,11 +480,15 @@
         {
           "id": "client-certs",
           "name": "Client certificates",
-          "n": { "dev": 3, "stg": 4, "prod": 2 },
-          "meta": ["one per consumer", "dated in code"],
+          "n": {
+            "dev": 4,
+            "stg": 5,
+            "prod": 3
+          },
+          "meta": ["the CA's own root, plus one per consumer", "dated in code"],
           "d": {
             "type": "AWS::ACMPCA::Certificate",
-            "role": "UNS and DVLA everywhere; Foreign Travel Advice in dev and staging; pentest in staging.",
+            "role": "The certificate authority signs its own root certificate and one per consumer, and all of them are ACMPCA certificates: UNS and DVLA everywhere, Foreign Travel Advice in dev and staging, pentest in staging.",
             "code": [
               [
                 "devConsumers.ts",
@@ -417,7 +508,11 @@
         {
           "id": "iam-user",
           "name": "IAM users",
-          "n": { "dev": 1, "stg": 1, "prod": 1 },
+          "n": {
+            "dev": 1,
+            "stg": 1,
+            "prod": 1
+          },
           "meta": ["bigquery-export", "access key in Secrets Manager"],
           "d": {
             "type": "AWS::IAM::User",
@@ -433,7 +528,11 @@
         {
           "id": "signing",
           "name": "Code-signing profiles",
-          "n": { "dev": 1, "stg": 1, "prod": 1 },
+          "n": {
+            "dev": 1,
+            "stg": 1,
+            "prod": 1
+          },
           "meta": ["WARN on untrusted"],
           "d": {
             "type": "AWS::Signer::SigningProfile",
@@ -452,7 +551,11 @@
         {
           "id": "alarms",
           "name": "Alarms",
-          "n": { "dev": 57, "stg": 57, "prod": 51 },
+          "n": {
+            "dev": 57,
+            "stg": 57,
+            "prod": 51
+          },
           "meta": ["alarms stack", "P1 · P2 · P3"],
           "d": {
             "type": "AWS::CloudWatch::Alarm",
@@ -468,7 +571,11 @@
         {
           "id": "dashboards",
           "name": "Dashboards",
-          "n": { "dev": 4, "stg": 4, "prod": 4 },
+          "n": {
+            "dev": 4,
+            "stg": 4,
+            "prod": 4
+          },
           "meta": ["2 in this repository", "2 from once-platform-constructs"],
           "d": {
             "type": "AWS::CloudWatch::Dashboard",
@@ -483,7 +590,11 @@
         {
           "id": "log-groups",
           "name": "Log groups",
-          "n": { "dev": 31, "stg": 29, "prod": 25 },
+          "n": {
+            "dev": 31,
+            "stg": 29,
+            "prod": 25
+          },
           "meta": ["one per function", "gateways ×2", "WAF", "export"],
           "d": {
             "type": "AWS::Logs::LogGroup",
@@ -503,7 +614,11 @@
         {
           "id": "sns",
           "name": "SNS topics",
-          "n": { "dev": 1, "stg": 1, "prod": 1 },
+          "n": {
+            "dev": 1,
+            "stg": 1,
+            "prod": 1
+          },
           "meta": ["sns-topic-alerts", "Chatbot when SSM names a channel"],
           "d": {
             "type": "AWS::SNS::Topic",

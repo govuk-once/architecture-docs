@@ -48,7 +48,7 @@ model {
 
     context_flex = platform 'FLEX' {
       #request-path
-      description 'software system in scope'
+      description 'what this page is about'
       technology 'AWS · TypeScript · serverless'
       link https://github.com/govuk-once/flex/blob/main/platform/infra/flex/src/app.ts 'platform/infra/flex/src/app.ts'
       link https://github.com/govuk-once/flex/blob/main/platform/infra/flex/src/app.ts 'app.ts'
@@ -76,7 +76,7 @@ model {
 
     context_cognito = internal 'Identity' {
       #request-path
-      description 'GOV.UK Once · Cognito'
+      description 'handles signing in'
       technology 'Amazon Cognito user pool'
       link https://github.com/govuk-once/flex/blob/main/platform/domains/auth/src/services/auth-service.ts 'auth-service.ts'
       link https://github.com/govuk-once/flex/blob/main/platform/infra/flex/src/stacks/platform.ts 'platform.ts'
@@ -232,7 +232,7 @@ model {
       order '0'
     }
   }
-  context_app -> context_cognito 'signs in, obtains token' {
+  context_app -> context_cognito 'signs in' {
     technology 'HTTPS · OAuth 2.0 authorization code with PKCE against the hosted UI'
     link https://github.com/govuk-once/flex/blob/main/libs/testing/src/fixtures/TokenGenerator.ts 'TokenGenerator.ts'
     metadata {
@@ -245,7 +245,7 @@ model {
       order '1'
     }
   }
-  context_cognito -> context_onelogin 'federates' {
+  context_cognito -> context_onelogin 'checks who they are' {
     technology 'HTTPS · OIDC redirect from the Cognito hosted UI'
     link https://github.com/govuk-once/flex/blob/main/libs/testing/src/fixtures/TokenGenerator.ts 'TokenGenerator.ts'
     metadata {
@@ -258,7 +258,7 @@ model {
       order '2'
     }
   }
-  context_app -> context_flex 'HTTPS + JWT' {
+  context_app -> context_flex 'what other services hold' {
     technology 'HTTPS to the CloudFront alias'
     link https://github.com/govuk-once/flex/blob/main/platform/domains/viewer-request-cff-platform/src/validators/jwt.ts 'cff jwt.ts'
     metadata {
@@ -271,7 +271,7 @@ model {
       order '3'
     }
   }
-  context_flex -> context_cognito 'verifies the token' {
+  context_flex -> context_cognito 'checks the sign-in is real' {
     technology 'HTTPS GET /.well-known/jwks.json'
     link https://github.com/govuk-once/flex/blob/main/platform/domains/auth/src/services/auth-service.ts 'auth-service.ts'
     metadata {
@@ -285,7 +285,7 @@ model {
       order '4'
     }
   }
-  context_flex -> context_udp 'SigV4 + API key' {
+  context_flex -> context_udp 'who they are' {
     technology 'HTTPS via the API Gateway interface endpoint'
     link https://github.com/govuk-once/flex/blob/main/libs/sdk/src/fetch/sigv4.ts 'sigv4.ts'
     metadata {
@@ -299,7 +299,7 @@ model {
       order '5'
     }
   }
-  context_flex -> context_uns 'SigV4 + API key' {
+  context_flex -> context_uns 'notifications' {
     technology 'HTTPS via the API Gateway interface endpoint'
     link https://github.com/govuk-once/flex/blob/main/platform/domains/uns/src/gateway.ts 'uns gateway.ts'
     metadata {
@@ -313,7 +313,7 @@ model {
       order '6'
     }
   }
-  context_flex -> context_dvla 'API key, over the internet' {
+  context_flex -> context_dvla 'licence and vehicle details' {
     technology 'HTTPS through a NAT gateway, on an unsigned client'
     link https://github.com/govuk-once/flex/blob/main/platform/domains/dvla/src/gateway.ts 'dvla gateway.ts'
     metadata {

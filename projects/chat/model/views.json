@@ -1,0 +1,60 @@
+{
+  "context": {
+    "name": "Context",
+    "order": 1,
+    "group": "Architecture",
+    "audience": "Anyone new to GOV.UK Chat, including non-engineers",
+    "blurb": "GOV.UK Chat among the systems around it: the app a question is typed into, the AWS services that answer it, and the private repository that holds every prompt. C4 level 1 — runtime only.",
+    "note": "Which caller reaches this system is not provable from either repository: the app backend forwards to whatever an SSM parameter names. Everything else here is read from this repository's own code.",
+    "dashMeans": "a dependency resolved when the agent is built, not a call it makes",
+    "tables": [
+      {
+        "name": "The four stacks, and which agent answers which API",
+        "code": [
+          ["cdk/bin/app.ts", "cdk/bin/app.ts"],
+          ["chat-api-ts-stack.ts", "cdk/src/stacks/chat-api-ts-stack.ts"],
+          [
+            "chat-api-fastapi-stack.ts",
+            "cdk/src/stacks/chat-api-fastapi-stack.ts"
+          ],
+          ["agui-agent/main.py", "services/agui-agent/src/agui_agent/main.py"],
+          [
+            "example-agent/main.py",
+            "services/example-agent/src/example_agent/main.py"
+          ]
+        ],
+        "cols": [
+          "API stack",
+          "How a caller authenticates",
+          "Its agent",
+          "The model that answers"
+        ],
+        "rows": [
+          [
+            "<code>ChatApiTsStack</code> — TypeScript, one route",
+            "Cognito, client credentials, scope <code>chat-api/invoke</code>",
+            "<code>AguiAgentStack</code>",
+            "<code>eu.anthropic.claude-sonnet-5</code>, 4,000 tokens"
+          ],
+          [
+            "<code>ChatApiFastapiStack</code> — Python, many routes",
+            "AWS IAM, a signed request",
+            "<code>ExampleAgentStack</code>",
+            "<code>eu.anthropic.claude-sonnet-4-6</code>"
+          ]
+        ]
+      }
+    ],
+    "w": 780,
+    "h": 800
+  },
+  "resources": {
+    "name": "Resources",
+    "order": 2,
+    "group": "Reference",
+    "audience": "Cost, audit and incident scoping — the detail behind every badge",
+    "blurb": "Every AWS resource the CDK app declares, counted per environment by reading the constructs.",
+    "note": "Counts are read from the source, not synthesised. This repository's CDK app bundles every agent in Docker against a private git dependency, so nothing outside its own CI can synthesise it — which is also why no count here is gated by a build. Environments are ephemeral by default: only <code>stag</code> and <code>prod</code> are durable, and every other name, including a developer's own, gets its own copy of all four stacks.",
+    "inventory": "resources.json"
+  }
+}

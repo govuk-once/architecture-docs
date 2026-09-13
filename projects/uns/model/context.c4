@@ -5,7 +5,7 @@
 
 model {
 
-  context_departments = boundary 'Departments · mTLS clients' {
+  context_departments = boundary 'Departments' {
     metadata {
       type 'Ownership boundary'
       tech 'a client certificate and an API key each'
@@ -81,7 +81,7 @@ model {
 
     context_uns = platform 'UNS' {
       #request-path
-      description 'software system in scope'
+      description 'what this page is about'
       link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/cdk.ts 'cdk.ts'
       link https://github.com/govuk-once/gds-unified-notification-service/blob/main/docs/developer-reference.md 'developer-reference.md'
       metadata {
@@ -128,7 +128,7 @@ model {
 
   context_onesignal = external 'OneSignal' {
     #request-path
-    description 'api.onesignal.com'
+    description 'push provider, outside government'
     link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/common/services/adapters/notificationAdapterOneSignal.ts 'notificationAdapterOneSignal.ts'
     link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/common/services/notificationService.ts 'notificationService.ts'
     metadata {
@@ -167,7 +167,7 @@ model {
     }
   }
 
-  context_dept -> context_uns 'HTTPS · mTLS · API key' {
+  context_dept -> context_uns 'a message' {
     metadata {
       protocol 'HTTPS to a public REST API with a truststore'
       auth 'A client certificate the truststore signed, checked against a revocation table; an API key per organisation'
@@ -175,7 +175,7 @@ model {
       order '1'
     }
   }
-  context_flex -> context_uns 'SigV4 · API key' {
+  context_flex -> context_uns 'their notifications' {
     metadata {
       protocol 'HTTPS to a private REST API through FLEX\'s VPC endpoint'
       auth 'IAM, when the FLEX account and endpoint ids are configured; an API key always'
@@ -183,7 +183,7 @@ model {
       order '2'
     }
   }
-  context_uns -> context_udp 'SigV4 · assumed role' {
+  context_uns -> context_udp 'which device to reach' {
     metadata {
       protocol 'HTTPS to UDP\'s private API'
       auth 'A role UDP created for UNS, assumed with external id UNS; plus the API key UDP issued'
@@ -191,7 +191,7 @@ model {
       order '3'
     }
   }
-  context_uns -> context_onesignal 'POST /notifications' {
+  context_uns -> context_onesignal 'sends it on' {
     metadata {
       protocol 'HTTPS'
       auth 'Authorization: Key, from Secrets Manager'
@@ -199,7 +199,7 @@ model {
       order '4'
     }
   }
-  context_onesignal -> context_app 'push' {
+  context_onesignal -> context_app 'the notification' {
     metadata {
       protocol 'FCM or APNs, inside OneSignal'
       auth '—'

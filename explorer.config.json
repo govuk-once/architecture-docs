@@ -8,7 +8,7 @@
     "page": "index.html",
     "url": "https://govuk-once.github.io/architecture-docs/"
   },
-  "projects": ["app", "flex", "udp", "uns"],
+  "projects": ["app", "flex", "udp", "uns", "chat"],
   "planned": [],
   "fit": {
     "title": "Overall architecture",
@@ -67,6 +67,14 @@
         "sub": "DVLA, Foreign Travel Advice",
         "col": 1,
         "row": 3
+      },
+      {
+        "id": "chat",
+        "project": "chat",
+        "label": "GOV.UK Chat",
+        "sub": "answers a question",
+        "col": 1,
+        "row": 0
       }
     ],
     "edges": [
@@ -75,6 +83,12 @@
         "to": "backend",
         "label": "sign-in, chat and config",
         "see": "app#containers"
+      },
+      {
+        "from": "backend",
+        "to": "chat",
+        "label": "a person's question",
+        "see": "chat#context"
       },
       {
         "from": "app",

@@ -9,11 +9,31 @@
   "filterHint": "Filter — try Cognito, alarm, KMS, production",
   "placementBudget": 13,
   "kinds": [
-    { "id": "person", "label": "Person", "colour": "purple" },
-    { "id": "app", "label": "GOV.UK App", "colour": "blue" },
-    { "id": "govuk", "label": "GOV.UK Once", "colour": "teal" },
-    { "id": "third", "label": "Outside GOV.UK Once", "colour": "amber" },
-    { "id": "vendor", "label": "Commercial third party", "colour": "coral" },
+    {
+      "id": "person",
+      "label": "Person",
+      "colour": "purple"
+    },
+    {
+      "id": "app",
+      "label": "GOV.UK App",
+      "colour": "blue"
+    },
+    {
+      "id": "govuk",
+      "label": "GOV.UK Once",
+      "colour": "teal"
+    },
+    {
+      "id": "third",
+      "label": "Outside GOV.UK Once",
+      "colour": "amber"
+    },
+    {
+      "id": "vendor",
+      "label": "Commercial third party",
+      "colour": "coral"
+    },
     {
       "id": "unstated",
       "label": "Owner not stated in these repositories",
@@ -25,25 +45,33 @@
       "id": "dev",
       "label": "Development",
       "facts": "dev",
-      "parameters": { "Environment": "dev" }
+      "parameters": {
+        "Environment": "dev"
+      }
     },
     {
       "id": "stg",
       "label": "Staging",
       "facts": "staging",
-      "parameters": { "Environment": "staging" }
+      "parameters": {
+        "Environment": "staging"
+      }
     },
     {
       "id": "int",
       "label": "Integration",
       "facts": "integration",
-      "parameters": { "Environment": "integration" }
+      "parameters": {
+        "Environment": "integration"
+      }
     },
     {
       "id": "prod",
       "label": "Production",
       "facts": "production",
-      "parameters": { "Environment": "production" }
+      "parameters": {
+        "Environment": "production"
+      }
     }
   ],
   "sources": {
@@ -70,11 +98,19 @@
       "ref": "main",
       "root": ".sources/app/config",
       "url": "https://github.com/alphagov/govuk-mobile-backend-config/blob/main/"
+    },
+    "govkit": {
+      "repo": "https://github.com/govuk-once/govuk-mobile-ios-gov-kit.git",
+      "ref": "main",
+      "root": ".sources/app/govkit",
+      "url": "https://github.com/govuk-once/govuk-mobile-ios-gov-kit/blob/main/"
     }
   },
   "derive": {
     "module": "cloudformation",
-    "inputs": { "templates": "backend:services/*/template.yaml" },
+    "inputs": {
+      "templates": "backend:services/*/template.yaml"
+    },
     "counts": {
       "fnAuthProxy": {
         "type": "AWS::Serverless::Function",
@@ -132,18 +168,42 @@
         "type": "AWS::Serverless::Api",
         "logicalId": "^MockSharedSignalsTransmitterApi$"
       },
-      "apiChat": { "type": "AWS::ApiGateway::RestApi" },
-      "alarmCount": { "type": "AWS::CloudWatch::Alarm" },
-      "userPools": { "type": "AWS::Cognito::UserPool" },
-      "userPoolClients": { "type": "AWS::Cognito::UserPoolClient" },
-      "identityProviders": { "type": "AWS::Cognito::UserPoolIdentityProvider" },
-      "webAcls": { "type": "AWS::WAFv2::WebACL" },
-      "kmsKeys": { "type": "AWS::KMS::Key" },
-      "logGroups": { "type": "AWS::Logs::LogGroup" },
-      "metricFilters": { "type": "AWS::Logs::MetricFilter" },
-      "iamRoles": { "type": "AWS::IAM::Role" },
-      "snsTopics": { "type": "AWS::SNS::Topic" },
-      "dashboards": { "type": "AWS::CloudWatch::Dashboard" },
+      "apiChat": {
+        "type": "AWS::ApiGateway::RestApi"
+      },
+      "alarmCount": {
+        "type": "AWS::CloudWatch::Alarm"
+      },
+      "userPools": {
+        "type": "AWS::Cognito::UserPool"
+      },
+      "userPoolClients": {
+        "type": "AWS::Cognito::UserPoolClient"
+      },
+      "identityProviders": {
+        "type": "AWS::Cognito::UserPoolIdentityProvider"
+      },
+      "webAcls": {
+        "type": "AWS::WAFv2::WebACL"
+      },
+      "kmsKeys": {
+        "type": "AWS::KMS::Key"
+      },
+      "logGroups": {
+        "type": "AWS::Logs::LogGroup"
+      },
+      "metricFilters": {
+        "type": "AWS::Logs::MetricFilter"
+      },
+      "iamRoles": {
+        "type": "AWS::IAM::Role"
+      },
+      "snsTopics": {
+        "type": "AWS::SNS::Topic"
+      },
+      "dashboards": {
+        "type": "AWS::CloudWatch::Dashboard"
+      },
       "alarms": {
         "type": "AWS::CloudWatch::Alarm",
         "distinctBy": "construct",

@@ -12,7 +12,8 @@ model {
       tech 'in uns-{env}-stack'
       role 'The public API, its five routes and one authorizer, and the queue pipeline behind them.'
       facts [
-        'Every function: nodejs22, 512 MB, 30 s, X-Ray, a KMS-encrypted log group, no reserved concurrency. Only the pipeline functions sit in the VPC.'
+        'Every function: nodejs22, 512 MB, 30 s, X-Ray, a KMS-encrypted log group, no reserved concurrency. Only the pipeline functions sit in the VPC.',
+        'This stack cannot be synthesised for production as it stands. The tag loop over the queues reads <code>.dlq</code> on every one of them, and the group-processing queue is not created when the groups flag is off — which it is in production. Synthesising with <code>env=prod</code> throws <code>Cannot read properties of undefined</code>.'
       ]
       sourceId 'pso'
       order '0'

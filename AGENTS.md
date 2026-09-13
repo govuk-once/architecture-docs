@@ -5,12 +5,18 @@ lives elsewhere. It holds a LikeC4 model per platform, the pipeline that renders
 interactive page, an index over them, and the checks that keep model and code in step. It
 reads those repositories and never writes to them.
 
-Today that is **FLEX**, the **GOV.UK App**, **UDP** and **UNS**. One
+Today that is **FLEX**, the **GOV.UK App**, **UDP**, **UNS** and **GOV.UK Chat**. One
 directory per architecture under `projects/`; one renderer in `explorer/` that knows about
 none of them. Every command below takes an optional project id and acts on all of them when
-you give none. FLEX, UDP and UNS are each read from one repository; the GOV.UK App from
-four. UNS is the one whose CDK app cannot be synthesised here — it imports a package from
-a private CodeArtifact registry — so its counts are prose, not derived.
+you give none. FLEX, UDP, UNS and GOV.UK Chat are each read from one repository; the GOV.UK
+App from five.
+
+Two of them cannot be synthesised here, so their counts are prose rather than derived, and
+each page says so. UNS imports `once-platform-constructs`, whose source is public and builds
+cleanly — it is only _published_ to a private CodeArtifact registry, so the block is a
+publishing decision rather than a technical one. GOV.UK Chat is harder: its CDK app bundles
+every Lambda in Docker against a private git dependency, so it needs Docker, network egress
+and a token for another repository — which is why only its own CI can synth it.
 
 This file is for anyone — person or coding agent — making changes here. It is a router and an
 operating manual: it says how to run the loop, and where the real instructions live.
@@ -383,6 +389,6 @@ all read config, so none of them changes:
    index lists them in. Remove it from `planned` if it was there.
 
 An architecture the site intends to cover and has not read yet goes in `planned` instead: it
-gets a card saying plainly that nothing has been read from its repository, and `seenFrom`
+gets a row saying plainly that nothing has been read from its repository, and `seenFrom`
 names the project whose model the description came from — a description of UDP written while
 reading FLEX is evidence about FLEX, not about UDP.
