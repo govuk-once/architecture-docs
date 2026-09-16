@@ -318,9 +318,13 @@ jobs:
       issues: write
     steps:
       - name: Open, update or close the alarm
-        continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
+          # This job checks nothing out, so gh has no git remote to infer a repository
+          # from and dies on its first call. Naming the repository is the whole fix. It
+          # failed this way silently for two days, behind a continue-on-error that has
+          # been removed: an alarm that cannot raise itself has to fail loudly instead.
+          GH_REPO: ${{ github.repository }}
           OUTCOME: ${{ needs.build.result }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
