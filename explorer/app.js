@@ -1407,9 +1407,13 @@ function buildDoc() {
             ii = items.indexOf(it),
             c = countOf(it),
             note = !it.id;
-          return `<button class="row${!note && c === 0 ? " zero" : ""}" data-g="${gi2}" data-i="${ii}">
+          /* Zero means different things on different tabs. On the inventory it means the
+             resource is not created in the stage the selector names. Every other doc tab has
+             no stages at all, so borrowing that wording reads as nonsense: a decision that no
+             planned change cites yet would have announced itself as "none in development". */
+          return `<button class="row${!note && c === 0 && view.id === CONFIG.inventoryView ? " zero" : ""}" data-g="${gi2}" data-i="${ii}">
         <span>${iconTag(it.d.icon || iconForType(it.d.type), "sm")}<b>${esc(it.name)}</b></span>
-        <span class="rcount">${note ? "design note" : c === null ? "varies" : c === 0 ? `none in ${esc(stageLabel().toLowerCase())}` : `${c}\u00d7`}</span>
+        <span class="rcount">${note ? "design note" : c === null ? "varies" : c === 0 ? (view.id === CONFIG.inventoryView ? `none in ${esc(stageLabel().toLowerCase())}` : "none yet") : `${c}\u00d7`}</span>
         <span class="rmeta">${(it.meta || []).map((m) => `<span class="tag">${esc(m)}</span>`).join("")}</span>
       </button>`;
         })
