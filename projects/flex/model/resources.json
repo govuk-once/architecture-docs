@@ -742,7 +742,7 @@
             "tech": "CDK-generated",
             "role": "Backing functions for custom resources. Deploy machinery, not request path.",
             "facts": [
-              "An <code>AwsCustomResource</code> singleton per stack, used for cross-region SSM reads and the two API deployments. The Macie stack adds four more on persistent stages: the session, the automated-discovery opt-out, the results export and the scheduled scan job.",
+              "An <code>AwsCustomResource</code> singleton per stack, used for cross-region SSM reads and the two API deployments. The Macie stack added four more on persistent stages — the session, the automated-discovery opt-out, the results export and the scheduled scan job — and contributes none while it is disabled.",
               "<code>CfnPause</code> adds an inline timeout function plus a Provider framework function.",
               "<code>BucketDeployment</code> adds an asset-copying handler that also invalidates CloudFront."
             ],
@@ -1251,9 +1251,9 @@
           "id": "iam-roles",
           "name": "IAM roles",
           "n": {
-            "dev": 58,
-            "stg": 43,
-            "prod": 36,
+            "dev": 57,
+            "stg": 42,
+            "prod": 35,
             "eph": 53
           },
           "from": "counts.iamRoles",
@@ -1263,7 +1263,7 @@
             "tech": "Generated and hand-written",
             "role": "Execution identities.",
             "facts": [
-              "One generated execution role per Flex Lambda construct, each under the permissions boundary — 24 of 36 roles in production. The 12 outside it are roles CDK generates for its own providers (custom resources, the deploy gap, the bucket deployment handler), the API Gateway CloudWatch role, the Slack channel configuration role, the two alarm relay functions, the hand-written smoke-test role, and the Macie custom-resource role added with the stack in FLEX-491.",
+              "One generated execution role per Flex Lambda construct, each under the permissions boundary — 24 of 35 roles in production. The 11 outside it are roles CDK generates for its own providers (custom resources, the deploy gap, the bucket deployment handler), the API Gateway CloudWatch role, the Slack channel configuration role, the two alarm relay functions, and the hand-written smoke-test role. It was 12 until FLEX-491 (#522) disabled the Macie stack and took its custom-resource role with it.",
               "Hand-written roles: the API Gateway CloudWatch role (auto-named — 'ApiGatewayCloudWatchRole' is only a construct id) and the smoke-test role, the only one with an explicit physical name <code>{env}-flex-smoke-test-role</code>.",
               "Also created by CDK: the Chatbot role, custom-resource roles and the BucketDeployment handler role.",
               "Per-route inline policies come from grantRouteResources and grantRoutePermissions."
@@ -1396,20 +1396,20 @@
           "id": "macie",
           "name": "Amazon Macie stack",
           "n": {
-            "dev": 1,
-            "stg": 1,
-            "prod": 1,
+            "dev": 0,
+            "stg": 0,
+            "prod": 0,
             "eph": 0
           },
-          "meta": ["us-east-1", "FlexMacieStack", "persistent stages"],
+          "meta": ["us-east-1", "FlexMacieStack", "written, not deployed"],
           "d": {
-            "type": "Custom::AWS x4, plus an IAM role, a Lambda, a KMS key and an S3 bucket",
+            "type": "Custom::AWS x4, plus an IAM role, a Lambda, a KMS key and an S3 bucket — none of them synthesised today",
             "tech": "AwsCustomResource — neither a Macie session nor a classification job has a CloudFormation resource",
-            "role": "Scheduled sensitive-data discovery over the CloudFront access-log bucket.",
+            "role": "Scheduled sensitive-data discovery over the CloudFront access-log bucket. Written, but not deployed to any stage.",
             "facts": [
-              "Deployed since <b>FLEX-491</b>, which re-enabled the stack with an explicit custom-resource role. It was previously commented out in <code>app.ts</code>; these docs said so, and said it for three commits after it stopped being true.",
-              "<code>if (persistent)</code> in <code>app.ts</code> gates it, so it reaches development, staging and production and never an ephemeral PR stage.",
-              "Its <code>MacieCustomResourceRole</code> carries no permissions boundary, and is one of the 12 roles outside the boundary in production.",
+              "Not deployed. <b>FLEX-491</b> re-enabled the stack with an explicit custom-resource role (#519), then restored the dynamic-role pattern and disabled it in <code>app.ts</code> (#522) while a deployment issue is investigated with the Platform team. Everything below describes the stack as written, not as running.",
+              "<code>if (persistent)</code> in <code>app.ts</code> gated it to development, staging and production, never an ephemeral PR stage — the call it guarded is the one #522 disabled.",
+              "Its <code>MacieCustomResourceRole</code> carries no permissions boundary. With the stack disabled, production has 11 roles outside the boundary rather than 12.",
               "The session is enabled through a <code>macie2:enableMacie</code> call with FIFTEEN_MINUTES finding publication; automated discovery explicitly disabled to avoid rolling scans of public specs and log buckets.",
               "A weekly SCHEDULED job every Monday at 100% sampling with RECOMMENDED managed identifiers.",
               "Results export to a KMS-encrypted RETAIN bucket under <code>macie-results/</code>.",
@@ -1886,9 +1886,9 @@
           "id": "loggroups",
           "name": "Log groups",
           "n": {
-            "dev": 56,
-            "stg": 42,
-            "prod": 37,
+            "dev": 55,
+            "stg": 41,
+            "prod": 36,
             "eph": 54
           },
           "from": "counts.logGroups",
@@ -1898,7 +1898,7 @@
             "tech": "365 days on Flex constructs · 731 on CDK-managed",
             "role": "Every log group the stacks create: one per Lambda construct, one per API stage for access and execution logs, and the groups CDK manages for its own functions.",
             "facts": [
-              "Flex constructs set <code>RetentionDays.ONE_YEAR</code> explicitly (29 groups in production). The 8 groups CDK creates for its own functions — the deploy gap, the alarm relays, the bucket deployment handler, the Macie custom-resource function — take CDK's two-year default instead.",
+              "Flex constructs set <code>RetentionDays.ONE_YEAR</code> explicitly (29 groups in production). The 7 groups CDK creates for its own functions — the deploy gap, the alarm relays, the bucket deployment handler — take CDK's two-year default instead. The Macie custom-resource function was an eighth until FLEX-491 (#522) disabled that stack.",
               "Content is redacted at source by the <code>@flex/logging</code> sanitizer before it is ever written.",
               "<code>FlexLogger.setLogLevel</code> returns without doing anything when <code>FLEX_ENVIRONMENT</code> is production, so verbose logging cannot be turned on there at runtime."
             ],

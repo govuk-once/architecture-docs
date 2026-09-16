@@ -364,9 +364,9 @@
       "ephemeral": 0
     },
     "kmsKeys": {
-      "development": 4,
-      "staging": 4,
-      "production": 4,
+      "development": 3,
+      "staging": 3,
+      "production": 3,
       "ephemeral": 1
     },
     "secrets": {
@@ -382,9 +382,9 @@
       "ephemeral": 1
     },
     "iamRoles": {
-      "development": 58,
-      "staging": 43,
-      "production": 36,
+      "development": 57,
+      "staging": 42,
+      "production": 35,
       "ephemeral": 53
     },
     "iamRolesBounded": {
@@ -394,9 +394,9 @@
       "ephemeral": 45
     },
     "logGroups": {
-      "development": 56,
-      "staging": 42,
-      "production": 37,
+      "development": 55,
+      "staging": 41,
+      "production": 36,
       "ephemeral": 54
     },
     "authorizers": {
@@ -460,9 +460,9 @@
       "ephemeral": 8
     },
     "macieStacks": {
-      "development": 1,
-      "staging": 1,
-      "production": 1,
+      "development": 0,
+      "staging": 0,
+      "production": 0,
       "ephemeral": 0
     }
   }

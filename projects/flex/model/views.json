@@ -770,11 +770,11 @@
           ],
           [
             "Macie scan of the CloudFront access-log bucket",
-            "<code>FlexMacieStack</code>, persistent stages only",
+            "<code>FlexMacieStack</code> — written, but no longer deployed",
             "us-east-1",
-            "Weekly",
-            "Monday, 100% sampling, recommended managed identifiers; findings published every 15 minutes, results to a KMS-encrypted bucket",
-            "<code>app.ts</code> lines 11 and 93, <code>stacks/macie.ts</code>"
+            "Not running",
+            "Monday, 100% sampling, recommended managed identifiers; findings published every 15 minutes, results to a KMS-encrypted bucket — the schedule the stack carries when it is enabled. FLEX-491 (#522) disabled it in <code>app.ts</code> while a deployment issue is investigated with the Platform team, so no stage synthesises it today",
+            "<code>app.ts</code>, <code>stacks/macie.ts</code>"
           ]
         ]
       },
@@ -883,7 +883,7 @@
           [
             "Amazon Macie",
             "<code>FlexMacieStack</code>",
-            "Deployed to persistent stages since FLEX-491, which re-enabled it with an explicit custom-resource role — the Platform IAM guardrail that held it back is resolved. <code>validate:macie-coverage</code> runs in Hygiene on every pull request and posts a Slack notice for uncovered domains; it now reports against a stack that is deployed."
+            "Written, but not deployed. FLEX-491 re-enabled it with an explicit custom-resource role (#519), then reverted to the dynamic-role pattern and disabled the stack in <code>app.ts</code> (#522) while a deployment issue is investigated with the Platform team. No stage synthesises it today, so <code>validate:macie-coverage</code> in Hygiene reports against a stack that is not deployed."
           ],
           [
             "VPC flow logs",
