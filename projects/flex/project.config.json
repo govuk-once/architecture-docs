@@ -186,6 +186,10 @@
         "type": "AWS::KMS::Key",
         "logicalId": "^AlarmTopicRelayKey"
       },
+      "kmsLogGroup": {
+        "type": "AWS::KMS::Key",
+        "logicalId": "^LogGroupKey"
+      },
       "boundaryPolicies": {
         "type": "AWS::IAM::ManagedPolicy"
       },

@@ -1374,6 +1374,44 @@
           }
         },
         {
+          "id": "kms-log-group",
+          "name": "KMS key · CloudWatch log groups",
+          "n": {
+            "dev": 2,
+            "stg": 2,
+            "prod": 2,
+            "eph": 1
+          },
+          "from": "counts.kmsLogGroup",
+          "meta": [
+            "eu-west-2 + us-east-1",
+            "FlexCoreStack · FlexGlobalStack",
+            "not used yet"
+          ],
+          "d": {
+            "type": "AWS::KMS::Key + Alias",
+            "tech": "alias/flex-log-group-key · alias/{stage}-flex-global-log-group-key · rotation on",
+            "role": "Created for CloudWatch log-group encryption, one in each region's stack. No log group uses either yet.",
+            "facts": [
+              "<code>createLogGroupKey</code> is called twice: in FlexCoreStack as <code>alias/flex-log-group-key</code>, and in FlexGlobalStack as <code>alias/{stage}-flex-global-log-group-key</code>. Core is persistent stages only, so an ephemeral or personal stage has just the global one.",
+              "Its resource policy grants <code>logs.{region}.amazonaws.com</code> Encrypt*, Decrypt*, ReEncrypt*, GenerateDataKey* and Describe*, conditioned on the encryption context naming a log group in the same account and region.",
+              "Core writes the eu-west-2 key's ARN to <code>/{env}/flex/kms/log-group-key-arn</code>. <code>resolveLogGroupEncryptionKey</code> returns the key from its own stack or reads that ARN with <code>valueForStringParameter</code> — which, once something calls it, is a second import that bypasses the export graph and fails at deploy rather than synth. Nothing calls it yet; the commit that added it says usage follows."
+            ],
+            "code": [
+              [
+                "constructs/kms/log-group-key.ts",
+                "platform/infra/flex/src/constructs/kms/log-group-key.ts"
+              ],
+              [
+                "stacks/core/stack.ts",
+                "platform/infra/flex/src/stacks/core/stack.ts"
+              ],
+              ["stacks/global.ts", "platform/infra/flex/src/stacks/global.ts"],
+              ["utils/logs.ts", "platform/infra/flex/src/utils/logs.ts"]
+            ]
+          }
+        },
+        {
           "id": "kms-lambda-env",
           "name": "KMS key · Lambda environment variables",
           "n": 0,
@@ -1381,7 +1419,7 @@
           "d": {
             "type": "AWS::KMS::Key (imported)",
             "tech": "environmentEncryption on every Flex* construct",
-            "role": "The fourth key in the system, and the only one FLEX does not create: it protects every Lambda's environment variables.",
+            "role": "The only key in the system FLEX does not create: it protects every Lambda's environment variables.",
             "facts": [
               "All three Flex Lambda constructs set <code>environmentEncryption</code> to it and call <code>grantDecrypt</code> on the function, so every route, gateway, authorizer and canary function depends on it.",
               "Its ARN is read from <code>/{env}/flex-param/secret/encryption-key</code> with <code>StringParameter.valueForStringParameter</code>, which bypasses <code>BaseStack.import()</code> and the SsmApp export graph — so unlike every other imported key, a missing or wrong value fails at deploy rather than at synth.",
@@ -1948,9 +1986,9 @@
           "id": "ssm-written",
           "name": "Parameters written by FLEX",
           "n": {
-            "dev": 23,
-            "stg": 22,
-            "prod": 22,
+            "dev": 24,
+            "stg": 23,
+            "prod": 23,
             "eph": 8
           },
           "meta": ["eu-west-2", "core + platform"],
@@ -1959,7 +1997,7 @@
             "tech": "StringParameter via BaseStack.export()",
             "role": "Replaces CloudFormation exports for all cross-stack wiring.",
             "facts": [
-              "Core writes 14: nine VPC parameters plus two security groups, two alarm topics and the API Gateway endpoint. Development adds the release topic (15).",
+              "Core writes 15: nine VPC parameters plus two security groups, two alarm topics, the API Gateway endpoint and the log-group key ARN. Development adds the release topic (16).",
               "<code>exportVpc</code> is the reason the VPC contributes nine: id, CIDR, AZs, and subnet-id plus route-table-id lists for each of the three tiers.",
               "Platform writes 8: three public API keys, four private API keys and the origin-verify secret ARN.",
               "An ephemeral or personal stage writes only the platform 8 — it imports the rest from development.",
