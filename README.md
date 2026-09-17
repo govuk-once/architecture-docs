@@ -7,7 +7,7 @@ derived from that platform's own code rather than from prior design documents.
 
 | Architecture               | State                                                           |
 | -------------------------- | --------------------------------------------------------------- |
-| **FLEX** — `/flex/`        | Documented, nine tabs, rebuilt on every merge                   |
+| **FLEX** — `/flex/`        | Documented, eight tabs, rebuilt on every merge                  |
 | **GOV.UK App** — `/app/`   | Documented, nine tabs, read from five repositories              |
 | **UDP** — `/udp/`          | Documented, nine tabs, synthesised from its CDK app             |
 | **UNS** — `/uns/`          | Documented, read from its CDK source; not synthesised           |
@@ -19,7 +19,7 @@ them.
 
 ## FLEX
 
-Nine tabs, in three groups. Every box, line and zone is clickable; resource counts update
+Eight tabs, in three groups. Every box, line and zone is clickable; resource counts update
 when you switch stage.
 
 | Tab              | Group         | Who it is for                                                    |
@@ -32,7 +32,6 @@ when you switch stage.
 | **Security**     | Cross-cutting | Security review, assurance and threat modelling                  |
 | **Delivery**     | Cross-cutting | Platform engineers and on-call                                   |
 | **Resources**    | Reference     | Cost, audit and incident scoping — the detail behind every badge |
-| **Decisions**    | Reference     | Anyone reviewing a proposed change — what each rests on          |
 
 ## GOV.UK App
 
