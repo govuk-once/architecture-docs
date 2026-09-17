@@ -2,7 +2,7 @@
  * Reading and validating a project's planned states.
  *
  * This lives apart from the build because the build is not the only thing that needs it:
- * the review export walks the same changes, and the state editor validates with exactly
+ * the review export and the state editor in architecture-docs-states validate with exactly
  * these functions rather than a second opinion about the same rules. A second opinion is
  * the failure mode worth designing out — an editor that accepts what the build refuses is
  * worse than no editor, because it teaches you the wrong format with a green tick.
@@ -227,7 +227,8 @@ export const unchangedByState = (list: StateManifest[]) =>
 
 /**
  * Every state up to and including `at`, each with whatever its own overlay says about this
- * view. No sort: `loadStates` and the editor's `withEdits` both hand the list over sorted.
+ * view. No sort: `loadStates` and the editor's `withEdits`, in architecture-docs-states, both hand the
+ * list over sorted.
  */
 export const chainTo = (
   states: Pick<States, "list" | "overlays">,

@@ -1,11 +1,11 @@
 /**
- * Put the pages where the people are.
+ * Put the architecture overview where the people are.
  *
- * Two pages per project that names a Confluence space in its config: the architecture
- * overview, rewritten on every build, and the review page for the planned states beneath
- * it. Each is exported as `pnpm overview` and `pnpm review` do, then created or updated
- * with its pictures attached — only when it would change, because every update notifies
- * the page's watchers. Runs after each build of main from .github/workflows/confluence.yml,
+ * One page per project that names a Confluence space in its config: the architecture
+ * overview, rewritten on every build. It is exported as `pnpm overview` does, then created
+ * or updated with its pictures attached — only when it would change, because every update
+ * notifies the page's watchers. The review page for the planned states goes beneath it from
+ * govuk-once/architecture-docs-states, which finds this page by its title. Runs after each build of main from .github/workflows/confluence.yml,
  * and by hand from a machine with the three variables set.
  *
  *   CONFLUENCE_BASE_URL   https://<site>.atlassian.net/wiki
@@ -21,7 +21,6 @@ import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { main as exportReview } from "./exportForReview.js";
 import { main as exportOverview, titlesOf } from "./exportOverview.js";
 import {
   type Attachment,
@@ -31,7 +30,6 @@ import {
 } from "./lib/confluence.js";
 import { DOCS_ROOT } from "./lib/paths.js";
 import { selectProjects } from "./lib/projects.js";
-import { loadStates } from "./lib/states.js";
 
 const pictures = (dir: string, prefix: string): Attachment[] =>
   readdirSync(dir)
@@ -86,7 +84,6 @@ export async function main(argv: string[]): Promise<void> {
 
   const named = projects.map((p) => p.id);
   await exportOverview(named);
-  await exportReview(named);
 
   for (const project of projects) {
     const conf = project.config.confluence;
@@ -105,7 +102,6 @@ export async function main(argv: string[]): Promise<void> {
         if (a.action !== "kept") console.log(`  ${a.action} ${a.name}`);
     };
 
-    /* The overview first: the review page lives under it. */
     const overview = await publish(
       site,
       {
@@ -118,25 +114,6 @@ export async function main(argv: string[]): Promise<void> {
       opts,
     );
     report(overview, titles.overview);
-
-    if (!loadStates(project).list.length) {
-      console.log(`${project.id}: no planned states, so no review page`);
-      continue;
-    }
-    const review = await publish(
-      site,
-      {
-        space: conf.space,
-        /* Under the overview when that exists; on a dry run of a first publish it may not,
-           and then the overview's own parent will do. */
-        parent: overview.page?.id ?? conf.parent,
-        title: titles.review,
-        body: readFileSync(path.join(dir, "page.html"), "utf8"),
-        attachments: pictures(dir, "s"),
-      },
-      opts,
-    );
-    report(review, titles.review);
   }
 }
 

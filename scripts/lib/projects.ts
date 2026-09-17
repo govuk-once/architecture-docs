@@ -172,7 +172,8 @@ export interface ProjectConfig {
   synth?: SynthContract;
   /**
    * Where this project's pages go in Confluence, when they go: the architecture overview,
-   * and the review page beneath it. The space key is the one thing that cannot be guessed.
+   * published from here, and the review page beneath it, published from
+   * architecture-docs-states. The space key is the one thing that cannot be guessed.
    * `parent` places the overview the first time only: a page id, or a path of titles such
    * as "Architecture / FLEX", found in the space and made where missing. The titles
    * default to "<name> — architecture" and "<name> — planned states, for comment".

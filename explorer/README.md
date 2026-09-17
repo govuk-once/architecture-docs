@@ -50,8 +50,9 @@ Two things are deliberately not per project:
 
 ## Showing more than one state of an architecture
 
-A project may declare planned states — proposed architectures laid over the as-is. The
-renderer does not compose them; the build does, and injects the finished views. That is
+A build may carry planned states — proposed architectures laid over the as-is, read from
+`ARCH_STATES_DIR`, which only the private architecture-docs-states sets. The renderer does
+not compose them; the build does, and injects the finished views. That is
 deliberate: a layout only a person ever sees is a layout nothing checks, so the future and
 diff views are gated by the same geometry rules as the as-is. The renderer only switches
 between them.
@@ -70,7 +71,7 @@ between them.
   away while both its ends remain, and a line that simply vanished would say nothing.
 - **The inspector says what a change is**: for a box or a line, its status under Changes
   and the decision it rests on, as a link to the record when the register has one. See
-  [`../projects/STATES.md`](../projects/STATES.md).
+  [`STATES.md`](https://github.com/govuk-once/architecture-docs-states/blob/main/STATES.md).
 - **The URL names what is showing** — `#tab=…&stage=…&state=…&changes=1` — written on
   every change and read once on load, so a diagram can be pointed at from beside the row
   somebody is arguing about on the review page. An unreadable or stale fragment leaves the

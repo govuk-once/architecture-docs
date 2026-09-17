@@ -31,10 +31,8 @@ pnpm sync      # clone or fetch each source into .sources/, and install what nee
 pnpm synth     # run each CDK app per stage: the CloudFormation the counts are read from
 pnpm build     # derive the facts, validate the models, assemble every page and the index
 pnpm check     # render every page in a browser and measure what only rendering can see
-pnpm review    # export the planned states for comment, where people can actually comment
-pnpm editor    # serve the site with the state editor at /editor/ — local, writes states/ only
 pnpm overview  # export the architecture overview page, one per project
-pnpm confluence  # put the overview and the review page in Confluence; CI runs it after each build of main
+pnpm confluence  # put the overview in Confluence; CI runs it after each build of main
 pnpm encrypt-site  # seal site/ behind SITE_PASSWORD; the deploy job runs it when the secret is set
 ```
 
@@ -78,7 +76,7 @@ stage's `parameters` deciding which `Condition` holds there.
 The as-is is yours. You read the source, you write the model, you cite the file, and every
 gate in this repository exists to stop you asserting something the code does not do.
 
-**Planned states are not yours.** `projects/<id>/states/` holds proposed architectures, and
+**Planned states are not yours.** The states in architecture-docs-states are proposed architectures, and
 a proposal is somebody's — it comes out of a board, an RFC, an ADR, a decision somebody is
 answerable for. You may be asked to write one down, lay it out, or check it; you may not
 invent one, and you may not decide what a state should contain because it would make the
@@ -86,8 +84,9 @@ diagram tidier. If an overlay needs a change nobody has argued for, say so and s
 
 The line is enforced as well as stated: every planned change cites an entry in
 `states/decisions.json`, the build refuses a citation the register does not hold, and it
-counts the changes resting only on questions still open. See
-[`projects/STATES.md`](projects/STATES.md) for the whole workflow.
+counts the changes resting only on questions still open. The states, the register and the
+workflow live in [`architecture-docs-states`](https://github.com/govuk-once/architecture-docs-states), which is private; this repository
+builds none.
 
 ## Authoring the model
 
@@ -194,9 +193,9 @@ Every rule the build refuses and every number the render check counts is covered
 `scripts/buildArchitectureExplorer.test.ts` and `scripts/checkArchitectureExplorer.test.ts`.
 The first is pure and fast; the second builds small SVG fixtures and measures them in
 Chromium, because `getBBox` and `getPointAtLength` return nothing useful outside a browser.
-The planned-state rules — composition, the fold, the declarations, what autofix may and may
-not move — are covered by the tests beside `scripts/lib/states.ts`, `composeStates.ts` and
-`autofix.ts`, and the review wording by the one beside `reviewText.ts`.
+The planned-state rules — composition, the fold, the declarations — are covered by the tests
+beside `scripts/lib/states.ts` and `composeStates.ts`. What autofix may move and the review
+wording are tested in architecture-docs-states, beside that code.
 
 A gate that stops catching things fails nothing, and looks exactly like a gate with nothing
 to catch. So when you add one:
@@ -294,19 +293,6 @@ build enforces, and the known defects in the source that the diagrams must not p
 [`explorer/README.md`](explorer/README.md) covers the renderer, which is shared and knows
 about no project.
 
-## Arranging a planned state
-
-A person arranges a state in the editor and the gates accept it; then they ask you to
-arrange it. That request has a narrow meaning. Read [`projects/CANVAS.md`](projects/CANVAS.md)
-and [`projects/STATES.md`](projects/STATES.md), then edit only geometry in the named overlay:
-`x`, `y`, `w`, `h`, and slots (`zone`, `row`, `col`) where a box would sit better on a
-zone's grid than by hand. Never change a label, a sub, a fact, a citation, a line, or which
-side of a boundary a box is on — those are the author's claims, and a layout pass that
-touches them has changed the proposal. Prefer slots to coordinates inside a zone; keep
-reading order left to right along the request path; leave the as-is where it is unless the
-state's own additions force a move. Run `pnpm build` and `pnpm check` after, and fix what
-they report rather than widening a budget.
-
 ## Conventions
 
 - **Commit messages** are `TICKET-000 type: description`, matching the source repository's
@@ -331,10 +317,9 @@ On a pull request that means someone changed a model without rebuilding; on the 
 run it means a source moved and the docs have not caught up. It then runs the render check,
 lint, typecheck and tests, and publishes `site/` to Pages from `main`.
 
-The planned-state gates need no step of their own: `pnpm build` composes and refuses, and
-`pnpm check` sweeps every state in both modes against its own two ratchets. `pnpm review` is
-not run in CI — it writes a review copy for a person to paste into Confluence, and it writes
-into gitignored `export/`.
+This repository builds no states, so the planned-state gates run in architecture-docs-states:
+its CI builds this site again with `ARCH_STATES_DIR` set, where `pnpm build` composes and
+refuses and `pnpm check` sweeps every state in both modes against its own two ratchets.
 
 A scheduled run that fails opens an issue titled _Scheduled build is failing_, comments on
 it rather than opening another on each further failure, and closes it when a scheduled run

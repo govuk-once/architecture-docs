@@ -13,7 +13,7 @@ They apply to a **planned state's** views exactly as they apply to the as-is. Th
 are composed at build time, not in the renderer, precisely so these rules can run over them
 — a layout only a person ever sees is a layout nothing checks. A failure names the state it
 first appears at, and the later states that inherit it: `containers@s3/router: … — also at
-s4`. See [STATES.md](STATES.md).
+s4`. See [STATES.md](https://github.com/govuk-once/architecture-docs-states/blob/main/STATES.md).
 
 ## Let the build do the arithmetic
 
@@ -29,7 +29,7 @@ placing beside it by hand: 24 at the sides, 50 above the first row for the zone 
 below the last, and gutters of 14 across and 20 down. The state editor's **Fix** puts the
 three arithmetic faults right — a box too narrow for its text, one over a zone edge, two on
 top of each other — and never moves a box to the other side of a boundary; see
-[STATES.md](STATES.md).
+[STATES.md](https://github.com/govuk-once/architecture-docs-states/blob/main/STATES.md).
 
 Reach for the table when you are placing a zone on the canvas, or laying out an as-is view,
 where there is no grid to fall back on.

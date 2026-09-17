@@ -1,9 +1,10 @@
 name: Publish to Confluence
 
-# Two pages per project go where the people are: the architecture overview, rewritten on
-# every build, and the review page for the planned states beneath it. After every push to
-# main this takes the site the build workflow just produced, exports both pages from it,
-# and publishes them — only when a page would change, because every update notifies the
+# The architecture overview goes where the people are, one page per project, rewritten on
+# every build. The review page for the planned states beneath it is published from
+# architecture-docs-states, which finds this page by its title. After every push to main
+# this takes the site the build workflow just produced, exports the page from it, and
+# publishes it — only when a page would change, because every update notifies the
 # people whose attention the pages exist to get. A merge that touched nothing a reader
 # sees writes nothing.
 #

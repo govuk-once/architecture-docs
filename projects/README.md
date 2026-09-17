@@ -12,10 +12,6 @@ projects/
     model/*.c4                 authored: the diagrams, as a LikeC4 model — the source
     model/views.json           authored: tab order, audience, reference tables
     model/resources.json       authored: the inventory
-    states/                    authored: proposed architectures — see STATES.md
-      decisions.json             the register every planned change cites
-      <state>/state.json         what the state is, and where it sits in the order
-      <state>/<view>.json        what that state's own step does to that view
     derived/                   the build owns this; never edit
       architecture-facts.json    the counts, read from the synthesised templates
       architecture-source.json   two commits: `derived` (facts computed from) and
@@ -229,13 +225,12 @@ In a project directory:
 | `model/views.json`     | Per-view presentation a LikeC4 view cannot hold: tab order, audience, reference tables |
 | `model/resources.json` | The AWS inventory: 84 rows with per-stage counts. Not a diagram                        |
 | `project.config.json`  | Everything specific to this architecture — see below                                   |
-| `states/`              | Proposed architectures laid over the as-is, one directory per state — see STATES.md    |
 
 Beside this file, [`CANVAS.md`](CANVAS.md) is the layout contract: the geometry the build
 refuses, the placement rules that keep a view free of crossings, and the loop for getting
-there. Read it before placing a box. [`STATES.md`](STATES.md) is the contract for `states/`:
-how a planned state edits the as-is, what it must cite, what the editor does, and what the
-build refuses in it.
+there. Read it before placing a box. Planned states are not kept here: their contract,
+[`STATES.md`](https://github.com/govuk-once/architecture-docs-states/blob/main/STATES.md), is in the private architecture-docs-states,
+which builds this site again with them in it.
 
 In [`../explorer/`](../explorer/), shared by every project:
 
@@ -657,7 +652,7 @@ while the identities stay honest.
 - a planned state that names a box, zone or line not in the view at its step, cites a
   decision the register does not hold, or declares a view unchanged while changing it — and
   every geometry rule above, over the composed future and diff views. See
-  [STATES.md](STATES.md)
+  [STATES.md](https://github.com/govuk-once/architecture-docs-states/blob/main/STATES.md)
 
 Pass `--lenient` to report problems without failing, while iterating.
 
@@ -687,7 +682,7 @@ It splits results in two:
   view it composes from — a composed view inherits every awkward line the as-is already
   draws, and counting those again would make the state ratchet a second, worse measure of
   the as-is. Separate numbers also stop a regression in one being paid for by an improvement
-  in the other. See [STATES.md](STATES.md).
+  in the other. See [STATES.md](https://github.com/govuk-once/architecture-docs-states/blob/main/STATES.md).
 
 It also runs axe-core over both colour schemes on the WCAG 2.2 AA rule set, and renders
 every tab in four viewport shapes — a phone upright and sideways, a tablet, a resized
