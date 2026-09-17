@@ -150,7 +150,7 @@ model {
       metadata {
         type 'AWS::KMS::Key'
         tech '30-day pending window'
-        role 'Every table, queue and dead-letter queue, every log group, the cache, the alert topic, and each function\'s environment variables.'
+        role 'Every table, queue and dead-letter queue, every log group, the cache, the alert and release topics, and each function\'s environment variables.'
         sourceId 'mainkey'
         order '1'
         x '386'

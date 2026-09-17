@@ -239,7 +239,7 @@ model {
       #request-path
       description 'GetParametersByPath · 60 s cache'
       link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/common/services/configurationService.ts 'configurationService.ts'
-      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/common/utils/parameters.ts 'parameters.ts'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/shared/ssmParameter.ts 'ssmParameter.ts'
       metadata {
         type 'Code'
         tech 'SSM · WithDecryption · Secrets Manager beside it'

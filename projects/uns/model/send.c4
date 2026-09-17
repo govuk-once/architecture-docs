@@ -155,12 +155,13 @@ model {
       description 'schedule.analyticsExport · :30'
       link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/lambdas/pso/schedule.analyticsExport/handler.ts 'schedule.analyticsExport/handler.ts'
       link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/common/services/analyticsExportService.ts 'analyticsExportService.ts'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/constructs/UNSPSOResources.ts 'UNSPSOResources.ts'
       metadata {
         type 'EventBridge schedule → CloudWatch Logs export task'
         tech 'one log stream per hour · CSV'
         role 'Exports the previous two hours of the analytics log group to the analytics bucket, where an IAM user created for BigQuery reads it.'
         facts [
-          'Objects expire after seven days in production, one elsewhere.'
+          'Objects expire after seven days in development, staging and production, one in a developer sandbox.'
         ]
         sourceId 'export'
         order '7'
@@ -283,7 +284,7 @@ model {
       #request-path
       description 'POST /notifications?c=push'
       link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/common/services/adapters/notificationAdapterOneSignal.ts 'notificationAdapterOneSignal.ts'
-      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/common/utils/secrets.ts 'secrets.ts'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/shared/secretParameters.ts 'secretParameters.ts'
       metadata {
         type 'Push provider'
         tech 'fetch · 25 s timeout · Authorization: Key'

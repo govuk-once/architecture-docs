@@ -340,7 +340,7 @@ model {
     metadata {
       type 'Construct tree · UNSCommon and UNSOrganisations'
       tech 'in uns-{env}-stack'
-      role 'The tables, the cache, the main key, the alert topic, the code-signing profile and the analytics queue.'
+      role 'The tables, the cache, the main key, the alert and release topics, the code-signing profile and the analytics queue.'
       sourceId 'common'
       order '0'
       x '920'
@@ -454,12 +454,12 @@ model {
 
     containers_kms = platform 'Main key · alert topic' {
       #off-request-path
-      description 'kms-main · sns-topic-alerts'
+      description 'kms-main · alert and release topics'
       link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/constructs/UNSCommon.ts 'UNSCommon.ts'
       metadata {
         type 'AWS::KMS::Key · AWS::SNS::Topic'
         tech 'rotation on · Chatbot when SSM names a channel'
-        role 'The key behind every table, queue, log group, cache and function environment; the topic every alarm publishes to.'
+        role 'The key behind every table, queue, log group, cache and function environment; the topic every alarm publishes to, and a second for release announcements.'
         sourceId 'kms'
         order '6'
         x '1230'
@@ -513,10 +513,12 @@ model {
       description 'key and cert in Secrets Manager'
       link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/constructs/bases/UNSClientCertificateConstruct.ts 'UNSClientCertificateConstruct.ts'
       link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/customResourceFns/unsClientCertificateCSRGenerator.ts 'unsClientCertificateCSRGenerator.ts'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/consumers/devConsumers.ts 'devConsumers.ts'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/consumers/stagingConsumers.ts 'stagingConsumers.ts'
       metadata {
         type 'AWS::ACMPCA::Certificate · 2 secrets each'
         tech 'keypair made in a custom resource; the private key never reaches CloudFormation'
-        role 'Two in production, three in development, four in staging. A consumer whose account SSM names may read its own two secrets.'
+        role 'Two in production; three in development and four in staging, plus rolling three-month ones: three in development, two in staging, where Foreign Travel Advice and pentest have none. A consumer whose account SSM names may read its own two secrets.'
         facts [
           'The OU field is filled from the organisation, not the organisational unit.'
         ]

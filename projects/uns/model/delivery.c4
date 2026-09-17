@@ -224,12 +224,14 @@ model {
       link https://github.com/govuk-once/gds-unified-notification-service/blob/main/.github/workflows/_deploy.yml '_deploy.yml'
       link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/cdk.predeploy.ssm.ts 'cdk.predeploy.ssm.ts'
       link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/cdk.postdeploy.ssm.ts 'cdk.postdeploy.ssm.ts'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/scripts/release-announcement.ts 'release-announcement.ts'
       metadata {
         type 'Reusable workflow · GitHub environment'
         tech 'OIDC to AWS_DEPLOY_ROLE_ARN · pnpm ci · pnpm build'
         role 'Before the deploy, a script creates every SSM parameter the stacks read, with defaults, overwriting those the environment lists. After it, another writes the FLEX consumer secret: the private API URL, its key, the role.'
         facts [
-          '<code>--import-existing-resources</code> and <code>--require-approval never</code> on both stacks.'
+          '<code>--import-existing-resources</code> and <code>--require-approval never</code> on both stacks.',
+          'Then, before any test runs, a script publishes the version to the releases SNS topic. That step is <code>continue-on-error</code>.'
         ]
         sourceId 'dev'
         order '4'

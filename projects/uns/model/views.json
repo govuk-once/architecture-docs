@@ -12,6 +12,7 @@
       {
         "name": "Consumer organisations, per environment",
         "code": [
+          ["consumers.ts", "infrastructure/cdk/consumers/consumers.ts"],
           ["devConsumers.ts", "infrastructure/cdk/consumers/devConsumers.ts"],
           [
             "stagingConsumers.ts",
@@ -52,6 +53,12 @@
             "channels Standard; shown as Foreign Travel Advice"
           ],
           [
+            "Development",
+            "The same three organisations and OUs · <code>{dev,dvla,ea}.{start}.{end}</code>",
+            "Rolling: three months at a time from 13 Sep 2026, each successor issued four weeks before its predecessor ends",
+            "as above"
+          ],
+          [
             "Staging",
             "UNS · uns · <code>dev.2026-Q2-Q3</code>",
             "27 May 2026 – 31 Sep 2026, as written",
@@ -61,6 +68,12 @@
             "Staging",
             "DVLA · dvla",
             "27 May 2026 – 31 Sep 2026, as written",
+            "as above"
+          ],
+          [
+            "Staging",
+            "UNS · uns and DVLA · dvla · <code>{dev,dvla}.{start}.{end}</code>",
+            "Rolling, as in development",
             "as above"
           ],
           [
@@ -174,10 +187,15 @@
         "name": "Configuration the pipeline reads at runtime, and the value a fresh environment gets",
         "code": [
           ["cdk.predeploy.ssm.ts", "infrastructure/cdk/cdk.predeploy.ssm.ts"],
-          ["parameters.ts", "src/common/utils/parameters.ts"],
+          ["ssmParameter.ts", "shared/ssmParameter.ts"],
           [
             "circuitBreakerService.ts",
             "src/common/services/circuitBreakerService.ts"
+          ],
+          ["processingService.ts", "src/common/services/processingService.ts"],
+          [
+            "configurationService.ts",
+            "src/common/services/configurationService.ts"
           ]
         ],
         "cols": ["SSM parameter under /{prefix}/", "Default", "Read by"],
@@ -190,7 +208,7 @@
           [
             "<code>config/processing/adapter</code>",
             "<code>VOID</code> — maps the user id to itself",
-            "sqs.processing; <code>OneSignal</code> is the only other value the enum allows, and means UDP"
+            "sqs.processing; <code>UDP</code> is the only other value the enum allows"
           ],
           [
             "<code>config/dispatch/adapter</code> · <code>config/dispatch/onesignal/appId</code>",
@@ -209,8 +227,8 @@
           ],
           [
             "<code>config/featureFlag/{deeplinkUrl,messageRetention,channelControls}</code>",
-            "<code>true</code>; <code>false</code> in production",
-            "Dispatch and validation"
+            "None: the pre-deploy script creates only parameters that have a default, these have none, and nothing else in the repository writes them",
+            "Dispatch and validation; reading a parameter that is missing throws"
           ],
           [
             "<code>content/allowed/protocols</code> · <code>urlHostnames</code>",
@@ -263,6 +281,11 @@
           [
             "UNSLambdaConstruct.ts",
             "infrastructure/cdk/constructs/bases/UNSLambdaConstruct.ts"
+          ],
+          ["devConsumers.ts", "infrastructure/cdk/consumers/devConsumers.ts"],
+          [
+            "stagingConsumers.ts",
+            "infrastructure/cdk/consumers/stagingConsumers.ts"
           ]
         ],
         "cols": [
@@ -287,7 +310,6 @@
             "—",
             "yes"
           ],
-          ["Deeplink, retention and channel flags", "on", "on", "off", "on"],
           ["Public FLEX gateway for the tests", "yes", "—", "—", "yes"],
           ["VPC", "own", "own", "own", "imports dev's"],
           ["VPC flow logs", "—", "to S3, 365 days", "to S3, 365 days", "—"],
@@ -306,7 +328,13 @@
             "DESTROY · off · 1 month"
           ],
           ["<code>LOG_LEVEL</code>", "DEBUG", "DEBUG", "INFO", "DEBUG"],
-          ["Consumer certificates", "3", "4", "2", "1"]
+          [
+            "Consumer certificates",
+            "3, plus 3 rolling",
+            "4, plus 2 rolling",
+            "2",
+            "1"
+          ]
         ]
       }
     ]
@@ -629,7 +657,7 @@
             "infrastructure/cdk/constructs/bases/UNSClientCertificateConstruct.ts"
           ],
           ["cdk.postdeploy.ssm.ts", "infrastructure/cdk/cdk.postdeploy.ssm.ts"],
-          ["secrets.ts", "src/common/utils/secrets.ts"]
+          ["secretParameters.ts", "shared/secretParameters.ts"]
         ],
         "cols": ["Secret", "Written by", "Read by"],
         "rows": [

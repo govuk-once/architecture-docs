@@ -327,8 +327,8 @@
           "id": "secrets",
           "name": "Secrets",
           "n": {
-            "dev": 10,
-            "stg": 12,
+            "dev": 16,
+            "stg": 16,
             "prod": 8
           },
           "meta": [
@@ -348,6 +348,14 @@
               [
                 "UNSPSOResources.ts",
                 "infrastructure/cdk/constructs/UNSPSOResources.ts"
+              ],
+              [
+                "devConsumers.ts",
+                "infrastructure/cdk/consumers/devConsumers.ts"
+              ],
+              [
+                "stagingConsumers.ts",
+                "infrastructure/cdk/consumers/stagingConsumers.ts"
               ]
             ]
           }
@@ -481,15 +489,20 @@
           "id": "client-certs",
           "name": "Client certificates",
           "n": {
-            "dev": 4,
-            "stg": 5,
+            "dev": 7,
+            "stg": 7,
             "prod": 3
           },
-          "meta": ["the CA's own root, plus one per consumer", "dated in code"],
+          "meta": [
+            "the CA's own root, plus one per consumer",
+            "dated in code",
+            "rolling in dev and staging"
+          ],
           "d": {
             "type": "AWS::ACMPCA::Certificate",
-            "role": "The certificate authority signs its own root certificate and one per consumer, and all of them are ACMPCA certificates: UNS and DVLA everywhere, Foreign Travel Advice in dev and staging, pentest in staging.",
+            "role": "The certificate authority signs its own root certificate and one per consumer, and all of them are ACMPCA certificates: UNS and DVLA everywhere, Foreign Travel Advice in dev and staging, pentest in staging. Development adds a rolling three-month certificate each for UNS, DVLA and Foreign Travel Advice, staging for UNS and DVLA, so these counts hold for a synth between 14 Sep and 15 Nov 2026; in the four weeks before one ends, its successor is issued beside it.",
             "code": [
+              ["consumers.ts", "infrastructure/cdk/consumers/consumers.ts"],
               [
                 "devConsumers.ts",
                 "infrastructure/cdk/consumers/devConsumers.ts"
@@ -615,11 +628,15 @@
           "id": "sns",
           "name": "SNS topics",
           "n": {
-            "dev": 1,
-            "stg": 1,
-            "prod": 1
+            "dev": 2,
+            "stg": 2,
+            "prod": 2
           },
-          "meta": ["sns-topic-alerts", "Chatbot when SSM names a channel"],
+          "meta": [
+            "sns-topic-alerts",
+            "sns-topic-releases",
+            "Chatbot each, when SSM names its channel"
+          ],
           "d": {
             "type": "AWS::SNS::Topic",
             "code": [
