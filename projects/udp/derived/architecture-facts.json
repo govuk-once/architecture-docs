@@ -2,29 +2,29 @@
   "generatedFrom": "cdk.out/{id}/*.template.json counts={\"apiRoutes\":{\"type\":\"AWS::ApiGateway::Method\",\"template\":\"^{stage}-main$\"},\"functions\":{\"type\":\"AWS::Lambda::Function\",\"perTemplate\":\"^{stage}-(?<name>main|sar|dvla-pilot|vpc|macie)$\",\"hasProperty\":\"FunctionName\"},\"functionsTotal\":{\"type\":\"AWS::Lambda::Function\",\"hasProperty\":\"FunctionName\"},\"tables\":{\"type\":\"AWS::DynamoDB::Table\"},\"queues\":{\"type\":\"AWS::SQS::Queue\"},\"buckets\":{\"type\":\"AWS::S3::Bucket\"},\"kmsKeys\":{\"type\":\"AWS::KMS::Key\"},\"vpcEndpoints\":{\"type\":\"AWS::EC2::VPCEndpoint\"},\"natGateways\":{\"type\":\"AWS::EC2::NatGateway\"},\"flowLogs\":{\"type\":\"AWS::EC2::FlowLog\"},\"securityGroups\":{\"type\":\"AWS::EC2::SecurityGroup\"},\"networkAcls\":{\"type\":\"AWS::EC2::NetworkAcl\"},\"networkAclEntries\":{\"type\":\"AWS::EC2::NetworkAclEntry\"},\"subnets\":{\"type\":\"AWS::EC2::Subnet\"},\"webAcls\":{\"type\":\"AWS::WAFv2::WebACL\"},\"logGroups\":{\"type\":\"AWS::Logs::LogGroup\"},\"iamRoles\":{\"type\":\"AWS::IAM::Role\"},\"snsTopics\":{\"type\":\"AWS::SNS::Topic\"},\"dashboards\":{\"type\":\"AWS::CloudWatch::Dashboard\"},\"apiKeys\":{\"type\":\"AWS::ApiGateway::ApiKey\"},\"usagePlans\":{\"type\":\"AWS::ApiGateway::UsagePlan\"},\"backupPlans\":{\"type\":\"AWS::Backup::BackupPlan\"},\"backupSelections\":{\"type\":\"AWS::Backup::BackupSelection\"},\"backupVaults\":{\"type\":\"AWS::Backup::BackupVault\"},\"codeBuildProjects\":{\"type\":\"AWS::CodeBuild::Project\"},\"appConfigApplications\":{\"type\":\"AWS::AppConfig::Application\"},\"e2eStacks\":{\"type\":\"AWS::IAM::Role\",\"template\":\"-e2e$\",\"templatesContaining\":true},\"macieStacks\":{\"type\":\"AWS::KMS::Key\",\"template\":\"-macie$\",\"templatesContaining\":true},\"alarmsTotal\":{\"type\":\"AWS::CloudWatch::Alarm\"},\"alarmsLambdaErrors\":{\"type\":\"AWS::CloudWatch::Alarm\",\"logicalId\":\"^Lambda\\\\d+Errors\"},\"alarmsLambdaDuration\":{\"type\":\"AWS::CloudWatch::Alarm\",\"logicalId\":\"^Lambda\\\\d+Duration\"},\"alarmsLambdaThrottles\":{\"type\":\"AWS::CloudWatch::Alarm\",\"logicalId\":\"^Lambda\\\\d+Throttles\"},\"alarmsDynamo\":{\"type\":\"AWS::CloudWatch::Alarm\",\"logicalId\":\"^DynamoDb\"},\"alarmsApi\":{\"type\":\"AWS::CloudWatch::Alarm\",\"logicalId\":\"^ApiGateway\"}} synth={\"cwd\":\"cdk\",\"command\":[\"npx\",\"tsx\",\"bin/app.ts\"],\"env\":{\"CDK_DEFAULT_ACCOUNT\":\"000000000000\",\"CDK_DEFAULT_REGION\":\"eu-west-2\",\"AWS_REGION\":\"eu-west-2\",\"DEVELOPER_ID\":\"\"},\"context\":{\"env\":\"{stage}\"},\"output\":\"cdk.out/{id}\",\"prepare\":{\"cwd\":\".\",\"command\":[\"pnpm\",\"build:all\"]}}",
   "stages": ["development", "staging", "production"],
   "counts": {
-    "apiRoutes": { "development": 13, "staging": 13, "production": 13 },
+    "apiRoutes": { "development": 13, "staging": 13, "production": 10 },
     "functions": {
       "dvla-pilot": { "development": 1, "staging": 1, "production": 1 },
       "macie": { "development": 0, "staging": 0, "production": 0 },
-      "main": { "development": 13, "staging": 13, "production": 13 },
-      "sar": { "development": 4, "staging": 4, "production": 4 },
+      "main": { "development": 13, "staging": 13, "production": 10 },
+      "sar": { "development": 4, "staging": 4, "production": 0 },
       "vpc": { "development": 0, "staging": 0, "production": 0 }
     },
-    "functionsTotal": { "development": 18, "staging": 18, "production": 18 },
+    "functionsTotal": { "development": 18, "staging": 18, "production": 11 },
     "tables": { "development": 2, "staging": 2, "production": 2 },
-    "queues": { "development": 5, "staging": 5, "production": 5 },
-    "buckets": { "development": 4, "staging": 4, "production": 3 },
+    "queues": { "development": 5, "staging": 5, "production": 0 },
+    "buckets": { "development": 4, "staging": 4, "production": 1 },
     "kmsKeys": { "development": 4, "staging": 5, "production": 5 },
-    "vpcEndpoints": { "development": 10, "staging": 10, "production": 10 },
-    "natGateways": { "development": 1, "staging": 1, "production": 1 },
+    "vpcEndpoints": { "development": 12, "staging": 12, "production": 12 },
+    "natGateways": { "development": 0, "staging": 0, "production": 0 },
     "flowLogs": { "development": 1, "staging": 1, "production": 1 },
     "securityGroups": { "development": 3, "staging": 3, "production": 3 },
-    "networkAcls": { "development": 2, "staging": 2, "production": 2 },
-    "networkAclEntries": { "development": 9, "staging": 9, "production": 6 },
-    "subnets": { "development": 6, "staging": 6, "production": 6 },
+    "networkAcls": { "development": 1, "staging": 1, "production": 1 },
+    "networkAclEntries": { "development": 4, "staging": 4, "production": 4 },
+    "subnets": { "development": 2, "staging": 2, "production": 2 },
     "webAcls": { "development": 1, "staging": 1, "production": 1 },
-    "logGroups": { "development": 25, "staging": 25, "production": 23 },
-    "iamRoles": { "development": 29, "staging": 28, "production": 26 },
+    "logGroups": { "development": 25, "staging": 25, "production": 16 },
+    "iamRoles": { "development": 29, "staging": 28, "production": 18 },
     "snsTopics": { "development": 3, "staging": 4, "production": 4 },
     "dashboards": { "development": 2, "staging": 2, "production": 2 },
     "apiKeys": { "development": 1, "staging": 1, "production": 1 },
@@ -40,21 +40,21 @@
     },
     "e2eStacks": { "development": 1, "staging": 1, "production": 0 },
     "macieStacks": { "development": 1, "staging": 1, "production": 1 },
-    "alarmsTotal": { "development": 57, "staging": 57, "production": 57 },
+    "alarmsTotal": { "development": 57, "staging": 57, "production": 36 },
     "alarmsLambdaErrors": {
       "development": 17,
       "staging": 17,
-      "production": 17
+      "production": 10
     },
     "alarmsLambdaDuration": {
       "development": 17,
       "staging": 17,
-      "production": 17
+      "production": 10
     },
     "alarmsLambdaThrottles": {
       "development": 17,
       "staging": 17,
-      "production": 17
+      "production": 10
     },
     "alarmsDynamo": { "development": 3, "staging": 3, "production": 3 },
     "alarmsApi": { "development": 3, "staging": 3, "production": 3 }

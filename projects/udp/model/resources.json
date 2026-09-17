@@ -8,21 +8,22 @@
         {
           "id": "api-routes",
           "name": "Routes",
-          "n": { "dev": 13, "stg": 13, "prod": 13 },
+          "n": { "dev": 13, "stg": 13, "prod": 10 },
           "from": "counts.apiRoutes",
           "meta": ["main stack", "AWS_IAM", "AWS_PROXY"],
           "d": {
             "type": "AWS::ApiGateway::Method",
             "role": "One private REST API; every method is IAM-authorised and proxies to its own Lambda.",
             "facts": [
-              "Six identity routes, four data routes, three rights routes."
+              "Six identity routes, four data routes, and — outside production — three rights routes. In production the main stack drops every route marked <code>disableRoute</code>, which is those three."
             ],
             "code": [
               ["routes.ts", "libs/utils/schemas/routes/routes.ts"],
               [
                 "api-gateway-construct.ts",
                 "cdk/lib/constructs/api-gateway-construct.ts"
-              ]
+              ],
+              ["main-stack.ts", "cdk/lib/stacks/main-stack.ts"]
             ]
           }
         },
@@ -84,7 +85,7 @@
         {
           "id": "fn-main",
           "name": "Route functions",
-          "n": { "dev": 13, "stg": 13, "prod": 13 },
+          "n": { "dev": 13, "stg": 13, "prod": 10 },
           "from": "counts.functions.main",
           "meta": ["main stack", "isolated subnets", "nodejs24.x"],
           "d": {
@@ -99,13 +100,16 @@
         {
           "id": "fn-sar",
           "name": "Rights pipeline functions",
-          "n": { "dev": 4, "stg": 4, "prod": 4 },
+          "n": { "dev": 4, "stg": 4, "prod": 0 },
           "from": "counts.functions.sar",
-          "meta": ["sar stack", "SQS and S3 triggered"],
+          "meta": ["sar stack", "SQS and S3 triggered", "not in production"],
           "d": {
             "type": "AWS::Lambda::Function",
             "role": "createSarFile, generateSarPresignedUrl, dsarRequest, dsarDelete.",
-            "code": [["sar-stack.ts", "cdk/lib/stacks/sar-stack.ts"]]
+            "code": [
+              ["sar-stack.ts", "cdk/lib/stacks/sar-stack.ts"],
+              ["cdk/bin/app.ts", "cdk/bin/app.ts"]
+            ]
           }
         },
         {
@@ -129,13 +133,17 @@
         {
           "id": "fn-total",
           "name": "All named functions",
-          "n": { "dev": 18, "stg": 18, "prod": 18 },
+          "n": { "dev": 18, "stg": 18, "prod": 11 },
           "from": "counts.functionsTotal",
           "meta": ["every stack"],
           "d": {
             "type": "AWS::Lambda::Function",
-            "role": "The eighteen the repository builds. Custom-resource providers CDK adds have no FunctionName and are not counted.",
-            "code": [["cdk/project.json", "cdk/project.json"]]
+            "role": "The eighteen the repository builds; eleven in production, which has neither the three rights route functions nor the sar stack. Custom-resource providers CDK adds have no FunctionName and are not counted.",
+            "code": [
+              ["cdk/project.json", "cdk/project.json"],
+              ["cdk/bin/app.ts", "cdk/bin/app.ts"],
+              ["main-stack.ts", "cdk/lib/stacks/main-stack.ts"]
+            ]
           }
         }
       ]
@@ -165,31 +173,34 @@
         {
           "id": "queues",
           "name": "Queues",
-          "n": { "dev": 5, "stg": 5, "prod": 5 },
+          "n": { "dev": 5, "stg": 5, "prod": 0 },
           "from": "counts.queues",
-          "meta": ["main and sar stacks", "KMS"],
+          "meta": ["main and sar stacks", "KMS", "none in production"],
           "d": {
             "type": "AWS::SQS::Queue",
-            "role": "SAR and DSAR queues in main; the delete queue, its dead-letter queue and the SAR file dead-letter queue in sar.",
+            "role": "SAR and DSAR queues in main; the delete queue, its dead-letter queue and the SAR file dead-letter queue in sar. None in production: main creates a queue only for a route that names one, and the sar stack is not created there.",
             "code": [
               ["main-stack.ts", "cdk/lib/stacks/main-stack.ts"],
-              ["sar-stack.ts", "cdk/lib/stacks/sar-stack.ts"]
+              ["sar-stack.ts", "cdk/lib/stacks/sar-stack.ts"],
+              ["routes.ts", "libs/utils/schemas/routes/routes.ts"],
+              ["cdk/bin/app.ts", "cdk/bin/app.ts"]
             ]
           }
         },
         {
           "id": "buckets",
           "name": "Buckets",
-          "n": { "dev": 4, "stg": 4, "prod": 3 },
+          "n": { "dev": 4, "stg": 4, "prod": 1 },
           "from": "counts.buckets",
           "meta": ["sar, macie and e2e stacks"],
           "d": {
             "type": "AWS::S3::Bucket",
-            "role": "The SAR bucket and its access-logs bucket, Macie's results bucket, and — outside production — the test source bucket.",
+            "role": "Macie's results bucket in every environment; outside production, the SAR bucket, its access-logs bucket and the test source bucket.",
             "code": [
               ["s3-construct.ts", "cdk/lib/constructs/s3-construct.ts"],
               ["e2e-stack.ts", "cdk/lib/stacks/e2e-stack.ts"],
-              ["macie-stack.ts", "cdk/lib/macie/macie-stack.ts"]
+              ["macie-stack.ts", "cdk/lib/macie/macie-stack.ts"],
+              ["cdk/bin/app.ts", "cdk/bin/app.ts"]
             ]
           }
         },
@@ -239,12 +250,12 @@
         {
           "id": "subnets",
           "name": "Subnets",
-          "n": { "dev": 6, "stg": 6, "prod": 6 },
+          "n": { "dev": 2, "stg": 2, "prod": 2 },
           "from": "counts.subnets",
           "meta": ["vpc stack", "2 AZs", "/24"],
           "d": {
             "type": "AWS::EC2::Subnet",
-            "role": "Public, private with egress, and isolated — two of each.",
+            "role": "Isolated, one in each availability zone. There is no other tier.",
             "code": [
               ["vpc-construct.ts", "cdk/lib/constructs/vpc-construct.ts"]
             ]
@@ -253,26 +264,12 @@
         {
           "id": "vpc-endpoints",
           "name": "VPC endpoints",
-          "n": { "dev": 10, "stg": 10, "prod": 10 },
+          "n": { "dev": 12, "stg": 12, "prod": 12 },
           "from": "counts.vpcEndpoints",
-          "meta": ["vpc stack", "2 gateway", "8 interface"],
+          "meta": ["vpc stack", "12 interface"],
           "d": {
             "type": "AWS::EC2::VPCEndpoint",
             "role": "The isolated tier's only way out; the list is on Network.",
-            "code": [
-              ["vpc-construct.ts", "cdk/lib/constructs/vpc-construct.ts"]
-            ]
-          }
-        },
-        {
-          "id": "nat",
-          "name": "NAT gateways",
-          "n": { "dev": 1, "stg": 1, "prod": 1 },
-          "from": "counts.natGateways",
-          "meta": ["vpc stack", "one AZ"],
-          "d": {
-            "type": "AWS::EC2::NatGateway",
-            "role": "For the test builds only. Deployed in production too, where nothing uses it and the public ACL passes nothing.",
             "code": [
               ["vpc-construct.ts", "cdk/lib/constructs/vpc-construct.ts"]
             ]
@@ -295,12 +292,12 @@
         {
           "id": "nacls",
           "name": "Network ACLs",
-          "n": { "dev": 2, "stg": 2, "prod": 2 },
+          "n": { "dev": 1, "stg": 1, "prod": 1 },
           "from": "counts.networkAcls",
           "meta": ["vpc stack"],
           "d": {
             "type": "AWS::EC2::NetworkAcl",
-            "role": "One for the private tiers, one for the public tier.",
+            "role": "One, on both isolated subnets.",
             "code": [
               ["vpc-construct.ts", "cdk/lib/constructs/vpc-construct.ts"]
             ]
@@ -309,12 +306,12 @@
         {
           "id": "nacl-entries",
           "name": "Network ACL entries",
-          "n": { "dev": 9, "stg": 9, "prod": 6 },
+          "n": { "dev": 4, "stg": 4, "prod": 4 },
           "from": "counts.networkAclEntries",
-          "meta": ["vpc stack", "fewer in production"],
+          "meta": ["vpc stack"],
           "d": {
             "type": "AWS::EC2::NetworkAclEntry",
-            "role": "The public ACL's three allow rules are added outside production only.",
+            "role": "Deny SSH and RDP inbound from anywhere; allow all traffic in from, and out to, the VPC CIDR.",
             "code": [
               ["vpc-construct.ts", "cdk/lib/constructs/vpc-construct.ts"]
             ]
@@ -343,21 +340,22 @@
         {
           "id": "alarms",
           "name": "Alarms",
-          "n": { "dev": 57, "stg": 57, "prod": 57 },
+          "n": { "dev": 57, "stg": 57, "prod": 36 },
           "from": "counts.alarmsTotal",
           "meta": ["monitoring stack"],
           "d": {
             "type": "AWS::CloudWatch::Alarm",
-            "role": "Three per function for seventeen functions, three for DynamoDB, three for the API.",
+            "role": "Three per function for seventeen functions — ten in production — three for DynamoDB, three for the API.",
             "code": [
-              ["monitoring-stack.ts", "cdk/lib/stacks/monitoring-stack.ts"]
+              ["monitoring-stack.ts", "cdk/lib/stacks/monitoring-stack.ts"],
+              ["cdk/bin/app.ts", "cdk/bin/app.ts"]
             ]
           }
         },
         {
           "id": "alarms-fn-errors",
           "name": "Lambda error alarms",
-          "n": { "dev": 17, "stg": 17, "prod": 17 },
+          "n": { "dev": 17, "stg": 17, "prod": 10 },
           "from": "counts.alarmsLambdaErrors",
           "meta": ["critical", "≥ 2 in two 1-min periods"],
           "d": {
@@ -370,7 +368,7 @@
         {
           "id": "alarms-fn-duration",
           "name": "Lambda duration alarms",
-          "n": { "dev": 17, "stg": 17, "prod": 17 },
+          "n": { "dev": 17, "stg": 17, "prod": 10 },
           "from": "counts.alarmsLambdaDuration",
           "meta": ["critical", "p95 over 150 ms"],
           "d": {
@@ -384,7 +382,7 @@
         {
           "id": "alarms-fn-throttles",
           "name": "Lambda throttle alarms",
-          "n": { "dev": 17, "stg": 17, "prod": 17 },
+          "n": { "dev": 17, "stg": 17, "prod": 10 },
           "from": "counts.alarmsLambdaThrottles",
           "meta": ["critical", "any throttle"],
           "d": {
@@ -424,7 +422,7 @@
         {
           "id": "log-groups",
           "name": "Log groups",
-          "n": { "dev": 25, "stg": 25, "prod": 23 },
+          "n": { "dev": 25, "stg": 25, "prod": 16 },
           "from": "counts.logGroups",
           "meta": ["1 year · 1 month in dev", "KMS"],
           "d": {
@@ -476,7 +474,7 @@
         {
           "id": "iam-roles",
           "name": "IAM roles",
-          "n": { "dev": 29, "stg": 28, "prod": 26 },
+          "n": { "dev": 29, "stg": 28, "prod": 18 },
           "from": "counts.iamRoles",
           "meta": ["every stack", "+1 per real consumer"],
           "d": {
@@ -548,7 +546,7 @@
           "meta": ["e2e and perf stacks", "not in production"],
           "d": {
             "type": "AWS::CodeBuild::Project",
-            "role": "Cucumber end-to-end, and k6 performance, in the egress tier.",
+            "role": "Cucumber end-to-end, and k6 performance, in the isolated subnets.",
             "code": [
               [
                 "codebuild-e2e-construct.ts",

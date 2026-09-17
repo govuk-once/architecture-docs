@@ -55,9 +55,10 @@ model {
   }
 
   request_account = boundary 'UDP account · VPC' {
+    link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/vpc-construct.ts 'vpc-construct.ts'
     metadata {
       type 'AWS account boundary'
-      tech 'One VPC, three subnet tiers'
+      tech 'One VPC, isolated subnets only'
       role 'Everything from the API inward runs here; the Lambdas have no route to the internet.'
       facts [
         'The Lambdas sit in the isolated subnets, and reach DynamoDB and KMS only through VPC endpoints — see Network.'
@@ -151,12 +152,13 @@ model {
       description 'udp-identity-{env} · sk-index'
       link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/dynamodb-construct.ts 'dynamodb-construct.ts'
       link https://github.com/govuk-once/user-data-platform/blob/main/libs/data-access/services/DynamoDbIdentityService.ts 'DynamoDbIdentityService.ts'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/vpc-construct.ts 'vpc-construct.ts'
       metadata {
         type 'AWS::DynamoDB::Table'
         tech 'On demand · CMK · point-in-time recovery'
         role 'One row per link: <code>pk = {service}#{serviceId}</code>, <code>sk = udpId</code>. The GSI inverts that, so a person\'s links are one query.'
         facts [
-          'Reached through the DynamoDB gateway endpoint; a row past its <code>ttl</code> is treated as absent.',
+          'Reached through the DynamoDB interface endpoint — see Network; a row past its <code>ttl</code> is treated as absent.',
           'The response is stripped of <code>pk</code>, <code>sk</code>, <code>udpId</code> and <code>ttl</code> on the way out, leaving <code>serviceName</code> and <code>serviceId</code>.'
         ]
         sourceId 'table'
@@ -208,8 +210,9 @@ model {
   }
   request_fn -> request_table 'Query · sk-index' {
     link https://github.com/govuk-once/user-data-platform/blob/main/libs/data-access/services/DynamoDbIdentityService.ts 'DynamoDbIdentityService.ts'
+    link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/vpc-construct.ts 'vpc-construct.ts'
     metadata {
-      protocol 'DynamoDB, through the gateway endpoint'
+      protocol 'DynamoDB, through the interface endpoint'
       auth 'The function\'s role: GetItem and Query on the table and its indexes'
       carries 'Two reads; the linked record back'
       order '5'

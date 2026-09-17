@@ -9,12 +9,13 @@ model {
     #request-path
     description 'the data subject'
     link https://github.com/govuk-once/user-data-platform/blob/main/libs/utils/schemas/routes/routes.ts 'routes.ts'
+    link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/stacks/main-stack.ts 'main-stack.ts'
     metadata {
       type 'Person'
       tech '—'
       role 'The person whose record this is. Never a direct caller: everything reaches UDP through FLEX.'
       facts [
-        'A subject access request and a deletion request are routes on this API — <code>POST /v1/sar</code> and <code>POST /v1/dsar</code> — made on the person\'s behalf by a consumer.'
+        'A subject access request and a deletion request are routes on this API — <code>POST /v1/sar</code> and <code>POST /v1/dsar</code> — made on the person\'s behalf by a consumer. Production does not deploy them.'
       ]
       sourceId 'user'
       order '1'
@@ -115,13 +116,14 @@ model {
       link https://github.com/govuk-once/user-data-platform/blob/main/cdk/bin/app.ts 'cdk/bin/app.ts'
       link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/api-gateway-construct.ts 'api-gateway-construct.ts'
       link https://github.com/govuk-once/user-data-platform/blob/main/README.md 'README.md'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/stacks/main-stack.ts 'main-stack.ts'
       metadata {
         type 'Software system · in scope'
         tech 'AWS · TypeScript · serverless · one VPC'
         role 'Keeps one record per person — a <code>udpId</code> — the links from each service\'s own identifier to it, the data services store against it, and the requests to export or erase all of it.'
         facts [
-          'Thirteen routes on one private REST API, each an IAM-authorised Lambda in an isolated subnet, over two DynamoDB tables.',
-          'Eight stacks per environment: VPC, main, SAR, DVLA pilot, monitoring, Macie; backup outside development; end-to-end and performance test stacks outside production.',
+          'Thirteen routes on one private REST API — ten in production, without the SAR and DSAR routes — each an IAM-authorised Lambda in an isolated subnet, over two DynamoDB tables.',
+          'VPC, main, DVLA pilot, monitoring and Macie stacks in every environment; SAR, end-to-end and performance test stacks outside production; backup outside development.',
           'The README says no Cognito or OAuth credentials are involved and access is cross-account IAM. The OpenAPI file still declares a Cognito bearer scheme; nothing enforces one.'
         ]
         sourceId 'udp'
@@ -157,10 +159,11 @@ model {
   context_flex -> context_udp 'who this person is' {
     link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/iam-consumer-construct.ts 'iam-consumer-construct.ts'
     link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/api-gateway-construct.ts 'api-gateway-construct.ts'
+    link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/stacks/main-stack.ts 'main-stack.ts'
     metadata {
       protocol 'HTTPS to a private API, through the consumer\'s execute-api endpoint'
       auth 'An assumed consumer role, SigV4; the API\'s resource policy admits only listed endpoints'
-      carries 'Users, identity links and exchanges, data under /v1/{resourcePath+}, SAR and DSAR requests'
+      carries 'Users, identity links and exchanges, data under /v1/{resourcePath+}, and outside production SAR and DSAR requests'
       facts [
         'The consumer role may invoke <code>GET</code> for <code>read</code>, <code>POST</code>, <code>PUT</code> and <code>PATCH</code> for <code>write</code>, <code>DELETE</code> for <code>delete</code> — on every path. Nothing scopes a consumer to a resource.',
         'FLEX\'s udp gateway also calls <code>/v1/notifications</code> and <code>/v1/groups</code>, which are not routes here: they are resource paths on the generic data API.'

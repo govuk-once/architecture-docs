@@ -25,10 +25,12 @@ model {
   }
 
   containers_main = boundary 'main stack · {env}-main' {
+    link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/stacks/main-stack.ts 'main-stack.ts'
+    link https://github.com/govuk-once/user-data-platform/blob/main/libs/utils/schemas/routes/routes.ts 'routes.ts'
     metadata {
       type 'CloudFormation stack'
       tech 'cdk/lib/stacks/main-stack.ts'
-      role 'The API, its thirteen route functions, both tables, the queues the rights routes write to, and everything a consumer is given.'
+      role 'The API, its thirteen route functions, both tables, the queues the rights routes write to, and everything a consumer is given. In production it drops the three routes marked <code>disableRoute</code> — the SAR and DSAR routes — with their functions and queues, leaving ten.'
       facts [
         'Tagged with <code>ServiceName</code>, <code>TeamName</code>, <code>Environment</code> and the package version the deploy wrote.',
         'A developer or pull-request deployment prefixes every stack name: <code>pr-123-dev-main</code>.'
@@ -70,10 +72,11 @@ model {
       description 'api-{env} · WAF · AWS_IAM'
       link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/api-gateway-construct.ts 'api-gateway-construct.ts'
       link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/waf-construct.ts 'waf-construct.ts'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/stacks/main-stack.ts 'main-stack.ts'
       metadata {
         type 'AWS::ApiGateway::RestApi'
         tech 'PRIVATE endpoint · stage {env} · 100 rps, burst 200'
-        role 'Thirteen methods, every one a Lambda proxy with IAM authorisation, behind a resource policy that admits only the consumers\' VPC endpoints.'
+        role 'Thirteen methods, ten in production, every one a Lambda proxy with IAM authorisation, behind a resource policy that admits only the consumers\' VPC endpoints.'
         facts [
           'The regional Web ACL is associated here: a 300,000-per-IP rate rule and three AWS managed rule sets, logged to <code>aws-waf-logs-…</code>.',
           'The stage logs every method at INFO to a JSON access log, with metrics and X-Ray on and data tracing off.'
@@ -145,10 +148,15 @@ model {
       description 'POST /v1/sar · GET /v1/sar/{sarId}'
       link https://github.com/govuk-once/user-data-platform/blob/main/src/startSarLambda/handler.ts 'startSarLambda/handler.ts'
       link https://github.com/govuk-once/user-data-platform/blob/main/src/getSarStatusLambda/handler.ts 'getSarStatusLambda/handler.ts'
+      link https://github.com/govuk-once/user-data-platform/blob/main/libs/utils/schemas/routes/routes.ts 'routes.ts'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/stacks/main-stack.ts 'main-stack.ts'
       metadata {
         type 'AWS::Lambda::Function ×2'
         tech 'nodejs24.x · 512 MB · 30 s · isolated subnet'
         role 'Start answers <code>202</code> with a <code>sarID</code> and puts the request on the SAR queue; status reads the <code>SAR/{sarId}</code> record the pipeline writes.'
+        facts [
+          'Not in production: both routes are marked <code>disableRoute</code>, and the main stack leaves them out there.'
+        ]
         sourceId 'sarfns'
         order '6'
         x '636'
@@ -164,10 +172,15 @@ model {
       #request-path
       description 'POST /v1/dsar'
       link https://github.com/govuk-once/user-data-platform/blob/main/src/startDsarLambda/handler.ts 'startDsarLambda/handler.ts'
+      link https://github.com/govuk-once/user-data-platform/blob/main/libs/utils/schemas/routes/routes.ts 'routes.ts'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/stacks/main-stack.ts 'main-stack.ts'
       metadata {
         type 'AWS::Lambda::Function'
         tech 'nodejs24.x · 512 MB · 30 s · isolated subnet'
         role 'Answers <code>202</code> and puts the deletion request on the DSAR queue. Nothing is deleted on the request path.'
+        facts [
+          'Not in production: the route is marked <code>disableRoute</code>, and the main stack leaves it out there.'
+        ]
         sourceId 'dsarfn'
         order '7'
         x '922'
@@ -233,10 +246,14 @@ model {
       #request-path
       description 'KMS-encrypted'
       link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/stacks/main-stack.ts 'main-stack.ts'
+      link https://github.com/govuk-once/user-data-platform/blob/main/libs/utils/schemas/routes/routes.ts 'routes.ts'
       metadata {
         type 'AWS::SQS::Queue'
         tech 'created in main, consumed in sar'
         role 'Decouples the <code>202</code> from the export, which reads every record the person has.'
+        facts [
+          'Not in production: the main stack creates a queue only for a route that names one, and production has no such route.'
+        ]
         sourceId 'sarqueue'
         order '10'
         x '636'
@@ -252,10 +269,14 @@ model {
       #request-path
       description 'KMS-encrypted'
       link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/stacks/main-stack.ts 'main-stack.ts'
+      link https://github.com/govuk-once/user-data-platform/blob/main/libs/utils/schemas/routes/routes.ts 'routes.ts'
       metadata {
         type 'AWS::SQS::Queue'
         tech 'created in main, consumed in sar'
         role 'Decouples the <code>202</code> from the deletion, which is paged and fanned out.'
+        facts [
+          'Not in production: the main stack creates a queue only for a route that names one, and production has no such route.'
+        ]
         sourceId 'dsarqueue'
         order '11'
         x '922'
@@ -368,11 +389,12 @@ model {
     }
   }
 
-  containers_sar = boundary 'sar stack · {env}-sar' {
+  containers_sar = boundary 'sar stack · {env}-sar · not in production' {
+    link https://github.com/govuk-once/user-data-platform/blob/main/cdk/bin/app.ts 'cdk/bin/app.ts'
     metadata {
       type 'CloudFormation stack'
       tech 'cdk/lib/stacks/sar-stack.ts'
-      role 'The asynchronous halves of both rights requests: four functions, one bucket, three more queues.'
+      role 'The asynchronous halves of both rights requests: four functions, one bucket, three more queues. The app creates the stack only outside production.'
       sourceId 'sar'
       order '0'
       x '300'
@@ -506,10 +528,11 @@ model {
   }
 
   containers_flex -> containers_api 'HTTPS · SigV4' {
+    link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/stacks/main-stack.ts 'main-stack.ts'
     metadata {
       protocol 'HTTPS through the consumer\'s execute-api endpoint'
       auth 'SigV4 with the consumer role; the resource policy checks the endpoint'
-      carries 'All thirteen routes'
+      carries 'All thirteen routes; ten in production'
       order '1'
     }
   }
@@ -527,11 +550,13 @@ model {
   }
   containers_identityfns -> containers_identitytable 'DynamoDB' {
     link https://github.com/govuk-once/user-data-platform/blob/main/libs/data-access/services/DynamoDbIdentityService.ts 'DynamoDbIdentityService.ts'
-    metadata { protocol 'DynamoDB over the gateway endpoint' auth 'Function role: table and index' carries 'Put, get, delete and query of links' order '6' }
+    link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/vpc-construct.ts 'vpc-construct.ts'
+    metadata { protocol 'DynamoDB over its interface endpoint' auth 'Function role: table and index' carries 'Put, get, delete and query of links' order '6' }
   }
   containers_datafns -> containers_datatable 'DynamoDB' {
     link https://github.com/govuk-once/user-data-platform/blob/main/libs/data-access/services/DynamoDbDataService.ts 'DynamoDbDataService.ts'
-    metadata { protocol 'DynamoDB over the gateway endpoint' auth 'Function role: table; KMS for the data key' carries 'Encrypted items under the udpId' order '7' }
+    link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/vpc-construct.ts 'vpc-construct.ts'
+    metadata { protocol 'DynamoDB over its interface endpoint' auth 'Function role: table; KMS for the data key' carries 'Encrypted items under the udpId' order '7' }
   }
   containers_sarfns -> containers_sarqueue 'SendMessage' {
     metadata { protocol 'SQS over the interface endpoint' auth 'Function role: SendMessage' carries 'The request, with the sarID minted for it' order '8' }
@@ -546,7 +571,8 @@ model {
     metadata { protocol 'SQS event source mapping' auth 'Function role: receive and delete' carries 'One request per invocation' order '11' }
   }
   containers_createsar -> containers_bucket 'PutObject' {
-    metadata { protocol 'S3 over the gateway endpoint' auth 'Function role: write; the bucket key' carries 'The person\'s export' order '12' }
+    link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/vpc-construct.ts 'vpc-construct.ts'
+    metadata { protocol 'S3 over its interface endpoint' auth 'Function role: write; the bucket key' carries 'The person\'s export' order '12' }
   }
   containers_bucket -> containers_presign 'OBJECT_CREATED' {
     metadata { protocol 'S3 event notification' auth 'Bucket\'s invoke permission' carries 'The new object\'s key' order '13' }

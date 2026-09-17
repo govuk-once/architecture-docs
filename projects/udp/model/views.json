@@ -19,7 +19,7 @@
     "dashMeans": "a header the gateway reads but never checks",
     "tables": [
       {
-        "name": "The thirteen routes, and the consumer permission each needs",
+        "name": "The thirteen routes — ten in production — and the consumer permission each needs",
         "code": [
           ["routes.ts", "libs/utils/schemas/routes/routes.ts"],
           [
@@ -94,19 +94,19 @@
             "<code>POST /v1/sar</code>",
             "write",
             "startSar",
-            "Queues an export; see Rights requests"
+            "Queues an export; see Rights requests. Not in production"
           ],
           [
             "<code>GET /v1/sar/{sarId}</code>",
             "read",
             "getSarStatus",
-            "The download link, once there is one"
+            "The download link, once there is one. Not in production"
           ],
           [
             "<code>POST /v1/dsar</code>",
             "write",
             "startDsar",
-            "Queues a deletion; see Rights requests"
+            "Queues a deletion; see Rights requests. Not in production"
           ]
         ]
       },
@@ -186,8 +186,8 @@
           ["lambda-construct.ts", "cdk/lib/constructs/lambda-construct.ts"],
           ["environment.ts", "cdk/constants/environment.ts"],
           ["cdk/bin/app.ts", "cdk/bin/app.ts"],
-          ["vpc-construct.ts", "cdk/lib/constructs/vpc-construct.ts"],
-          ["main-stack.ts", "cdk/lib/stacks/main-stack.ts"]
+          ["main-stack.ts", "cdk/lib/stacks/main-stack.ts"],
+          ["routes.ts", "libs/utils/schemas/routes/routes.ts"]
         ],
         "cols": ["Setting", "Development", "Staging", "Production"],
         "rows": [
@@ -201,7 +201,12 @@
           ],
           ["Backup stack", "—", "vault, 3 plans", "vault, 3 plans"],
           ["End-to-end and performance stacks", "yes", "yes", "—"],
-          ["Public network ACL allow rules", "yes", "yes", "deny rules only"],
+          [
+            "SAR and DSAR routes, their queues, and the sar stack",
+            "yes",
+            "yes",
+            "—"
+          ],
           ["API caching", "off", "off", "off — forced in the stack"],
           [
             "Stack name prefix",
@@ -274,7 +279,7 @@
     "group": "Architecture",
     "audience": "Anyone answering a subject access or deletion request, and anyone reviewing how they are met",
     "blurb": "The two asynchronous flows side by side, numbered in reading order: an export that ends in a seven-day download link, and a deletion that ends with the person's links gone. Both answer 202 at the API and do the work off a queue.",
-    "note": "Neither flow tells the consumer when it is done. An export is polled for; a deletion has no status route at all.",
+    "note": "Development and staging only: production deploys neither the three rights routes nor the sar stack. Neither flow tells the consumer when it is done. An export is polled for; a deletion has no status route at all.",
     "dashMeans": "where a failure goes — and nothing in the repository reads either dead-letter queue",
     "tables": [
       {
@@ -327,24 +332,32 @@
     "order": 6,
     "group": "Cross-cutting",
     "audience": "Anyone changing a subnet, an endpoint or a security group",
-    "blurb": "The one VPC per environment, its three subnet tiers, and the endpoints that are the only way out of the isolated tier. Every Lambda sits in the isolated tier; everything it reaches is an endpoint beside it.",
+    "blurb": "The one VPC per environment, its two isolated subnets, and the endpoints that are the only way out of them. Every Lambda and both test builds sit in those subnets; everything they reach is an endpoint beside them.",
     "note": "The private API is not in the VPC. It is a regional service that accepts calls only through the execute-api endpoints its resource policy lists — the consumers' own, and this VPC's, which the test builds use. The test builds also reach CodeBuild and ECR through the interface endpoints; that edge is a fact on their box.",
     "tables": [
       {
-        "name": "The ten endpoints",
+        "name": "The twelve endpoints",
         "code": [
           ["vpc-construct.ts", "cdk/lib/constructs/vpc-construct.ts"],
           [
             "codebuild-e2e-construct.ts",
             "cdk/lib/constructs/codebuild-e2e-construct.ts"
-          ]
+          ],
+          ["main-stack.ts", "cdk/lib/stacks/main-stack.ts"],
+          ["sar-stack.ts", "cdk/lib/stacks/sar-stack.ts"],
+          ["dvla-pilot-stack.ts", "cdk/lib/stacks/dvla-pilot-stack.ts"],
+          ["sigv4-signer.ts", "e2e/src/helpers/sigv4-signer.ts"]
         ],
         "cols": ["Service", "Type", "Used by"],
         "rows": [
-          ["DynamoDB", "Gateway", "Every route and rights function"],
+          [
+            "DynamoDB",
+            "Interface · no private DNS",
+            "Every route, rights and purge function, by the URL in <code>DYNAMODB_ENDPOINT</code>"
+          ],
           [
             "S3",
-            "Gateway",
+            "Interface",
             "The export function; the test builds fetching their source"
           ],
           ["KMS", "Interface", "Envelope encryption in every function"],
@@ -362,12 +375,22 @@
           ],
           ["CodeBuild", "Interface", "The test builds themselves"],
           ["ECR API", "Interface", "The test builds' image pulls"],
+          [
+            "ECR Docker registry",
+            "Interface",
+            "The same image pulls, alongside ECR API"
+          ],
+          [
+            "STS",
+            "Interface",
+            "The test builds assuming the <code>test</code> consumer role"
+          ],
           ["Cognito IdP", "Interface", "Nothing in the code"]
         ]
       }
     ],
     "w": 1460,
-    "h": 760
+    "h": 660
   },
   "security": {
     "name": "Security",
@@ -382,22 +405,23 @@
         "code": [
           ["monitoring-stack.ts", "cdk/lib/stacks/monitoring-stack.ts"],
           ["nfr.ts", "cdk/constants/nfr.ts"],
-          ["perf-stack.ts", "cdk/lib/stacks/perf-stack.ts"]
+          ["perf-stack.ts", "cdk/lib/stacks/perf-stack.ts"],
+          ["cdk/bin/app.ts", "cdk/bin/app.ts"]
         ],
         "cols": ["Alarm", "Fires when", "Topic"],
         "rows": [
           [
-            "Lambda errors · ×17",
+            "Lambda errors · ×17, ×10 in production",
             "≥ 2 errors in each of two 1-minute periods",
             "critical"
           ],
           [
-            "Lambda duration · ×17",
+            "Lambda duration · ×17, ×10 in production",
             "p95 over 150 ms in each of three periods",
             "critical"
           ],
           [
-            "Lambda throttles · ×17",
+            "Lambda throttles · ×17, ×10 in production",
             "≥ 1 throttle in each of three periods",
             "critical"
           ],

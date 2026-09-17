@@ -67,12 +67,13 @@ model {
       link https://github.com/govuk-once/user-data-platform/blob/main/.github/workflows/ci.yml 'ci.yml'
       link https://github.com/govuk-once/user-data-platform/blob/main/cdk/.checkov.yaml '.checkov.yaml'
       link https://github.com/govuk-once/user-data-platform/blob/main/.semgrep-args.txt '.semgrep-args.txt'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/custom-checks/kms_roatation_period.py 'kms_roatation_period.py'
       metadata {
         type 'GitHub Actions job · 60 min'
         tech 'pnpm lint:all · build:all · test:all'
         role 'Pre-commit hygiene, dependency review failing on high severity, at least one conventional commit, every project linted, built and unit-tested, then a synth with development credentials for Checkov and a Semgrep scan with six rule packs.'
         facts [
-          'Checkov\'s one custom check, KMS rotation within 90 days, has Python syntax errors and cannot load; the built-in checks run.',
+          'Checkov\'s config adds one custom check from <code>custom-checks</code>: a KMS key must rotate, every 90 days or less.',
           '<code>cdk-nag</code> is a dependency and is imported nowhere.'
         ]
         sourceId 'ci'
@@ -150,12 +151,13 @@ model {
       description 'nx cdk:destroy:dev'
       link https://github.com/govuk-once/user-data-platform/blob/main/.github/workflows/pr-cleanup.yml 'pr-cleanup.yml'
       link https://github.com/govuk-once/user-data-platform/blob/main/cdk/project.json 'cdk/project.json'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/macie/index.ts 'cdk/lib/macie/index.ts'
       metadata {
         type 'GitHub Actions job'
         tech 'cdk destroy --exclusively, by name'
         role 'Destroys the PR\'s stacks in a fixed order. The list names a <code>-dsar</code> stack the app never creates.'
         facts [
-          'The step id it reads the role ARN from is misspelt, so <code>CDK_DEPLOYMENT_ROLE_ARN</code> is empty during the destroy.'
+          'The list does not name the PR\'s <code>-macie</code> stack, which a PR deploy creates, so that one is left behind when the PR closes.'
         ]
         sourceId 'cleanup'
         order '7'
@@ -390,10 +392,12 @@ model {
   }
 
   delivery_account = boundary 'Test stacks · dev and staging' {
+    link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/codebuild-e2e-construct.ts 'codebuild-e2e-construct.ts'
+    link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/codebuild-perf-construct.ts 'codebuild-perf-construct.ts'
     metadata {
       type 'CloudFormation stacks · {prefix}-e2e · {prefix}-perf'
       tech 'created by the same deploy they test'
-      role 'CodeBuild in the egress tier, fed by a zip of the checkout the workflow uploads.'
+      role 'CodeBuild in the VPC\'s isolated subnets, fed by a zip of the checkout the workflow uploads.'
       sourceId 'account'
       order '0'
       x '1332'
@@ -432,10 +436,11 @@ model {
       link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/codebuild-e2e-construct.ts 'codebuild-e2e-construct.ts'
       link https://github.com/govuk-once/user-data-platform/blob/main/e2e/cucumber.cjs 'e2e/cucumber.cjs'
       link https://github.com/govuk-once/user-data-platform/blob/main/e2e/src/helpers/sigv4-signer.ts 'sigv4-signer.ts'
+      link https://github.com/govuk-once/user-data-platform/blob/main/e2e/src/helpers/cleanup.ts 'e2e/src/helpers/cleanup.ts'
       metadata {
         type 'AWS::CodeBuild::Project'
         tech '30-minute timeout · private subnets'
-        role 'Calls the API through the VPC\'s execute-api endpoint as the hard-coded <code>test</code> consumer, whose API key the stack passes in as a plain environment variable. Cleans up the users it created afterwards.'
+        role 'Calls the API through the VPC\'s execute-api endpoint as the hard-coded <code>test</code> consumer, whose API key the stack passes in as a plain environment variable. Then tries to delete the users it created, and only warns when that fails — which from these subnets it does; see Network.'
         sourceId 'e2ebuild'
         order '2'
         x '1356'

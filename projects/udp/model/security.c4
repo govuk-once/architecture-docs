@@ -190,12 +190,13 @@ model {
       description 'queues · bucket · logs'
       link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/kms-construct.ts 'kms-construct.ts'
       link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/stacks/sar-stack.ts 'sar-stack.ts'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/bin/app.ts 'cdk/bin/app.ts'
       metadata {
         type 'AWS::KMS::Key'
         tech 'rotation every 90 days'
-        role 'The SAR and DSAR queues and their dead-letter queues, the SAR bucket, and the log groups.'
+        role 'The log groups, and outside production the SAR and DSAR queues, their dead-letter queues and the SAR bucket.'
         facts [
-          'Marked for Macie: an aspect adds Macie\'s service-linked role to its policy with decrypt, so Macie can read the SAR bucket.'
+          'Marked for Macie: an aspect adds Macie\'s service-linked role to its policy with decrypt, so Macie can read the SAR bucket wherever there is one.'
         ]
         sourceId 'mainkey'
         order '3'
@@ -286,10 +287,11 @@ model {
       description 'enabled · findings every 15 min'
       link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/macie/macie-stack.ts 'macie-stack.ts'
       link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/macie/macie-access.ts 'macie-access.ts'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/bin/app.ts 'cdk/bin/app.ts'
       metadata {
         type 'Custom resource · macie2:UpdateMacieSession'
         tech 'results bucket macie-results-{account}-{region}'
-        role 'Turned on for the account by a custom resource, with a results bucket and key. An aspect grants Macie\'s service-linked role decrypt on every key marked for it, so it can read the SAR bucket.'
+        role 'Turned on for the account by a custom resource, with a results bucket and key. An aspect grants Macie\'s service-linked role decrypt on every key marked for it, so it can read the SAR bucket outside production; production has none.'
         facts [
           'No classification job is defined in the repository: what Macie scans, and when, is set outside it.'
         ]
@@ -366,10 +368,12 @@ model {
   }
 
   security_alerting = boundary '4 · Alerting' {
+    link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/stacks/monitoring-stack.ts 'monitoring-stack.ts'
+    link https://github.com/govuk-once/user-data-platform/blob/main/cdk/bin/app.ts 'cdk/bin/app.ts'
     metadata {
       type 'Controls'
       tech 'monitoring stack · {env}-monitoring'
-      role 'Fifty-seven alarms per environment and where they go. Every one is against the same NFR constants the performance tests use.'
+      role 'Fifty-seven alarms in development and staging, thirty-six in production, and where they go. Every one is against the same NFR constants the performance tests use.'
       sourceId 'alerting'
       order '0'
       x '1006'
@@ -384,12 +388,13 @@ model {
       description 'errors · p95 duration · throttles'
       link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/stacks/monitoring-stack.ts 'monitoring-stack.ts'
       link https://github.com/govuk-once/user-data-platform/blob/main/cdk/constants/nfr.ts 'nfr.ts'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/bin/app.ts 'cdk/bin/app.ts'
       metadata {
-        type 'AWS::CloudWatch::Alarm ×51'
+        type 'AWS::CloudWatch::Alarm ×51 · ×30 in production'
         tech '1-minute periods'
         role 'Errors ≥ 2 in two periods; p95 duration over 150 ms in three; any throttle in three. All critical.'
         facts [
-          'Seventeen functions are covered: the thirteen routes and the four in the sar stack. The DVLA purge function has none.'
+          'Seventeen functions are covered outside production: the thirteen routes and the four in the sar stack. Ten in production, which has neither the three rights routes nor the sar stack. The DVLA purge function has none.'
         ]
         sourceId 'fnalarms'
         order '1'

@@ -7,10 +7,13 @@
 model {
 
   rights_sar = boundary 'SAR · export everything' {
+    link https://github.com/govuk-once/user-data-platform/blob/main/cdk/bin/app.ts 'cdk/bin/app.ts'
+    link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/stacks/main-stack.ts 'main-stack.ts'
+    link https://github.com/govuk-once/user-data-platform/blob/main/libs/utils/schemas/routes/routes.ts 'routes.ts'
     metadata {
       type 'Flow'
-      tech 'main stack → sar stack'
-      role 'One export object, one download link good for seven days, one record of it.'
+      tech 'main stack → sar stack · not in production'
+      role 'One export object, one download link good for seven days, one record of it. Development and staging only: production has neither the routes nor the sar stack.'
       sourceId 'sar'
       order '0'
       x '40'
@@ -212,10 +215,13 @@ model {
   }
 
   rights_dsar = boundary 'DSAR · erase everything' {
+    link https://github.com/govuk-once/user-data-platform/blob/main/cdk/bin/app.ts 'cdk/bin/app.ts'
+    link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/stacks/main-stack.ts 'main-stack.ts'
+    link https://github.com/govuk-once/user-data-platform/blob/main/libs/utils/schemas/routes/routes.ts 'routes.ts'
     metadata {
       type 'Flow'
-      tech 'main stack → sar stack'
-      role 'Paged deletion of the person\'s records, then of the links that identify them.'
+      tech 'main stack → sar stack · not in production'
+      role 'Paged deletion of the person\'s records, then of the links that identify them. Development and staging only: production has neither the route nor the sar stack.'
       sourceId 'dsar'
       order '0'
       x '730'
@@ -395,7 +401,8 @@ model {
     metadata { protocol 'SQS' auth 'Function role: SendMessage' carries 'The request and the error' edgeStyle 'dash' order '4' }
   }
   rights_createsar -> rights_bucket 'PutObject' {
-    metadata { protocol 'S3 over the gateway endpoint' auth 'Function role: write' carries 'The export, KMS-encrypted at rest' order '5' }
+    link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/vpc-construct.ts 'vpc-construct.ts'
+    metadata { protocol 'S3 over its interface endpoint' auth 'Function role: write' carries 'The export, KMS-encrypted at rest' order '5' }
   }
   rights_bucket -> rights_presign 'OBJECT_CREATED' {
     metadata { protocol 'S3 event notification' auth 'Bucket\'s invoke permission' carries 'The object key' order '6' }
