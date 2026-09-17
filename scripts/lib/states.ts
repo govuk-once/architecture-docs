@@ -24,7 +24,28 @@ import {
   LEVELS,
   STATUSES,
 } from "./composeStates.js";
+import { DOCS_ROOT, STATES_ROOT } from "./paths.js";
 import type { Project } from "./projects.js";
+
+/**
+ * Where one project's planned states are read from and written to, or null when this build
+ * has none. Never inside this repository: it is public, and a states/ directory here would
+ * publish every proposal with the as-is. So one found here stops the build rather than
+ * being read — the fix is to move it to architecture-docs-states, not to delete the check.
+ */
+export function statesDir(
+  project: Pick<Project, "id" | "modelDir">,
+  root: string | null = STATES_ROOT,
+): string | null {
+  const inRepo = path.join(project.modelDir, "..", "states");
+  if (existsSync(inRepo))
+    throw new Error(
+      `${path.relative(DOCS_ROOT, inRepo)}/ exists, and this repository is public. Planned ` +
+        `states live in govuk-once/architecture-docs-states — move it there and build with ` +
+        `ARCH_STATES_DIR pointing at that repository's states/.`,
+    );
+  return root ? path.join(root, project.id) : null;
+}
 
 /** Everything one project's states/ directory holds. */
 export interface States {
@@ -34,15 +55,16 @@ export interface States {
 }
 
 /**
- * Proposals laid over the as-is: projects/<id>/states/<state>/state.json names the state,
+ * Proposals laid over the as-is: <ARCH_STATES_DIR>/<id>/<state>/state.json names the state,
  * and each <view>.json beside it is what that state does to one view — what it retires,
  * what it changes, what it adds. The build composes them into `byState` and the page
  * carries that, so the overlays are the only thing anyone edits and the composition is
  * gated like the as-is. `list` comes back sorted by `order`, which `chainTo` relies on.
  */
 export function loadStates(project: Project): States {
-  const dir = path.join(project.modelDir, "..", "states");
-  if (!existsSync(dir)) return { list: [], overlays: {}, decisions: {} };
+  const dir = statesDir(project);
+  if (!dir || !existsSync(dir))
+    return { list: [], overlays: {}, decisions: {} };
   /* Where a planned change was argued. A state is a proposal, not a derivation, so this is
      the only thing standing between it and an assertion. */
   const register = path.join(dir, "decisions.json");

@@ -193,7 +193,25 @@ function readSiteConfig(): SiteConfig {
 export const SITE_CONFIG = readSiteConfig();
 export const SITE = SITE_CONFIG.site;
 
-export const SITE_ROOT = path.resolve(DOCS_ROOT, SITE.root);
+/**
+ * `ARCH_SITE_ROOT` moves the whole site somewhere else — absolute, or relative to this
+ * repository. The build with planned states in it writes there, so it can never overwrite
+ * the public site, and nothing published from here can pick it up by accident.
+ */
+export const SITE_ROOT = path.resolve(
+  DOCS_ROOT,
+  process.env.ARCH_SITE_ROOT || SITE.root,
+);
+
+/**
+ * Where planned states are read from: a directory holding one `<project id>/` per project,
+ * set by `ARCH_STATES_DIR`. Unset, there are none — which is what this public repository
+ * builds. The states themselves live in govuk-once/architecture-docs-states, which is
+ * private, and set this when it builds its own copy of the site.
+ */
+export const STATES_ROOT = process.env.ARCH_STATES_DIR
+  ? path.resolve(DOCS_ROOT, process.env.ARCH_STATES_DIR)
+  : null;
 
 /** The index over the projects, at the root of the site. */
 export const SITE_INDEX = path.join(SITE_ROOT, SITE.page);

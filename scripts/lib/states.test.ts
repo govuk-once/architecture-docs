@@ -6,11 +6,20 @@
  * them. The fold has to keep everything that distinguishes faults and drop only what
  * repeats them.
  */
+import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import type { View } from "../buildArchitectureExplorer.js";
 import type { StateManifest, StateOverlay } from "./composeStates.js";
-import { checkDeclarations, composeAll, foldComposed } from "./states.js";
+import {
+  checkDeclarations,
+  composeAll,
+  foldComposed,
+  statesDir,
+} from "./states.js";
 
 describe("foldComposed", () => {
   it("says a fault once, at the state it first appears, and where it is still in force", () => {
@@ -153,5 +162,52 @@ describe("composeAll", () => {
         overlays: { s1: { delivery: ov("s1", "delivery") } },
       }),
     ).toThrow('states/s1/delivery.json: no view "delivery" to overlay');
+  });
+});
+
+/* This repository is public and the states are not. The lookup is the one place that could
+   read a proposal into the public build, so it is pinned: nothing without a root, never a
+   states/ directory beside the model. */
+describe("statesDir", () => {
+  const scratch = () => mkdtempSync(path.join(tmpdir(), "states-dir-"));
+
+  it("is null when no states root is set, so the public build has none", () => {
+    const dir = scratch();
+    try {
+      expect(
+        statesDir({ id: "flex", modelDir: path.join(dir, "model") }, null),
+      ).toBeNull();
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  it("is the project's own directory under the states root", () => {
+    const dir = scratch();
+    try {
+      expect(
+        statesDir(
+          { id: "flex", modelDir: path.join(dir, "model") },
+          "/private/states",
+        ),
+      ).toBe(path.join("/private/states", "flex"));
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  it("stops the build when states/ sits beside the model in this repository", () => {
+    const dir = scratch();
+    try {
+      mkdirSync(path.join(dir, "states"));
+      expect(() =>
+        statesDir(
+          { id: "flex", modelDir: path.join(dir, "model") },
+          "/private/states",
+        ),
+      ).toThrow("this repository is public");
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
   });
 });

@@ -30,7 +30,7 @@ import {
   stamps,
   validateEdits,
 } from "./lib/editorApi.js";
-import { DOCS_ROOT, SITE_ROOT } from "./lib/paths.js";
+import { DOCS_ROOT, SITE_ROOT, STATES_ROOT } from "./lib/paths.js";
 import { loadProjects } from "./lib/projects.js";
 
 const DOCS = SITE_ROOT;
@@ -289,7 +289,10 @@ const ready = () => {
       console.log(
         `  Preview draft   http://localhost:${String(PORT)}/preview/${project.id}/`,
       );
-    console.log(`  Writing to      projects/<id>/states/ · loopback only`);
+    const writing = STATES_ROOT
+      ? path.join(STATES_ROOT, "<id>") + path.sep
+      : "nowhere: set ARCH_STATES_DIR";
+    console.log(`  Writing to      ${writing} · loopback only`);
   }
   console.log("");
 };
