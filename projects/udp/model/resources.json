@@ -8,7 +8,7 @@
         {
           "id": "api-routes",
           "name": "Routes",
-          "n": { "dev": 13, "stg": 13, "prod": 10 },
+          "n": { "dev": 10, "stg": 10, "prod": 10 },
           "from": "counts.apiRoutes",
           "meta": ["main stack", "AWS_IAM", "AWS_PROXY"],
           "d": {
@@ -85,7 +85,7 @@
         {
           "id": "fn-main",
           "name": "Route functions",
-          "n": { "dev": 13, "stg": 13, "prod": 10 },
+          "n": { "dev": 13, "stg": 13, "prod": 13 },
           "from": "counts.functions.main",
           "meta": ["main stack", "isolated subnets", "nodejs24.x"],
           "d": {
@@ -100,7 +100,7 @@
         {
           "id": "fn-sar",
           "name": "Rights pipeline functions",
-          "n": { "dev": 4, "stg": 4, "prod": 0 },
+          "n": { "dev": 4, "stg": 4, "prod": 4 },
           "from": "counts.functions.sar",
           "meta": ["sar stack", "SQS and S3 triggered", "not in production"],
           "d": {
@@ -133,7 +133,7 @@
         {
           "id": "fn-total",
           "name": "All named functions",
-          "n": { "dev": 18, "stg": 18, "prod": 11 },
+          "n": { "dev": 18, "stg": 18, "prod": 18 },
           "from": "counts.functionsTotal",
           "meta": ["every stack"],
           "d": {
@@ -173,7 +173,7 @@
         {
           "id": "queues",
           "name": "Queues",
-          "n": { "dev": 5, "stg": 5, "prod": 0 },
+          "n": { "dev": 5, "stg": 5, "prod": 5 },
           "from": "counts.queues",
           "meta": ["main and sar stacks", "KMS", "none in production"],
           "d": {
@@ -190,7 +190,7 @@
         {
           "id": "buckets",
           "name": "Buckets",
-          "n": { "dev": 4, "stg": 4, "prod": 1 },
+          "n": { "dev": 4, "stg": 4, "prod": 3 },
           "from": "counts.buckets",
           "meta": ["sar, macie and e2e stacks"],
           "d": {
@@ -250,7 +250,7 @@
         {
           "id": "subnets",
           "name": "Subnets",
-          "n": { "dev": 2, "stg": 2, "prod": 2 },
+          "n": { "dev": 6, "stg": 6, "prod": 6 },
           "from": "counts.subnets",
           "meta": ["vpc stack", "2 AZs", "/24"],
           "d": {
@@ -340,7 +340,7 @@
         {
           "id": "alarms",
           "name": "Alarms",
-          "n": { "dev": 57, "stg": 57, "prod": 36 },
+          "n": { "dev": 48, "stg": 36, "prod": 36 },
           "from": "counts.alarmsTotal",
           "meta": ["monitoring stack"],
           "d": {
@@ -355,7 +355,7 @@
         {
           "id": "alarms-fn-errors",
           "name": "Lambda error alarms",
-          "n": { "dev": 17, "stg": 17, "prod": 10 },
+          "n": { "dev": 14, "stg": 10, "prod": 10 },
           "from": "counts.alarmsLambdaErrors",
           "meta": ["critical", "≥ 2 in two 1-min periods"],
           "d": {
@@ -368,7 +368,7 @@
         {
           "id": "alarms-fn-duration",
           "name": "Lambda duration alarms",
-          "n": { "dev": 17, "stg": 17, "prod": 10 },
+          "n": { "dev": 14, "stg": 10, "prod": 10 },
           "from": "counts.alarmsLambdaDuration",
           "meta": ["critical", "p95 over 150 ms"],
           "d": {
@@ -382,7 +382,7 @@
         {
           "id": "alarms-fn-throttles",
           "name": "Lambda throttle alarms",
-          "n": { "dev": 17, "stg": 17, "prod": 10 },
+          "n": { "dev": 14, "stg": 10, "prod": 10 },
           "from": "counts.alarmsLambdaThrottles",
           "meta": ["critical", "any throttle"],
           "d": {
@@ -422,7 +422,7 @@
         {
           "id": "log-groups",
           "name": "Log groups",
-          "n": { "dev": 25, "stg": 25, "prod": 16 },
+          "n": { "dev": 25, "stg": 25, "prod": 23 },
           "from": "counts.logGroups",
           "meta": ["1 year · 1 month in dev", "KMS"],
           "d": {
@@ -474,7 +474,7 @@
         {
           "id": "iam-roles",
           "name": "IAM roles",
-          "n": { "dev": 29, "stg": 28, "prod": 18 },
+          "n": { "dev": 29, "stg": 28, "prod": 26 },
           "from": "counts.iamRoles",
           "meta": ["every stack", "+1 per real consumer"],
           "d": {

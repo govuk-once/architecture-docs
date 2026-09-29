@@ -525,8 +525,8 @@
         "code": [
           ["e2e/project.json", "e2e/project.json"],
           ["identity-api.feature", "e2e/src/features/identity-api.feature"],
-          ["sar.feature", "e2e/src/features/sar.feature"],
-          ["dsar.feature", "e2e/src/features/dsar.feature"],
+          ["sar.feature-old", "e2e/src/features/sar.feature-old"],
+          ["dsar.feature-old", "e2e/src/features/dsar.feature-old"],
           [
             "consumer-config-steps.ts",
             "e2e/src/step-definitions/consumer-config-steps.ts"
@@ -539,8 +539,16 @@
             "14",
             "Create, read, exchange, delete, linked services"
           ],
-          ["SAR API", "12", "Start, poll, download"],
-          ["DSAR API", "9", "Start, then verify the records are gone"],
+          [
+            "SAR API",
+            "12",
+            "Start, poll, download — parked as <code>.feature-old</code>; the routes are still disabled"
+          ],
+          [
+            "DSAR API",
+            "9",
+            "Start, then verify the records are gone — parked as <code>.feature-old</code>; the routes are still disabled"
+          ],
           [
             "Patch data",
             "8",

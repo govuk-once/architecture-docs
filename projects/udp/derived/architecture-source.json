@@ -2,12 +2,12 @@
   "repo": "git@github.com:govuk-once/user-data-platform.git",
   "ref": "main",
   "derived": {
-    "sha": "412e5e6511cf492b23d9b54941286e8f35fe9616",
-    "subject": "Merge pull request #340 from govuk-once/UDP-401-fix-sonar",
-    "committed": "2026-09-16T15:09:12+01:00",
+    "sha": "a61f620feabf0d1e411927c188bdf0119327658a",
+    "subject": "Merge pull request #358 from govuk-once/timeout-increase",
+    "committed": "2026-09-28T12:01:20+01:00",
     "builtFrom": "cdk.out/{id}/*.template.json counts={\"apiRoutes\":{\"type\":\"AWS::ApiGateway::Method\",\"template\":\"^{stage}-main$\"},\"functions\":{\"type\":\"AWS::Lambda::Function\",\"perTemplate\":\"^{stage}-(?<name>main|sar|dvla-pilot|vpc|macie)$\",\"hasProperty\":\"FunctionName\"},\"functionsTotal\":{\"type\":\"AWS::Lambda::Function\",\"hasProperty\":\"FunctionName\"},\"tables\":{\"type\":\"AWS::DynamoDB::Table\"},\"queues\":{\"type\":\"AWS::SQS::Queue\"},\"buckets\":{\"type\":\"AWS::S3::Bucket\"},\"kmsKeys\":{\"type\":\"AWS::KMS::Key\"},\"vpcEndpoints\":{\"type\":\"AWS::EC2::VPCEndpoint\"},\"natGateways\":{\"type\":\"AWS::EC2::NatGateway\"},\"flowLogs\":{\"type\":\"AWS::EC2::FlowLog\"},\"securityGroups\":{\"type\":\"AWS::EC2::SecurityGroup\"},\"networkAcls\":{\"type\":\"AWS::EC2::NetworkAcl\"},\"networkAclEntries\":{\"type\":\"AWS::EC2::NetworkAclEntry\"},\"subnets\":{\"type\":\"AWS::EC2::Subnet\"},\"webAcls\":{\"type\":\"AWS::WAFv2::WebACL\"},\"logGroups\":{\"type\":\"AWS::Logs::LogGroup\"},\"iamRoles\":{\"type\":\"AWS::IAM::Role\"},\"snsTopics\":{\"type\":\"AWS::SNS::Topic\"},\"dashboards\":{\"type\":\"AWS::CloudWatch::Dashboard\"},\"apiKeys\":{\"type\":\"AWS::ApiGateway::ApiKey\"},\"usagePlans\":{\"type\":\"AWS::ApiGateway::UsagePlan\"},\"backupPlans\":{\"type\":\"AWS::Backup::BackupPlan\"},\"backupSelections\":{\"type\":\"AWS::Backup::BackupSelection\"},\"backupVaults\":{\"type\":\"AWS::Backup::BackupVault\"},\"codeBuildProjects\":{\"type\":\"AWS::CodeBuild::Project\"},\"appConfigApplications\":{\"type\":\"AWS::AppConfig::Application\"},\"e2eStacks\":{\"type\":\"AWS::IAM::Role\",\"template\":\"-e2e$\",\"templatesContaining\":true},\"macieStacks\":{\"type\":\"AWS::KMS::Key\",\"template\":\"-macie$\",\"templatesContaining\":true},\"alarmsTotal\":{\"type\":\"AWS::CloudWatch::Alarm\"},\"alarmsLambdaErrors\":{\"type\":\"AWS::CloudWatch::Alarm\",\"logicalId\":\"^Lambda\\\\d+Errors\"},\"alarmsLambdaDuration\":{\"type\":\"AWS::CloudWatch::Alarm\",\"logicalId\":\"^Lambda\\\\d+Duration\"},\"alarmsLambdaThrottles\":{\"type\":\"AWS::CloudWatch::Alarm\",\"logicalId\":\"^Lambda\\\\d+Throttles\"},\"alarmsDynamo\":{\"type\":\"AWS::CloudWatch::Alarm\",\"logicalId\":\"^DynamoDb\"},\"alarmsApi\":{\"type\":\"AWS::CloudWatch::Alarm\",\"logicalId\":\"^ApiGateway\"}} synth={\"cwd\":\"cdk\",\"command\":[\"npx\",\"tsx\",\"bin/app.ts\"],\"env\":{\"CDK_DEFAULT_ACCOUNT\":\"000000000000\",\"CDK_DEFAULT_REGION\":\"eu-west-2\",\"AWS_REGION\":\"eu-west-2\",\"DEVELOPER_ID\":\"\"},\"context\":{\"env\":\"{stage}\"},\"output\":\"cdk.out/{id}\",\"prepare\":{\"cwd\":\".\",\"command\":[\"pnpm\",\"build:all\"]}}",
     "derivation": "d325111416e2a20c",
-    "facts": "bfe3e55e89da18bf"
+    "facts": "cf9cf00aa5f9ec82"
   },
   "read": {
     "sha": "412e5e6511cf492b23d9b54941286e8f35fe9616",

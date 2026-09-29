@@ -204,7 +204,7 @@
         "scope": "Lambda",
         "id": "Duration",
         "stages": ["development", "staging", "production", "ephemeral"],
-        "Threshold": "16000 | 20000 | 24000 | 8000",
+        "Threshold": "16000 | 20000 | 24000 | 48000 | 8000",
         "EvaluationPeriods": "1",
         "DatapointsToAlarm": "",
         "ComparisonOperator": "GreaterThanThreshold",
@@ -212,7 +212,7 @@
         "MetricName": "Duration",
         "Statistic": "",
         "ExtendedStatistic": "p99",
-        "AlarmActions": "SsmParameterValuedevelopmentflextopicwarningalarmsC96584B6F00A464EAD1953AFF4B05118Parameter | SsmParameterValueproductionflextopicwarningalarmsC96584B6F00A464EAD1953AFF4B05118Parameter | SsmParameterValuestagingflextopicwarningalarmsC96584B6F00A464EAD1953AFF4B05118Parameter"
+        "AlarmActions": "SsmParameterValuedevelopmentflextopicwarningalarmsC96584B6F00A464EAD1953AFF4B05118Parameter | SsmParameterValueproductionflextopicwarningalarmsC96584B6F00A464EAD1953AFF4B05118Parameter | SsmParameterValuestagingflextopicwarningalarmsC96584B6F00A464EAD1953AFF4B05118Parameter | WarningTopicE070F32B"
       },
       {
         "scope": "Lambda",
@@ -226,7 +226,7 @@
         "MetricName": "",
         "Statistic": "",
         "ExtendedStatistic": "",
-        "AlarmActions": "SsmParameterValuedevelopmentflextopiccriticalalarmsC96584B6F00A464EAD1953AFF4B05118Parameter | SsmParameterValueproductionflextopiccriticalalarmsC96584B6F00A464EAD1953AFF4B05118Parameter | SsmParameterValuestagingflextopiccriticalalarmsC96584B6F00A464EAD1953AFF4B05118Parameter"
+        "AlarmActions": "CriticalTopic48D98EE4 | SsmParameterValuedevelopmentflextopiccriticalalarmsC96584B6F00A464EAD1953AFF4B05118Parameter | SsmParameterValueproductionflextopiccriticalalarmsC96584B6F00A464EAD1953AFF4B05118Parameter | SsmParameterValuestagingflextopiccriticalalarmsC96584B6F00A464EAD1953AFF4B05118Parameter"
       },
       {
         "scope": "Lambda",
@@ -240,7 +240,7 @@
         "MetricName": "Throttles",
         "Statistic": "Sum",
         "ExtendedStatistic": "",
-        "AlarmActions": "SsmParameterValuedevelopmentflextopiccriticalalarmsC96584B6F00A464EAD1953AFF4B05118Parameter | SsmParameterValueproductionflextopiccriticalalarmsC96584B6F00A464EAD1953AFF4B05118Parameter | SsmParameterValuestagingflextopiccriticalalarmsC96584B6F00A464EAD1953AFF4B05118Parameter"
+        "AlarmActions": "CriticalTopic48D98EE4 | SsmParameterValuedevelopmentflextopiccriticalalarmsC96584B6F00A464EAD1953AFF4B05118Parameter | SsmParameterValueproductionflextopiccriticalalarmsC96584B6F00A464EAD1953AFF4B05118Parameter | SsmParameterValuestagingflextopiccriticalalarmsC96584B6F00A464EAD1953AFF4B05118Parameter"
       },
       {
         "scope": "Shield",
@@ -364,9 +364,9 @@
       "ephemeral": 0
     },
     "kmsKeys": {
-      "development": 5,
-      "staging": 5,
-      "production": 5,
+      "development": 7,
+      "staging": 7,
+      "production": 7,
       "ephemeral": 2
     },
     "secrets": {
@@ -382,20 +382,20 @@
       "ephemeral": 1
     },
     "iamRoles": {
-      "development": 57,
-      "staging": 42,
-      "production": 35,
-      "ephemeral": 53
+      "development": 60,
+      "staging": 45,
+      "production": 38,
+      "ephemeral": 54
     },
     "iamRolesBounded": {
-      "development": 45,
-      "staging": 31,
-      "production": 24,
-      "ephemeral": 45
+      "development": 51,
+      "staging": 36,
+      "production": 29,
+      "ephemeral": 46
     },
     "logGroups": {
-      "development": 55,
-      "staging": 41,
+      "development": 57,
+      "staging": 43,
       "production": 36,
       "ephemeral": 54
     },
@@ -454,21 +454,21 @@
       "ephemeral": 1
     },
     "kmsLogGroup": {
-      "development": 2,
-      "staging": 2,
-      "production": 2,
+      "development": 3,
+      "staging": 3,
+      "production": 3,
       "ephemeral": 1
     },
     "boundaryPolicies": {
-      "development": 8,
-      "staging": 7,
-      "production": 4,
+      "development": 9,
+      "staging": 8,
+      "production": 5,
       "ephemeral": 8
     },
     "macieStacks": {
-      "development": 0,
-      "staging": 0,
-      "production": 0,
+      "development": 1,
+      "staging": 1,
+      "production": 1,
       "ephemeral": 0
     }
   }

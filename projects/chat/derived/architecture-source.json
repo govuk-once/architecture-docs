@@ -2,9 +2,9 @@
   "repo": "https://github.com/govuk-once/govuk-chat-v2.git",
   "ref": "main",
   "derived": {
-    "sha": "76a01c8088ffa98ae678132f11c16eb0c95d31a8",
-    "subject": "Merge pull request #303 from govuk-once/chat-924",
-    "committed": "2026-09-10T15:47:41+01:00",
+    "sha": "d4ba8a72dd9927a0efd7b2d88c0b52cd5f882895",
+    "subject": "Merge pull request #310 from govuk-once/929-nextjs-service",
+    "committed": "2026-09-29T11:04:31+01:00",
     "builtFrom": "nothing derived — this project's counts are prose",
     "derivation": "af35b68e0ec835a9",
     "facts": ""

@@ -1221,9 +1221,9 @@
           "id": "iam-boundary",
           "name": "Permissions boundary policies",
           "n": {
-            "dev": 8,
-            "stg": 7,
-            "prod": 4,
+            "dev": 9,
+            "stg": 8,
+            "prod": 5,
             "eph": 8
           },
           "from": "counts.boundaryPolicies",
@@ -1251,10 +1251,10 @@
           "id": "iam-roles",
           "name": "IAM roles",
           "n": {
-            "dev": 57,
-            "stg": 42,
-            "prod": 35,
-            "eph": 53
+            "dev": 60,
+            "stg": 45,
+            "prod": 38,
+            "eph": 54
           },
           "from": "counts.iamRoles",
           "meta": ["both regions", "several stacks", "varies"],
@@ -1377,9 +1377,9 @@
           "id": "kms-log-group",
           "name": "KMS key · CloudWatch log groups",
           "n": {
-            "dev": 2,
-            "stg": 2,
-            "prod": 2,
+            "dev": 3,
+            "stg": 3,
+            "prod": 3,
             "eph": 1
           },
           "from": "counts.kmsLogGroup",
@@ -1434,9 +1434,9 @@
           "id": "macie",
           "name": "Amazon Macie stack",
           "n": {
-            "dev": 0,
-            "stg": 0,
-            "prod": 0,
+            "dev": 1,
+            "stg": 1,
+            "prod": 1,
             "eph": 0
           },
           "meta": ["us-east-1", "FlexMacieStack", "written, not deployed"],
@@ -1924,8 +1924,8 @@
           "id": "loggroups",
           "name": "Log groups",
           "n": {
-            "dev": 55,
-            "stg": 41,
+            "dev": 57,
+            "stg": 43,
             "prod": 36,
             "eph": 54
           },

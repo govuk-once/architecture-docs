@@ -2,9 +2,9 @@
   "repo": "https://github.com/govuk-once/gds-unified-notification-service.git",
   "ref": "main",
   "derived": {
-    "sha": "200b91355a3005d1f4516a9f88bf63905f33a8fa",
-    "subject": "fix(NOT-498): Fixing mismatch between script name and CICD ref (#349)",
-    "committed": "2026-09-17T09:25:22+01:00",
+    "sha": "13c4c10fb1dda70da29aed3e9844b0bd4275375c",
+    "subject": "refactor(NOT-524): Added concurrency to ephemeral build pipeline (#368)",
+    "committed": "2026-09-29T14:09:29+01:00",
     "builtFrom": "nothing derived — this project's counts are prose",
     "derivation": "af35b68e0ec835a9",
     "facts": ""
