@@ -27,6 +27,12 @@
         "production": 0,
         "ephemeral": 2
       },
+      "topics": {
+        "development": 2,
+        "staging": 2,
+        "production": 0,
+        "ephemeral": 2
+      },
       "travel": {
         "development": 2,
         "staging": 2,
@@ -42,10 +48,10 @@
       "uns": { "development": 4, "staging": 4, "production": 4, "ephemeral": 4 }
     },
     "publicRoutes": {
-      "development": 32,
-      "staging": 21,
+      "development": 34,
+      "staging": 23,
       "production": 17,
-      "ephemeral": 32
+      "ephemeral": 34
     },
     "privateRoutes": {
       "development": 7,
@@ -54,10 +60,10 @@
       "ephemeral": 7
     },
     "domainsWithAuthorizer": {
-      "development": 6,
-      "staging": 5,
+      "development": 7,
+      "staging": 6,
       "production": 3,
-      "ephemeral": 6
+      "ephemeral": 7
     },
     "alarms": [
       {
@@ -382,28 +388,28 @@
       "ephemeral": 1
     },
     "iamRoles": {
-      "development": 60,
-      "staging": 45,
+      "development": 62,
+      "staging": 47,
       "production": 38,
-      "ephemeral": 54
+      "ephemeral": 56
     },
     "iamRolesBounded": {
-      "development": 51,
-      "staging": 36,
+      "development": 53,
+      "staging": 38,
       "production": 29,
-      "ephemeral": 46
+      "ephemeral": 48
     },
     "logGroups": {
-      "development": 57,
-      "staging": 43,
+      "development": 59,
+      "staging": 45,
       "production": 36,
-      "ephemeral": 54
+      "ephemeral": 56
     },
     "authorizers": {
-      "development": 6,
-      "staging": 5,
+      "development": 7,
+      "staging": 6,
       "production": 3,
-      "ephemeral": 6
+      "ephemeral": 7
     },
     "wafCloudFront": {
       "development": 1,
@@ -460,10 +466,10 @@
       "ephemeral": 1
     },
     "boundaryPolicies": {
-      "development": 9,
-      "staging": 8,
+      "development": 10,
+      "staging": 9,
       "production": 5,
-      "ephemeral": 8
+      "ephemeral": 9
     },
     "macieStacks": {
       "development": 1,
