@@ -843,20 +843,21 @@ model {
     }
   }
 
-  security_kms = platform 'KMS keys × 3' {
+  security_kms = platform 'KMS keys × 5' {
     #off-request-path
-    description 'flow logs · alarm topics · relay'
+    description 'flow logs · alarms · relay · logs'
     technology 'Customer-managed'
     link https://github.com/govuk-once/flex/blob/main/platform/infra/flex/src/utils/lambda.ts 'utils/lambda.ts'
     link https://github.com/govuk-once/flex/blob/main/platform/infra/flex/src/constructs/lambda/flex-public-function.ts 'flex-public-function.ts'
     link https://github.com/govuk-once/flex/blob/main/platform/infra/flex/src/stacks/core/vpc.ts 'core/vpc.ts'
+    link https://github.com/govuk-once/flex/blob/main/platform/infra/flex/src/constructs/kms/log-group-key.ts 'kms/log-group-key.ts'
     metadata {
       type 'AWS::KMS::Key'
       tech 'Customer-managed'
       role 'What is encrypted with a key FLEX owns.'
       facts [
-        'Created: <code>alias/flex-vpc-flow-logs-key</code> and <code>alias/flex-alerts-key</code> in eu-west-2, <code>alias/{stage}-flex-alerts-relay-key</code> in us-east-1.',
-        'The fourth is imported, not created: /{env}/flex-param/secret/encryption-key encrypts the environment variables of every function built on the Flex* constructs, each of which is then granted decrypt on it.',
+        'Created: <code>alias/flex-vpc-flow-logs-key</code> and <code>alias/flex-alerts-key</code> in eu-west-2, <code>alias/{stage}-flex-alerts-relay-key</code> in us-east-1, and a log-group key in each — <code>alias/flex-log-group-key</code> and <code>alias/{stage}-flex-global-log-group-key</code>. No log group is encrypted with either yet.',
+        'One more is imported, not created: /{env}/flex-param/secret/encryption-key encrypts the environment variables of every function built on the Flex* constructs, each of which is then granted decrypt on it.',
         '<b>Defect:</b> that key is read with <code>StringParameter.valueForStringParameter</code> rather than <code>BaseStack.import()</code>, so it records no stack-dependency edge and gets no synth-time existence check — a missing parameter fails at deploy instead of at synth, unlike every other imported value.',
         'The flow-log key grants only the write path to <code>delivery.logs.amazonaws.com</code>. No reader grant is written on top of CDK\'s default account-root <code>kms:*</code> statement, so decrypt is delegated to IAM rather than blocked outright.'
       ]
@@ -872,6 +873,7 @@ model {
         'kms-flowlog',
         'kms-alerts',
         'kms-relay',
+        'kms-log-group',
         'kms-lambda-env'
       ]
     }

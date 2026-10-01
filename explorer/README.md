@@ -5,17 +5,18 @@ architecture arrives as data the build injects above `app.js`; everything specif
 site arrives the same way on the index page. That is what makes a second architecture a
 directory under [`../projects/`](../projects/) rather than a fork of this one.
 
-| File          | What it is                                                                    |
-| ------------- | ----------------------------------------------------------------------------- |
-| `theme.css`   | Colour, type and the page reset. Inlined first on every page the build writes |
-| `styles.css`  | The explorer's own layout: header, canvas, inspector, reference tables        |
-| `shell.html`  | The explorer's markup                                                         |
-| `app.js`      | Renderer, edge routing, pan/zoom, inspector, stage selector                   |
-| `icons.svg`   | AWS service icons as `<symbol>` defs, inlined whole so a page stays one file  |
-| `index.html`  | The frame of the index page over the projects, and its theme toggle           |
-| `index.css`   | The index page's layout                                                       |
-| `fonts/`      | The two typefaces, subset and committed; `pnpm fonts` refetches them          |
-| `favicon.svg` | The tab icon, inlined as a data URI                                           |
+| File          | What it is                                                                                                            |
+| ------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `theme.css`   | Colour, type and the page reset. Inlined first on every page the build writes                                         |
+| `styles.css`  | The explorer's own layout: header, canvas, inspector, reference tables                                                |
+| `shell.html`  | The explorer's markup                                                                                                 |
+| `app.js`      | Renderer, edge routing, pan/zoom, inspector, stage and state selectors                                                |
+| `icons.svg`   | AWS service icons as `<symbol>` defs, inlined whole so a page stays one file                                          |
+| `icons.json`  | Which icon a CloudFormation type implies, by service namespace or full type; the build and the page read the same map |
+| `index.html`  | The frame of the index page over the projects, and its theme toggle                                                   |
+| `index.css`   | The index page's layout                                                                                               |
+| `fonts/`      | The two typefaces, subset and committed; `pnpm fonts` refetches them                                                  |
+| `favicon.svg` | The tab icon, inlined as a data URI                                                                                   |
 
 Nothing here is served directly. [`../scripts/buildArchitectureExplorer.ts`](../scripts/buildArchitectureExplorer.ts)
 inlines it into `site/<id>/index.html` for each project and `site/index.html` for the index,
@@ -46,6 +47,60 @@ Two things are deliberately not per project:
 - **The theme choice** is stored under one key every page shares, so choosing dark on the
   index or on one project's page holds on every other. The build injects that key, so the
   explorer and the index cannot disagree about it.
+
+## Showing more than one state of an architecture
+
+A build may carry planned states — proposed architectures laid over the as-is, read from
+`ARCH_STATES_DIR`, which only the private architecture-docs-states sets. The renderer does
+not compose them; the build does, and injects the finished views. That is
+deliberate: a layout only a person ever sees is a layout nothing checks, so the future and
+diff views are gated by the same geometry rules as the as-is. The renderer only switches
+between them.
+
+- **The state selector** sits beside the stage selector, `As-is` first and then each state
+  in order. Its last segment is the **Changes** toggle, which marks what a state does:
+  dashed for new, heavier for changed, faded and struck for retired, with what the state
+  retires collected into a strip at the foot of the canvas. It is disabled rather than
+  hidden on As-is — a control that vanishes teaches nobody it exists — and it survives a
+  move between states, because a reader comparing two of them wants to stay in the diff.
+- **Tab badges** say what each state does to each view without opening it: solid where that
+  state's view differs from today, outlined where the state declares it unchanged, nothing
+  where no state has reached it yet. The number is drawn with CSS `content`, not written
+  into the DOM, so anything reading a tab by its text still sees just the view name.
+- **A retired line stays where it was**, faded, under Changes — a state can take a line
+  away while both its ends remain, and a line that simply vanished would say nothing.
+- **The inspector says what a change is**: for a box or a line, its status under Changes
+  and the decision it rests on, as a link to the record when the register has one. See
+  [`STATES.md`](https://github.com/govuk-once/architecture-docs-states/blob/main/STATES.md).
+- **The URL names what is showing** — `#tab=…&stage=…&state=…&changes=1` — written on
+  every change and read once on load, so a diagram can be pointed at from beside the row
+  somebody is arguing about on the review page. An unreadable or stale fragment leaves the
+  page on its defaults rather than failing.
+
+The whole apparatus is inert for a project with no states: the selector stays hidden, no
+badges are drawn, and nothing in the page grows.
+
+## Saying what a page is
+
+A first visit opens **How to read this page** — the tabs and their badges, the stage, the
+state, the Changes toggle, the canvas gestures and the panel. The page carries five
+independent controls and nothing on it otherwise announces them; a reader who does not know
+the state selector exists cannot discover it by looking at a diagram. It is a native
+`<dialog>`, so the focus trap, the backdrop and Escape are the browser's to get right rather
+than ours, and the **?** button reopens it.
+
+The "seen" flag is per project and best-effort: a private window or blocked site data throws
+on read, and the honest answer to that is to show the introduction again rather than to fail.
+The render checks seed the flag before load, because every measurement they take is of the
+page a returning reader sees — and `introChecks` opens it deliberately and tests that it
+takes focus, that Escape closes it, and that focus comes back.
+
+## Reference views name their own rows
+
+A reference tab is a list of rows with a filter over them. The inventory's vocabulary —
+"Resource", "Config", "37 in Development" — is the inventory's, so a view may override it
+with `itemUnit` and `itemTerms`. The Decisions tab does: "37 planned changes rest on this ·
+Kind · Status". Without that it wore the wrong noun for every row it had.
 
 ## Reachable without a mouse or a screen
 

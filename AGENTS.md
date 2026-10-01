@@ -5,9 +5,18 @@ lives elsewhere. It holds a LikeC4 model per platform, the pipeline that renders
 interactive page, an index over them, and the checks that keep model and code in step. It
 reads those repositories and never writes to them.
 
-Today that is **FLEX**, with UDP and UNS listed as planned. One directory per architecture
-under `projects/`; one renderer in `explorer/` that knows about none of them. Every command
-below takes an optional project id and acts on all of them when you give none.
+Today that is **FLEX**, the **GOV.UK App**, **UDP**, **UNS** and **GOV.UK Chat**. One
+directory per architecture under `projects/`; one renderer in `explorer/` that knows about
+none of them. Every command below takes an optional project id and acts on all of them when
+you give none. FLEX, UDP, UNS and GOV.UK Chat are each read from one repository; the GOV.UK
+App from five.
+
+Two of them cannot be synthesised here, so their counts are prose rather than derived, and
+each page says so. UNS imports `once-platform-constructs`, whose source is public and builds
+cleanly — it is only _published_ to a private CodeArtifact registry, so the block is a
+publishing decision rather than a technical one. GOV.UK Chat is harder: its CDK app bundles
+every Lambda in Docker against a private git dependency, so it needs Docker, network egress
+and a token for another repository — which is why only its own CI can synth it.
 
 This file is for anyone — person or coding agent — making changes here. It is a router and an
 operating manual: it says how to run the loop, and where the real instructions live.
@@ -21,12 +30,19 @@ pnpm install
 pnpm sync      # clone or fetch each source into .sources/, and install what needs it
 pnpm synth     # run each CDK app per stage: the CloudFormation the counts are read from
 pnpm build     # derive the facts, validate the models, assemble every page and the index
+pnpm check     # render every page in a browser and measure what only rendering can see
+pnpm overview  # export the architecture overview page, one per project
+pnpm confluence  # put the overview in Confluence; CI runs it after each build of main
+pnpm encrypt-site  # seal site/ behind SITE_PASSWORD; the deploy job runs it when the secret is set
 ```
 
 `pnpm synth` is the one command here that executes a documented repository. `sync` and
 `build` never do. It runs exactly the `synth.command` in each project's config — the CDK
 app itself, per stage, with no credentials: a context lookup the machine cannot make
-becomes a dummy value, which is right for counting resources by type. Read what it writes.
+becomes a dummy value, or the answer cached in the source's committed `cdk.context.json`,
+which is right for counting resources by type. Where the app needs the source's own build
+first — UDP loads every function from `build/` — `synth.prepare` names that build, and it
+runs once before the stages. Read what it writes.
 The templates under `cdk.out/<stage>/` in the checkout are the deployed truth, fully
 expanded, with nothing to reason through — a construct instantiated in a loop is one line
 of source and many resources in a template. When you author or re-read a model, read the
@@ -43,13 +59,34 @@ re-deriving and diffing is the whole point of the run.
 `pnpm sync` is what makes this repository self-contained: it pulls the sources it documents
 rather than assuming checkouts are already beside it. Each is disposable — gitignored,
 hard-reset on every sync so it can never carry local edits, and removed by `pnpm clean`.
-Where each comes from is declared in the `source` block of its `project.config.json`,
-nowhere else.
+Where each comes from is declared in the `source` block of its `project.config.json` — or
+`sources`, for a project read from more than one repository — and nowhere else.
 
 The install inside a checkout is not optional the first time: `pnpm synth` runs the CDK app,
 so its dependencies have to resolve. After that the install is repeated only when a manifest
 moved in the range; `pnpm sync --install` forces it if a checkout ever looks wrong. A sync
 keeps `cdk.out` so the templates survive it; `pnpm synth` always rewrites them.
+
+Only the checkout `synth` runs in is ever installed. The GOV.UK App's four are read and never
+installed: two are Swift and Kotlin, and its SAM templates are counted as written, with each
+stage's `parameters` deciding which `Condition` holds there.
+
+## What is yours, and what is not
+
+The as-is is yours. You read the source, you write the model, you cite the file, and every
+gate in this repository exists to stop you asserting something the code does not do.
+
+**Planned states are not yours.** The states in architecture-docs-states are proposed architectures, and
+a proposal is somebody's — it comes out of a board, an RFC, an ADR, a decision somebody is
+answerable for. You may be asked to write one down, lay it out, or check it; you may not
+invent one, and you may not decide what a state should contain because it would make the
+diagram tidier. If an overlay needs a change nobody has argued for, say so and stop.
+
+The line is enforced as well as stated: every planned change cites an entry in
+`states/decisions.json`, the build refuses a citation the register does not hold, and it
+counts the changes resting only on questions still open. The states, the register and the
+workflow live in [`architecture-docs-states`](https://github.com/govuk-once/architecture-docs-states), which is private; this repository
+builds none.
 
 ## Authoring the model
 
@@ -114,9 +151,10 @@ determines the work:
 | An alarm added or removed | Any alarm construct in the CDK app  | Update the Delivery alarm table          |
 | Nothing                   | Nothing that these docs derive from | Still read on — see below                |
 
-An empty diff is **not** proof the docs are current. Only ten resource counts and the
-nineteen alarm kinds are derived; everything else is prose written by reading the code. A rewrite
-of a CDK stack changes no number here and can still make a paragraph false.
+An empty diff is **not** proof the docs are current. Only the resource counts the config
+declares — 28 for FLEX — and the nineteen alarm kinds are derived; everything else is prose
+written by reading the code. A rewrite of a CDK stack changes no number here and can still
+make a paragraph false.
 
 So there is a second half, and it is the one that finds those:
 
@@ -155,6 +193,9 @@ Every rule the build refuses and every number the render check counts is covered
 `scripts/buildArchitectureExplorer.test.ts` and `scripts/checkArchitectureExplorer.test.ts`.
 The first is pure and fast; the second builds small SVG fixtures and measures them in
 Chromium, because `getBBox` and `getPointAtLength` return nothing useful outside a browser.
+The planned-state rules — composition, the fold, the declarations — are covered by the tests
+beside `scripts/lib/states.ts` and `composeStates.ts`. What autofix may move and the review
+wording are tested in architecture-docs-states, beside that code.
 
 A gate that stops catching things fails nothing, and looks exactly like a gate with nothing
 to catch. So when you add one:
@@ -191,15 +232,29 @@ build already.
 
 `pnpm build` exits non-zero — it does not warn — on a count that disagrees with the derived
 facts, an alarm table that no longer matches the synthesised templates, a reference table with no
-citation, a citation pointing at a file that no longer exists, text that will not fit its box,
+citation, any citation — on a box, a line, a table or an inventory row — pointing at a file that
+no longer exists, a citation that names no repository the project reads or links into one it
+does not list, text that will not fit its box,
 overlapping boxes, a box straddling a zone edge, an edge to a node that does not exist, a box
 with no `ownership`, a sub-label that repeats its label, a dashed edge on a view that never says
 what dashed means, a kind naming a colour the theme lacks, a character the embedded fonts do
-not carry, a view with no stated audience, a raw `<` that would swallow a label, or JSON that
-is not prettier-formatted.
+not carry, a raw `<` that would swallow a label, or JSON that is not prettier-formatted.
+
+A planned state adds its own refusals: an overlay file named for a view the model does not
+have, an overlay naming a box the view does not have at that step, a line drawn to an
+endpoint that is not there, a view a state declares unchanged and also overlays, a citation
+the decision register does not hold, a status or approval level outside the vocabulary, a
+dangling `supersededBy`, a relative link, and every geometry rule above applied again to the
+composed future and diff views. A fault in a composed view is reported once, at the state
+where it first appears, with the later states it is still in force at after the dash —
+`— also at s2, s3` — because those states only inherit it and the fix is in the first one's
+file. Two things it counts rather than refuses, and prints on every run: planned changes
+that cite nothing, and planned changes resting only on questions still open; beside them,
+one line per state saying which views it models and which it has not reached yet.
 
 `pnpm check` then renders the page in headless Chromium, light and dark, and measures what
-static validation cannot see. Run both.
+static validation cannot see — a tab that has lost its audience line among it, and every
+planned state, in both its future and its diff, against their own two ratchets. Run both.
 
 ## Verify your work
 
@@ -254,13 +309,17 @@ about no project.
 
 [`.github/workflows/build.yml`](.github/workflows/build.yml) runs on every pull request, on
 every push to `main`, on a weekday schedule, and by hand. Every run checks each documented
-source out beside this repository, installs it, synthesises it, rebuilds — never from the
-recorded state, always from the templates — and fails if any committed
-`derived/architecture-facts.json` no longer matches. On a pull request that means someone
-changed a model without rebuilding; on the scheduled run it means a source moved and the
-docs have not caught up. It then prints the `pnpm drift` reading list without failing on it,
-runs the render check, lint, typecheck and tests, and publishes `site/` to Pages from
-`main`.
+source out into `.sources/`, where `pnpm sync` puts it, installs it, synthesises it, prints
+the `pnpm drift` reading list without failing on it — before the build, because the build
+advances the recorded commit — then rebuilds, never from the recorded state, always from the
+templates, and fails if any committed `derived/architecture-facts.json` no longer matches.
+On a pull request that means someone changed a model without rebuilding; on the scheduled
+run it means a source moved and the docs have not caught up. It then runs the render check,
+lint, typecheck and tests, and publishes `site/` to Pages from `main`.
+
+This repository builds no states, so the planned-state gates run in architecture-docs-states:
+its CI builds this site again with `ARCH_STATES_DIR` set, where `pnpm build` composes and
+refuses and `pnpm check` sweeps every state in both modes against its own two ratchets.
 
 A scheduled run that fails opens an issue titled _Scheduled build is failing_, comments on
 it rather than opening another on each further failure, and closes it when a scheduled run
@@ -270,9 +329,10 @@ over a checkout step that still asked for a token for a repository that had gone
 
 Things that are the workflow's, not the scripts':
 
-- **One checkout step per project**, written out rather than generated — a workflow cannot
-  loop `actions/checkout`, and a private source needs a token with `Contents: read` on it;
-  the default `GITHUB_TOKEN` cannot read another repository. FLEX is public and needs none.
+- **One checkout step per source repository**, written out rather than generated — a
+  workflow cannot loop `actions/checkout`, and a private source needs a token with
+  `Contents: read` on it; the default `GITHUB_TOKEN` cannot read another repository. FLEX and
+  all four of the GOV.UK App's repositories are public and need none.
 - **Pages must use the GitHub Actions source**, not a branch: `site/` is gitignored, so a
   branch-based build would publish nothing.
 - **The `github-pages` environment only lets the default branch deploy** by default. A
@@ -289,7 +349,12 @@ Six things, and nothing else. The build, the renderer, the checks, the export an
 all read config, so none of them changes:
 
 1. `projects/<id>/project.config.json` — copy FLEX's and rewrite it. `source` names the
-   repository to document and where its checkout lands.
+   repository to document and where its checkout lands. An architecture read from several
+   repositories declares `sources` instead, each named and with the `url` its citations link
+   against — the GOV.UK App's is the worked example. Every citation in such a project then
+   names its source, `ios:Production/…`, and the build refuses one that names none or links
+   into a repository the config does not list: with four checkouts, a path that could be in
+   any of them is a claim nobody can check.
 2. `projects/<id>/model/` — the LikeC4 model. This is the work, and the only part that is
    judgement rather than transformation. Start from `projects/_template/`, the smallest
    model that builds; [`projects/README.md`](projects/README.md) sets out what it requires
@@ -297,15 +362,18 @@ all read config, so none of them changes:
 3. A `--legend-<colour>` token in `explorer/theme.css` for any colour its kinds name that is
    not already there. The build says so if you miss one.
 4. A `synth` block saying how to run its CDK app, and `derive.counts` saying what to count
-   in the templates — both JSON, no TypeScript. Or no `derive` block at all, if nothing is
-   worth gating: then leave `from` off every resource and `derived` off every table, and
+   in the templates — both JSON, no TypeScript. A SAM or CloudFormation template is read as
+   written and needs no `synth`: give each stage the `parameters` it deploys with, and each
+   resource's `Condition` is evaluated for that stage — a condition that cannot be evaluated
+   fails the derivation rather than being guessed at. Or no `derive` block at all, if nothing
+   is worth gating: then leave `from` off every resource and `derived` off every table, and
    maintain those numbers by hand like any other prose.
-5. A checkout step in `.github/workflows/build.yml`. A workflow cannot loop
+5. A checkout step per repository in `.github/workflows/build.yml`. A workflow cannot loop
    `actions/checkout`, and a private repository needs its own token.
 6. `<id>` in the `projects` array of `explorer.config.json`, which is also the order the
    index lists them in. Remove it from `planned` if it was there.
 
 An architecture the site intends to cover and has not read yet goes in `planned` instead: it
-gets a card saying plainly that nothing has been read from its repository, and `seenFrom`
+gets a row saying plainly that nothing has been read from its repository, and `seenFrom`
 names the project whose model the description came from — a description of UDP written while
 reading FLEX is evidence about FLEX, not about UDP.

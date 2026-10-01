@@ -1,11 +1,11 @@
 /*
- * The index over the projects: one card per architecture. Colour and type are in
+ * The index over the projects: one row per architecture. Colour and type are in
  * theme.css, which the build inlines before this file.
  *
- * A card is the whole clickable target, not a link buried in one, because the card is
- * what a reader is choosing between. A planned project gets the same card with no link
+ * A row is the whole clickable target, not a link buried in one, because the row is
+ * what a reader is choosing between. A planned project gets the same row with no link
  * and a plain statement that nothing has been read from its repository — the scope is
- * worth showing, and a card that looked live would be a claim.
+ * worth showing, and a row that looked live would be a claim.
  */
 body {
   display: flex;
@@ -73,76 +73,218 @@ main {
   color: var(--accent);
 }
 
-.grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
-  gap: 18px;
-  margin-top: 32px;
+/*
+ * The sketch of who calls whom, above the list. Static SVG the build writes; the boxes
+ * that are documented systems are links, the parties outside the programme are not, and
+ * every line is a link to the tab that proves it. Sized by the viewBox so it scales with
+ * the column and stays legible on a phone, where the list below stacks to one column.
+ */
+.fit {
+  margin-top: 28px;
+}
+.fit .eyebrow {
+  display: block;
+  margin-bottom: 10px;
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+/* On a phone the sketch scrolls sideways inside its own box rather than shrinking to a
+   smudge; the page itself never scrolls horizontally. Same rule the tables follow. */
+.fit .scroll {
+  overflow-x: auto;
+}
+.fit svg {
+  display: block;
+  width: 100%;
+  max-width: 1060px;
+  height: auto;
+  overflow: visible;
+}
+@media (max-width: 720px) {
+  .fit svg {
+    min-width: 640px;
+  }
+}
+/*
+ * The same drawing as the diagrams inside each page, down to the rules: colour carries
+ * ownership through --kind, every box wears the 4px bar, and an edge label sits on its
+ * line over a patch of the page ground. Class names match app.js so the two stay legible
+ * as one design rather than two that happen to look alike.
+ */
+.fit .node.sys {
+  --kind: var(--legend-blue);
+}
+.fit .node.out {
+  --kind: var(--legend-amber);
+}
+.fit .node .box {
+  fill: var(--surface);
+  stroke: var(--kind);
+  stroke-width: 1.5;
+}
+.fit .node .bar {
+  fill: var(--kind);
+}
+.fit .node .t {
+  fill: var(--ink);
+  font:
+    600 13px/1 "IBM Plex Sans",
+    sans-serif;
+}
+.fit .node .s {
+  fill: var(--muted);
+  font:
+    400 10.5px/1 "IBM Plex Mono",
+    monospace;
+}
+.fit a.node:hover .box,
+.fit a.node:focus-visible .box {
+  stroke-width: 3;
+}
+.fit a.node:hover .t,
+.fit a.node:focus-visible .t {
+  fill: var(--accent);
+}
+.fit .edge .line {
+  fill: none;
+  stroke: var(--line-strong);
+  stroke-width: 1.6;
+}
+.fit #fit-arrow path {
+  fill: var(--line-strong);
+}
+.fit .edge .lblbg {
+  fill: var(--bg);
+}
+.fit .edge .lbl {
+  fill: var(--muted);
+  font:
+    400 10.5px/1 "IBM Plex Mono",
+    monospace;
+  text-anchor: middle;
+}
+.fit a.edge:hover .line,
+.fit a.edge:focus-visible .line {
+  stroke: var(--accent);
+  stroke-width: 3;
+}
+.fit a.edge:hover .lbl,
+.fit a.edge:focus-visible .lbl {
+  fill: var(--accent);
+  font-weight: 600;
+}
+.fit .note {
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: var(--muted);
 }
 
-.card {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 22px 22px 18px;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  box-shadow: var(--shadow);
+/*
+ * The systems, one to a row. A grid of cards cannot tile five of them evenly — four and
+ * an orphan at every desktop width — and the count rises as repositories are documented,
+ * so a list is the honest shape: even at any number. The three columns are fixed rather
+ * than content-sized so that they line up down the page, which lets the tab counts and
+ * the commit dates be read as columns instead of hunted for inside five separate boxes.
+ */
+.rows {
+  margin-top: 16px;
+  border-top: 1px solid var(--line);
+}
+.row {
+  display: grid;
+  grid-template-columns: 248px minmax(0, 1fr) 208px;
+  gap: 12px 30px;
+  align-items: start;
+  padding: 20px 10px;
+  border-bottom: 1px solid var(--line);
+  border-radius: 8px;
   text-decoration: none;
   color: inherit;
 }
-a.card:hover {
-  border-color: var(--accent);
+a.row:hover {
+  background: var(--surface);
 }
-a.card:focus-visible {
+a.row:focus-visible {
   outline: 2px solid var(--focus);
-  outline-offset: 2px;
+  outline-offset: -2px;
 }
-.card h2 {
-  margin: 0;
-  font-size: 19px;
+.pages {
+  margin-top: 40px;
+  padding-top: 24px;
+  border-top: 1px solid var(--line);
+}
+.pages .eyebrow {
+  display: block;
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.row h2 {
+  margin: 0 0 5px;
+  font-size: 17px;
   font-weight: 600;
   letter-spacing: -0.01em;
 }
-a.card:hover h2 {
+a.row:hover h2 {
   color: var(--accent);
 }
-.card .tagline {
-  font-size: 11px;
+.row .tagline {
+  display: block;
+  font-size: 10.5px;
   letter-spacing: 0.09em;
   text-transform: uppercase;
   color: var(--muted);
 }
-.card p {
+/* Capped rather than filling its column: the blurb column is wide enough to run past a
+   comfortable measure, and the ragged right costs nothing when the meta column beside it
+   is what has to stay aligned. */
+.row p {
+  max-width: 60ch;
   margin: 0;
   font-size: 13.5px;
   line-height: 1.6;
   color: var(--ink-2);
 }
-.card .meta {
+.row .meta {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px 10px;
-  margin-top: auto;
-  padding-top: 14px;
-  border-top: 1px solid var(--line);
+  flex-direction: column;
+  gap: 4px;
   font-size: 11.5px;
+  line-height: 1.45;
   color: var(--muted);
 }
-.card .meta b {
+.row .meta b {
   font-weight: 500;
   color: var(--ink-2);
 }
 
-/* Planned: the same card, visibly not a door. */
-.card.planned {
-  background: transparent;
-  border-style: dashed;
-  box-shadow: none;
+/* Planned: the same row, visibly not a door. */
+.row.planned {
+  opacity: 0.72;
 }
-.card.planned h2 {
+.row.planned h2 {
   color: var(--ink-2);
+}
+
+/* Narrower than the three columns can hold: stack them, and let the meta run inline
+   again, which is the one place the old card shape still reads better. */
+@media (max-width: 860px) {
+  .row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+    padding: 18px 8px;
+  }
+  .row .meta {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 6px 14px;
+  }
 }
 .badge {
   align-self: flex-start;

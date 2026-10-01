@@ -1,0 +1,247 @@
+// GOV.UK App architecture — Account linking.
+//
+// The one flow that crosses every system on the Context tab: the app backend mints a token,
+// the user signs in at DVLA in the browser, DVLA sends the app back a token of its own, and
+// the app hands that to FLEX. Numbered in reading order.
+
+model {
+
+  linking_app = internal '1. GOV.UK App' {
+    #request-path
+    description 'Driving · link your account'
+    link https://github.com/govuk-once/govuk-mobile-ios-app/blob/main/Production/govuk_ios/ViewModels/DVLA/DVLAAuthenticationViewModel.swift 'ios · DVLAAuthenticationViewModel.swift'
+    link https://github.com/govuk-once/govuk-mobile-ios-app/blob/main/Production/govuk_ios/Deeplinking/DeeplinkRoutes/DVLAServiceDeeplinkRoute.swift 'ios · DVLAServiceDeeplinkRoute.swift'
+    link https://github.com/govuk-once/govuk-mobile-android-app/blob/main/feature/dvla/src/main/kotlin/uk/gov/govuk/dvla/DvlaViewModel.kt 'android · DvlaViewModel.kt'
+    link https://github.com/govuk-once/govuk-mobile-android-app/blob/main/feature/dvla/src/main/kotlin/uk/gov/govuk/dvla/navigation/DvlaNavigation.kt 'android · DvlaNavigation.kt'
+    metadata {
+      type 'Mobile client'
+      tech 'iOS · Android'
+      role 'Starts the link, opens DVLA, and finishes the link when DVLA sends it back.'
+      facts [
+        'Both platforms come back on the deep link <code>/callback/dvla/auth</code> and read a <code>token</code> parameter from it.',
+        'iOS opens DVLA with <code>?token=</code>; Android opens it with <code>?verification=</code> and <code>?session=</code>, read from fields the backend no longer returns — so the Android link cannot complete as written. It is switched off in Android release builds.',
+        'On iOS the whole feature is behind the <code>dvla</code> flag, forced off in production builds.'
+      ]
+      sourceId 'app'
+      order '1'
+      x '40'
+      y '30'
+      w '440'
+      h '62'
+      ownership 'app'
+    }
+  }
+
+  linking_auth = boundary 'App backend · auth stack' {
+    metadata {
+      type 'SAM stack'
+      tech 'services/auth/template.yaml'
+      role 'Mints the token the link starts with. It never talks to DVLA.'
+      facts [
+        'The route is on the token proxy API and has no authorizer: the function reads the caller\'s token itself, without verifying it — see Security.'
+      ]
+      sourceId 'auth'
+      order '0'
+      x '40'
+      y '140'
+      w '470'
+      h '404'
+      boundary 'hard'
+    }
+
+    linking_proxyapi = internal '2. Token proxy API' {
+      #request-path
+      description 'POST /linking/verification'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/template.yaml 'backend · services/auth/template.yaml'
+  
+      link https://github.com/govuk-once/govuk-mobile-ios-app/blob/main/Production/govuk_ios/Networking/GOVRequest/GovRequest+Authentication.swift 'ios · GovRequest+Authentication.swift'
+    metadata {
+        type 'AWS::Serverless::Api'
+        tech 'API Gateway REST · WAF'
+        role 'The same API the app gets its tokens from.'
+        facts [
+          'The app sends its Cognito access token in the JSON body, not in a header — <code>{"token": …}</code> — and the route has no authorizer.'
+        ]
+        sourceId 'proxyapi'
+        order '2'
+        x '64'
+        y '190'
+        w '220'
+        h '62'
+        ownership 'app'
+        awsIcon 'apigateway'
+      }
+    }
+
+    linking_fn = internal '3. Linking verification' {
+      #request-path
+      description 'hash · sign · encrypt'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/linking-verification/app.ts 'backend · linking-verification/app.ts'
+  
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/template.yaml 'backend · services/auth/template.yaml'
+    metadata {
+        type 'AWS::Serverless::Function'
+        tech 'nodejs22.x · jose · KMS'
+        role 'Turns the caller\'s identity into a token DVLA can open and nobody else can.'
+        facts [
+          'Decodes the token for <code>username</code> and <code>sub</code>, then asks Cognito for the user\'s email.',
+          'HMAC-SHA256 of the email with one secret key and of <code>sub</code> with another; a JWT of both, issued by <code>urn:gds:app-backend:linking-verification</code> and expiring in ten minutes.',
+          'Signs the JWT with the KMS key using RSASSA-PSS SHA-256, then encrypts it as a JWE — RSA-OAEP-256, A256GCM — to DVLA\'s public key.',
+          'Returns <code>{"token": jwe}</code>.'
+        ]
+        sourceId 'fn'
+        order '3'
+        x '64'
+        y '320'
+        w '220'
+        h '62'
+        ownership 'app'
+        awsIcon 'lambda'
+      }
+    }
+
+    linking_cognito = internal 'Cognito user pool' {
+      #request-path
+      description 'AdminGetUser'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/linking-verification/app.ts 'backend · linking-verification/app.ts'
+  
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/template.yaml 'backend · services/auth/template.yaml'
+    metadata {
+        type 'AWS::Cognito::UserPool'
+        tech 'Cognito admin API'
+        role 'Where the email comes from.'
+        facts [
+          'Looked up by the <code>username</code> in the unverified token.'
+        ]
+        sourceId 'cognito'
+        order '4'
+        x '298'
+        y '320'
+        w '188'
+        h '62'
+        ownership 'app'
+        awsIcon 'cognito'
+      }
+    }
+
+    linking_keys = internal 'Secrets and signing key' {
+      #request-path
+      description 'two HMAC keys · RSA-2048'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/template.yaml 'backend · services/auth/template.yaml'
+      metadata {
+        type 'Secrets Manager · KMS'
+        tech 'alias/dvla-verification-jwt-signing-key'
+        role 'What the token is hashed, signed and encrypted with.'
+        facts [
+          'The two HMAC keys and DVLA\'s public key are Secrets Manager values under <code>/{ConfigStackName}/linking/dvla/</code>, created outside this repository.',
+          'The signing key is an RSA-2048 KMS key that cannot rotate; its alias is <code>alias/dvla-verification-jwt-signing-key</code>.'
+        ]
+        sourceId 'keys'
+        order '5'
+        x '64'
+        y '450'
+        w '220'
+        h '62'
+        ownership 'app'
+        awsIcon 'kms'
+      }
+    }
+  }
+
+  linking_dvla = external '4. DVLA account sign-in' {
+    #request-path
+    description 'in the browser'
+    link https://github.com/govuk-once/govuk-mobile-android-app/blob/main/feature/dvla/build.gradle.kts 'android · feature/dvla/build.gradle.kts'
+    link https://github.com/govuk-once/govuk-mobile-ios-app/blob/main/Production/govuk_ios/Coordinators/DVLA/DVLAAuthenticationCoordinator.swift 'ios · DVLAAuthenticationCoordinator.swift'
+    metadata {
+      type 'Outside GOV.UK Once'
+      tech 'HTTPS, in the browser'
+      role 'Where the user signs in to their driver and vehicle account and agrees to the link.'
+      facts [
+        'Development builds open <code>customer-account-external-ui-ext.dvla.gov.uk/govuk-app</code>; release builds <code>driver-and-vehicles-account.service.gov.uk/govuk-app</code>.',
+        'What DVLA does with the token, and what it puts in the one it sends back, is not in any of these repositories.'
+      ]
+      sourceId 'dvla'
+      order '6'
+      x '540'
+      y '30'
+      w '220'
+      h '62'
+      ownership 'third'
+    }
+  }
+
+  linking_flex = internal '5. FLEX' {
+    #request-path
+    description 'POST …/udp/v1/identity/dvla'
+    link https://github.com/govuk-once/govuk-mobile-ios-app/blob/main/Production/govuk_ios/Networking/GOVRequest/GOVRequest+UserState.swift 'ios · GOVRequest+UserState.swift'
+    link https://github.com/govuk-once/govuk-mobile-android-app/blob/main/feature/dvla/src/main/kotlin/uk/gov/govuk/dvla/remote/DvlaApi.kt 'android · DvlaApi.kt'
+    metadata {
+      type 'GOV.UK Once system'
+      tech 'HTTPS · Bearer JWT'
+      role 'Records the link, then serves the licence and vehicle data through <code>/app/dvla/v1</code>.'
+      facts [
+        'The token DVLA sent back travels as the <code>x-linking-token</code> header, beside the Cognito access token as Bearer.',
+        'Unlinking is <code>DELETE</code> on the same path. What FLEX does with the token is on FLEX\'s own page.'
+      ]
+      sourceId 'flex'
+      order '7'
+      x '540'
+      y '160'
+      w '220'
+      h '62'
+      ownership 'govuk'
+    }
+  }
+
+  linking_app -> linking_proxyapi 'access token, in the body' {
+    link https://github.com/govuk-once/govuk-mobile-ios-app/blob/main/Production/govuk_ios/Networking/GOVRequest/GovRequest+Authentication.swift 'ios · GovRequest+Authentication.swift'
+    link https://github.com/govuk-once/govuk-mobile-android-app/blob/main/feature/dvla/src/main/kotlin/uk/gov/govuk/dvla/linking/data/LinkingRepo.kt 'android · LinkingRepo.kt'
+    metadata {
+      protocol 'HTTPS POST'
+      auth 'None on the request; the token is the payload'
+      carries 'The Cognito access token'
+      facts [
+        'Android wraps the call in a refresh-and-retry; iOS sends it on a client with no token provider.'
+      ]
+      order '1'
+    }
+  }
+  linking_proxyapi -> linking_fn 'invokes' {
+    metadata { protocol 'Lambda proxy integration' auth 'Invoke permission' carries 'The request' order '2' }
+  }
+  linking_fn -> linking_cognito 'email by username' {
+    link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/linking-verification/app.ts 'backend · linking-verification/app.ts'
+    metadata { protocol 'Cognito admin API' auth 'IAM role · cognito-idp:AdminGetUser' carries 'A username; an email back' order '3' }
+  }
+  linking_fn -> linking_keys 'hashes · signs · encrypts' {
+    link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/linking-verification/app.ts 'backend · linking-verification/app.ts'
+    metadata { protocol 'Secrets Manager · KMS Sign' auth 'IAM role' carries 'Three secrets read; one digest signed' edgeStyle 'dash' order '4' }
+  }
+  linking_app -> linking_dvla 'opens · comes back' {
+    link https://github.com/govuk-once/govuk-mobile-ios-app/blob/main/Production/govuk_ios/Deeplinking/DeeplinkRoutes/DVLAServiceDeeplinkRoute.swift 'ios · DVLAServiceDeeplinkRoute.swift'
+    metadata {
+      protocol 'HTTPS in the browser, then a govuk:// deep link'
+      auth 'The minted token out; DVLA\'s token back'
+      carries 'The user, to DVLA and back to the app'
+      edgeDir 'both'
+      facts [
+        'DVLA can also send <code>failure=true</code> with an <code>errorMessage</code>, which iOS records as an analytics error.'
+      ]
+      order '5'
+    }
+  }
+  linking_app -> linking_flex 'x-linking-token' {
+    link https://github.com/govuk-once/govuk-mobile-ios-app/blob/main/Production/govuk_ios/ViewModels/ServiceAccount/ServiceAccountLinkingViewModel.swift 'ios · ServiceAccountLinkingViewModel.swift'
+    metadata { protocol 'HTTPS POST' auth 'Cognito access token as Bearer' carries 'DVLA\'s token, as a header' order '6' }
+  }
+}
+
+views {
+  view linking {
+    title 'Account linking'
+    include linking_app
+    include linking_auth, linking_auth.**
+    include linking_dvla, linking_flex
+  }
+}

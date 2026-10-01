@@ -1,0 +1,219 @@
+// UNS architecture — Context.
+//
+// The model. Presentation that a LikeC4 view cannot hold — tab order, audience,
+// reference tables — is in views.json beside this file.
+
+model {
+
+  context_departments = boundary 'Departments' {
+    metadata {
+      type 'Ownership boundary'
+      tech 'a client certificate and an API key each'
+      role 'Government services outside GOV.UK Once that send notifications. Each is a named organisation with its own usage plan; the certificate says which.'
+      sourceId 'departments'
+      order '0'
+      x '40'
+      y '160'
+      w '330'
+      h '134'
+      boundary 'hard'
+    }
+
+    context_dept = external 'DVLA · Foreign Travel Advice' {
+      #request-path
+      description 'the senders'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/consumers/productionConsumers.ts 'productionConsumers.ts'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/consumers/consumersMetadata.ts 'consumersMetadata.ts'
+      metadata {
+        type 'Consumer organisations'
+        tech 'named per environment in code'
+        role 'Production names UNS itself and DVLA; development adds Foreign Travel Advice (<code>EventsAggregator</code>); staging adds a <code>pentest</code> organisation.'
+        facts [
+          'What a department may do is per-organisation metadata: DVLA gets no channel controls and no message retention; Foreign Travel Advice the standard channels.',
+          'The API is called PSO throughout the repository; nothing in it expands the acronym.'
+        ]
+        sourceId 'dept'
+        order '1'
+        x '64'
+        y '210'
+        w '282'
+        h '62'
+        ownership 'third'
+      }
+    }
+  }
+
+  context_govukonce = boundary 'GOV.UK Once' {
+    metadata {
+      type 'Ownership boundary'
+      tech '—'
+      role 'The two sibling systems UNS talks to: FLEX reads what it holds, and UDP tells it who a person is.'
+      sourceId 'govukonce'
+      order '0'
+      x '410'
+      y '30'
+      w '620'
+      h '264'
+      boundary 'hard'
+    }
+
+    context_flex = internal 'FLEX' {
+      #request-path
+      description 'GOV.UK Once · API layer'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/constructs/UNSFlexResources.ts 'UNSFlexResources.ts'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/cdk.postdeploy.ssm.ts 'cdk.postdeploy.ssm.ts'
+      metadata {
+        type 'GOV.UK Once system'
+        tech 'reads a private API over a VPC endpoint'
+        role 'The only reader. It lists, reads, marks and hides a person\'s notifications, and manages the groups they belong to, on the app\'s behalf. Documented on its own page.'
+        facts [
+          'After each deploy a script writes a secret in UNS\'s account — the private API URL, its key, a role — that FLEX\'s account may read.'
+        ]
+        sourceId 'flex'
+        order '2'
+        x '434'
+        y '80'
+        w '262'
+        h '62'
+        ownership 'govuk'
+      }
+    }
+
+    context_uns = platform 'UNS' {
+      #request-path
+      description 'what this page is about'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/cdk.ts 'cdk.ts'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/docs/developer-reference.md 'developer-reference.md'
+      metadata {
+        type 'Software system · in scope'
+        tech 'AWS · TypeScript · serverless · two stacks'
+        role 'Takes a message from a department, works out which device it is for, hands it to a push provider, and keeps the record FLEX reads back.'
+        facts [
+          'Two APIs on one CDK app: PSO, public behind mTLS, for departments; FLEX, private, for GOV.UK Once.',
+          'A message is a title and a body for a <code>UserID</code>, with an optional deeplink, channel and days to live; a group message is the same for every device subscribed to a group.',
+          'Every step publishes an analytics event: appended to the record, counted per campaign, logged, exported hourly to S3 for BigQuery.'
+        ]
+        sourceId 'uns'
+        order '3'
+        x '434'
+        y '210'
+        w '262'
+        h '62'
+        ownership 'uns'
+      }
+    }
+
+    context_udp = internal 'UDP' {
+      #request-path
+      description 'GOV.UK Once · user data'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/common/services/adapters/processingAdapterUDP.ts 'processingAdapterUDP.ts'
+      metadata {
+        type 'GOV.UK Once system'
+        tech 'private API · SigV4 with an assumed role'
+        role 'Turns the department\'s <code>UserID</code> into the device\'s push id. Documented on its own page.'
+        facts [
+          'One call, <code>GET /v1/notifications</code> with <code>requesting-service: dvla</code> hard-coded and a TODO to support more than one department.',
+          'The answer\'s <code>pushId</code> — or an older <code>notificationId</code> — becomes the <code>ExternalUserID</code> the push provider is given.'
+        ]
+        sourceId 'udp'
+        order '4'
+        x '744'
+        y '210'
+        w '262'
+        h '62'
+        ownership 'govuk'
+      }
+    }
+  }
+
+  context_onesignal = external 'OneSignal' {
+    #request-path
+    description 'push provider, outside government'
+    link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/common/services/adapters/notificationAdapterOneSignal.ts 'notificationAdapterOneSignal.ts'
+    link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/common/services/notificationService.ts 'notificationService.ts'
+    metadata {
+      type 'Push provider · outside government'
+      tech 'HTTPS · Authorization: Key'
+      role 'The only thing that reaches a phone. UNS posts one notification per device, addressed by external id, and OneSignal does FCM and APNs.'
+      facts [
+        'Chosen by an SSM parameter: <code>OneSignal</code>, or <code>VOID</code>, which sends nothing and is what the tests run against.',
+        'Nothing in the repository talks to Firebase, APNs or GOV.UK Notify.'
+      ]
+      sourceId 'onesignal'
+      order '5'
+      x '434'
+      y '340'
+      w '262'
+      h '62'
+      ownership 'third'
+    }
+  }
+
+  context_app = internal 'GOV.UK App' {
+    #request-path
+    description 'a person\'s phone'
+    link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/lambdas/interfaces/IFlexNotification.ts 'IFlexNotification.ts'
+    metadata {
+      type 'GOV.UK Once system'
+      tech 'mobile client'
+      role 'Receives the push, then reads the notification centre through FLEX. Documented on its own page.'
+      sourceId 'app'
+      order '6'
+      x '434'
+      y '470'
+      w '262'
+      h '62'
+      ownership 'govuk'
+    }
+  }
+
+  context_dept -> context_uns 'a message' {
+    metadata {
+      protocol 'HTTPS to a public REST API with a truststore'
+      auth 'A client certificate the truststore signed, checked against a revocation table; an API key per organisation'
+      carries 'POST /send, POST /v1/send-to-group, GET /status/…'
+      order '1'
+    }
+  }
+  context_flex -> context_uns 'their notifications' {
+    metadata {
+      protocol 'HTTPS to a private REST API through FLEX\'s VPC endpoint'
+      auth 'IAM, when the FLEX account and endpoint ids are configured; an API key always'
+      carries 'GET, PATCH and DELETE on /notifications; GET and POST on /v1/groups'
+      order '2'
+    }
+  }
+  context_uns -> context_udp 'which device to reach' {
+    metadata {
+      protocol 'HTTPS to UDP\'s private API'
+      auth 'A role UDP created for UNS, assumed with external id UNS; plus the API key UDP issued'
+      carries 'GET /v1/notifications for one user id'
+      order '3'
+    }
+  }
+  context_uns -> context_onesignal 'sends it on' {
+    metadata {
+      protocol 'HTTPS'
+      auth 'Authorization: Key, from Secrets Manager'
+      carries 'Title, body, deeplink, one external id, the notification id as idempotency key'
+      order '4'
+    }
+  }
+  context_onesignal -> context_app 'the notification' {
+    metadata {
+      protocol 'FCM or APNs, inside OneSignal'
+      auth '—'
+      carries 'The notification'
+      order '5'
+    }
+  }
+}
+
+views {
+  view context {
+    title 'Context'
+    include context_departments, context_departments.**
+    include context_govukonce, context_govukonce.**
+    include context_onesignal, context_app
+  }
+}

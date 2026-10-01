@@ -1,0 +1,13 @@
+{
+  "repo": "https://github.com/govuk-once/govuk-chat-v2.git",
+  "ref": "main",
+  "derived": {
+    "sha": "a5c2d4fb7dcd0d525427897ceb51e6ac382fbd04",
+    "subject": "Merge pull request #315 from govuk-once/930-chat-ui",
+    "committed": "2026-09-29T17:51:36+01:00",
+    "builtFrom": "nothing derived — this project's counts are prose",
+    "derivation": "af35b68e0ec835a9",
+    "facts": ""
+  },
+  "read": null
+}

@@ -1,0 +1,481 @@
+{
+  "context": {
+    "name": "Context",
+    "order": 1,
+    "group": "Architecture",
+    "audience": "Anyone new to GOV.UK Chat, including non-engineers",
+    "blurb": "GOV.UK Chat among the systems around it: the app a question is typed into, the AWS services that answer it, and the private repository that holds every prompt. C4 level 1 — runtime only.",
+    "note": "Which caller reaches this system is not provable from either repository: the app backend forwards to whatever an SSM parameter names. Everything else here is read from this repository's own code.",
+    "dashMeans": "a dependency resolved when the agent is built, not a call it makes",
+    "tables": [
+      {
+        "name": "The four stacks, and which agent answers which API",
+        "code": [
+          ["cdk/bin/app.ts", "cdk/bin/app.ts"],
+          ["chat-api-ts-stack.ts", "cdk/src/stacks/chat-api-ts-stack.ts"],
+          [
+            "chat-api-fastapi-stack.ts",
+            "cdk/src/stacks/chat-api-fastapi-stack.ts"
+          ],
+          ["agui-agent/main.py", "services/agui-agent/src/agui_agent/main.py"],
+          [
+            "example-agent/main.py",
+            "services/example-agent/src/example_agent/main.py"
+          ]
+        ],
+        "cols": [
+          "API stack",
+          "How a caller authenticates",
+          "Its agent",
+          "The model that answers"
+        ],
+        "rows": [
+          [
+            "<code>ChatApiTsStack</code> — TypeScript, one route",
+            "Cognito, client credentials, scope <code>chat-api/invoke</code>",
+            "<code>AguiAgentStack</code>",
+            "<code>eu.anthropic.claude-sonnet-5</code>, 4,000 tokens"
+          ],
+          [
+            "<code>ChatApiFastapiStack</code> — Python, many routes",
+            "AWS IAM, a signed request",
+            "<code>ExampleAgentStack</code>",
+            "<code>eu.anthropic.claude-sonnet-4-6</code>"
+          ]
+        ]
+      }
+    ],
+    "w": 800,
+    "h": 740
+  },
+  "request": {
+    "name": "Request path",
+    "order": 2,
+    "group": "Architecture",
+    "audience": "On-call, and anyone tracing a question through the system",
+    "blurb": "Every hop one question takes, numbered in reading order. The TypeScript API is the worked example because it has exactly one route, so the whole path is provable end to end.",
+    "note": "Three gates before the agent runs: the Cognito scope, the schema, and the run claim that stops two answers being generated on one thread at once. The answer streams back along the same hops, so no return line is drawn.",
+    "tables": [
+      {
+        "name": "Every route on both APIs, and what authorises it",
+        "code": [
+          ["chat-api-ts-stack.ts", "cdk/src/stacks/chat-api-ts-stack.ts"],
+          [
+            "chat-api-fastapi-stack.ts",
+            "cdk/src/stacks/chat-api-fastapi-stack.ts"
+          ],
+          [
+            "v1/routers/conversations.py",
+            "services/chat-api-fastapi/src/chat_api/v1/routers/conversations.py"
+          ],
+          [
+            "conversation_api/routes.py",
+            "services/chat-api-fastapi/src/chat_api/conversation_api/routes.py"
+          ],
+          ["main.py", "services/chat-api-fastapi/src/chat_api/main.py"]
+        ],
+        "cols": ["Method and path", "API", "Authorised by", "Does"],
+        "rows": [
+          [
+            "<code>POST /v1/threads/invoke</code>",
+            "TypeScript",
+            "Cognito scope",
+            "The only route: asks the agent and streams the answer back"
+          ],
+          [
+            "<code>POST /v1/conversations</code>",
+            "Python · v1",
+            "AWS IAM",
+            "Starts a conversation and streams the first answer"
+          ],
+          [
+            "<code>GET /v1/conversations</code>",
+            "Python · v1",
+            "AWS IAM",
+            "The 20 most recent conversations"
+          ],
+          [
+            "<code>GET /v1/conversations/{id}</code>",
+            "Python · v1",
+            "AWS IAM",
+            "One conversation and its 50 most recent messages"
+          ],
+          [
+            "<code>PATCH /v1/conversations/{id}</code>",
+            "Python · v1",
+            "AWS IAM",
+            "Renames it"
+          ],
+          [
+            "<code>DELETE /v1/conversations/{id}</code>",
+            "Python · v1",
+            "AWS IAM",
+            "Deletes it; answers <code>204</code>"
+          ],
+          [
+            "<code>DELETE /v1/conversations/{id}/streams/{id}</code>",
+            "Python · v1",
+            "AWS IAM",
+            "Stops a stream in progress; answers <code>204</code>"
+          ],
+          [
+            "<code>POST /v1/conversations/{id}/messages</code>",
+            "Python · v1",
+            "AWS IAM",
+            "Adds a question and streams the answer"
+          ],
+          [
+            "<code>POST /conversations</code>",
+            "Python · older",
+            "AWS IAM",
+            "Creates a conversation record only"
+          ],
+          [
+            "<code>POST /conversations/{id}/messages</code>",
+            "Python · older",
+            "AWS IAM",
+            "Stores a message; no agent is invoked"
+          ],
+          [
+            "<code>GET /conversations/{id}</code>",
+            "Python · older",
+            "AWS IAM",
+            "The conversation and its messages"
+          ],
+          [
+            "<code>GET /users/{id}/conversations</code>",
+            "Python · older",
+            "AWS IAM",
+            "Every conversation a person has"
+          ],
+          [
+            "<code>POST /invoke-agent</code>",
+            "Python · top level",
+            "AWS IAM",
+            "Asks the agent without storing anything"
+          ],
+          [
+            "<code>GET /stream</code>",
+            "Python · top level",
+            "AWS IAM",
+            "Five hard-coded words, half a second apart — a demonstration, not a product route"
+          ],
+          [
+            "<code>GET /</code>",
+            "Python · top level",
+            "AWS IAM",
+            "Returns <code>Hello World</code>"
+          ]
+        ]
+      },
+      {
+        "name": "What the handler does before the agent is invoked",
+        "code": [
+          [
+            "threads/invoke.ts",
+            "services/chat-api-ts/src/handlers/threads/invoke.ts"
+          ],
+          [
+            "zod-validator.ts",
+            "services/chat-api-ts/src/http/zod-validator.ts"
+          ],
+          [
+            "persistence/runs.ts",
+            "services/chat-api-ts/src/persistence/runs.ts"
+          ],
+          [
+            "persistence/threads.ts",
+            "services/chat-api-ts/src/persistence/threads.ts"
+          ]
+        ],
+        "cols": [
+          "Step",
+          "What it checks",
+          "What the caller gets when it fails"
+        ],
+        "rows": [
+          [
+            "Headers",
+            "<code>end-user-id</code> must be present",
+            "A JSON error saying only <code>Agent invocation error</code>"
+          ],
+          [
+            "Body",
+            "A thread id, a run id and the messages, against a schema",
+            "The same message, so nothing about the shape leaks"
+          ],
+          [
+            "Thread",
+            "The caller's thread id resolves to a system thread id",
+            "<code>500</code>, with the failure logged"
+          ],
+          [
+            "Claim · thread busy",
+            "No other run holds this thread",
+            "<code>409</code> — a run is already in progress on this thread"
+          ],
+          [
+            "Claim · duplicate run",
+            "This run id has not been used on this thread",
+            "<code>409</code> — this run id has already been used"
+          ],
+          [
+            "Claim · duplicate message",
+            "This message id has not been used on this thread",
+            "<code>409</code> — this message id has already been used"
+          ],
+          [
+            "Invoke",
+            "The agent returns a body at all",
+            "<code>500</code>, and the claim is released again"
+          ]
+        ]
+      }
+    ],
+    "w": 700,
+    "h": 680
+  },
+  "containers": {
+    "name": "Containers",
+    "order": 3,
+    "group": "Architecture",
+    "audience": "Chat engineers, and anyone reviewing a change to a stack",
+    "blurb": "Every separately deployable part the CDK app creates per environment, grouped by the stack that owns it, and the traffic between them. C4 level 2.",
+    "note": "There is no network layer to show. Nothing in this repository creates a VPC, a subnet, a security group or a VPC endpoint, so every call here is one AWS service reaching another over its public endpoint, authorised by IAM. Bedrock and the private prompts package are on Context, where the calls to them are set out.",
+    "tables": [
+      {
+        "name": "What differs by environment",
+        "code": [
+          ["environment.ts", "cdk/src/constants/environment.ts"],
+          ["chat-api-ts-stack.ts", "cdk/src/stacks/chat-api-ts-stack.ts"],
+          [
+            "chat-api-fastapi-stack.ts",
+            "cdk/src/stacks/chat-api-fastapi-stack.ts"
+          ],
+          ["cdk/bin/app.ts", "cdk/bin/app.ts"]
+        ],
+        "cols": ["Setting", "Ephemeral", "Staging and production"],
+        "rows": [
+          [
+            "Which names count as which",
+            "Anything that is not <code>stag</code> or <code>prod</code>, including a developer's own <code>$USER</code>",
+            "<code>stag</code> and <code>prod</code> only"
+          ],
+          [
+            "Removal policy on both tables and the user pool",
+            "<code>DESTROY</code>",
+            "<code>RETAIN</code>"
+          ],
+          ["Cognito access token validity", "24 hours", "1 hour"],
+          ["SnapStart on the FastAPI function", "Off", "On published versions"],
+          [
+            "Resource and stack name prefix",
+            "<code>{environment}-govuk-chat</code>, truncated to 40 characters",
+            "<code>stag-govuk-chat</code>, <code>prod-govuk-chat</code>"
+          ],
+          [
+            "Region",
+            "<code>eu-west-1</code> unless <code>CDK_DEFAULT_REGION</code> says otherwise",
+            "The same"
+          ]
+        ]
+      }
+    ],
+    "w": 1540,
+    "h": 580
+  },
+  "security": {
+    "name": "Security",
+    "order": 4,
+    "group": "Cross-cutting",
+    "audience": "Anyone reviewing what a caller, a function or an agent is allowed to do",
+    "blurb": "The chain of authority on each API: what admits a caller, what the code then runs as, and what that identity may reach. Two chains, because the two APIs are guarded in completely different ways.",
+    "note": "What is absent matters as much as what is present here, so the absences are listed rather than drawn. Nothing in this repository creates a customer-managed key, point-in-time recovery, deletion protection, a Web ACL, a log retention period, a tracing configuration, a Secrets Manager secret or an SSM parameter.",
+    "tables": [
+      {
+        "name": "What this repository does not set",
+        "code": [
+          ["chat-api-ts-stack.ts", "cdk/src/stacks/chat-api-ts-stack.ts"],
+          [
+            "chat-api-fastapi-stack.ts",
+            "cdk/src/stacks/chat-api-fastapi-stack.ts"
+          ],
+          ["agui-agent-stack.ts", "cdk/src/stacks/agui-agent-stack.ts"],
+          ["cdk/bin/app.ts", "cdk/bin/app.ts"]
+        ],
+        "cols": ["Control", "Where it would be set", "What the code does"],
+        "rows": [
+          [
+            "Customer-managed encryption key",
+            "Table properties",
+            "Not set. Both tables take the AWS-owned default key"
+          ],
+          [
+            "Point-in-time recovery",
+            "Table properties",
+            "Not set on either table"
+          ],
+          [
+            "Deletion protection",
+            "Table properties",
+            "Not set. Outside ephemeral environments a <code>RETAIN</code> removal policy is all that keeps a table"
+          ],
+          [
+            "Web ACL, rate limit or usage plan",
+            "API properties",
+            "None on either API"
+          ],
+          [
+            "Log retention",
+            "Function properties",
+            "Not set, so log groups keep everything indefinitely"
+          ],
+          ["Tracing", "Function properties", "Not set on either function"],
+          [
+            "Secrets Manager or SSM",
+            "Anywhere",
+            "Nothing read or created. The only secret is the app client secret the pool generates"
+          ],
+          [
+            "VPC, subnet or security group",
+            "Anywhere",
+            "None, so nothing here runs in a private subnet"
+          ]
+        ]
+      },
+      {
+        "name": "What each identity may do",
+        "code": [
+          ["chat-api-ts-stack.ts", "cdk/src/stacks/chat-api-ts-stack.ts"],
+          [
+            "chat-api-fastapi-stack.ts",
+            "cdk/src/stacks/chat-api-fastapi-stack.ts"
+          ],
+          ["agui-agent-stack.ts", "cdk/src/stacks/agui-agent-stack.ts"],
+          ["example-agent-stack.ts", "cdk/src/stacks/example-agent-stack.ts"]
+        ],
+        "cols": ["Identity", "May do", "On what"],
+        "rows": [
+          [
+            "Invoke function role · TypeScript",
+            "Read and write; invoke an agent runtime",
+            "Its own table; its own runtime and the paths beneath it"
+          ],
+          [
+            "AG-UI runtime role",
+            "Invoke models; create, get and list events",
+            "Every inference profile in the account and every foundation model in every region; its own memory"
+          ],
+          [
+            "FastAPI function role",
+            "Read and write; invoke models; invoke and stop a runtime",
+            "Its own table; the same model wildcards; its own runtime"
+          ],
+          [
+            "Example runtime role",
+            "Invoke models; create, get and list events",
+            "The same model wildcards; its own memory"
+          ]
+        ]
+      }
+    ],
+    "w": 1060,
+    "h": 600
+  },
+  "delivery": {
+    "name": "Delivery",
+    "order": 5,
+    "group": "Cross-cutting",
+    "audience": "Anyone asking how a change reaches an environment",
+    "blurb": "How a change gets deployed. Continuous integration checks and synthesises; it never deploys. The only thing in this repository that deploys is a script a person runs on their own machine.",
+    "note": "No workflow here holds an AWS credential: there is no role to assume, no credential step and no OIDC token request anywhere in the workflows. The only secret any of them uses is the token for the private prompts repository. How staging and production are deployed is not visible in this repository.",
+    "tables": [
+      {
+        "name": "What runs where",
+        "code": [
+          ["cdk-ci.yaml", ".github/workflows/cdk-ci.yaml"],
+          ["cdk-synth.sh", "cdk/scripts/cdk-synth.sh"],
+          ["dev-cdk-deploy.sh", "scripts/dev-cdk-deploy.sh"],
+          [
+            "check-dev-aws-credentials.sh",
+            "scripts/check-dev-aws-credentials.sh"
+          ]
+        ],
+        "cols": ["Step", "Where it runs", "What it needs"],
+        "rows": [
+          [
+            "Tests, lint, format, type checks",
+            "GitHub Actions, one workflow per package",
+            "Nothing but the checkout"
+          ],
+          [
+            "<code>cdk synth</code>",
+            "GitHub Actions",
+            "The private repository token, and Docker to bundle each agent"
+          ],
+          [
+            "<code>cdk deploy</code>",
+            "A developer's own machine",
+            "Credentials for the role the guard expects"
+          ],
+          [
+            "Anything that deploys automatically",
+            "Nowhere",
+            "There is no deployment workflow in this repository"
+          ]
+        ]
+      },
+      {
+        "name": "The four deploy commands, one per stack",
+        "code": [
+          [
+            "chat-api-ts/cdk-deploy.sh",
+            "services/chat-api-ts/scripts/cdk-deploy.sh"
+          ],
+          [
+            "chat-api-fastapi/cdk-deploy.sh",
+            "services/chat-api-fastapi/scripts/cdk-deploy.sh"
+          ],
+          [
+            "agui-agent/cdk-deploy.sh",
+            "services/agui-agent/scripts/cdk-deploy.sh"
+          ],
+          [
+            "example-agent/cdk-deploy.sh",
+            "services/example-agent/scripts/cdk-deploy.sh"
+          ]
+        ],
+        "cols": ["Run this", "Deploys"],
+        "rows": [
+          [
+            "<code>services/chat-api-ts/scripts/cdk-deploy.sh</code>",
+            "<code>ChatApiTsStack</code>"
+          ],
+          [
+            "<code>services/chat-api-fastapi/scripts/cdk-deploy.sh</code>",
+            "<code>ChatApiFastapiStack</code>"
+          ],
+          [
+            "<code>services/agui-agent/scripts/cdk-deploy.sh</code>",
+            "<code>AguiAgentStack</code>"
+          ],
+          [
+            "<code>services/example-agent/scripts/cdk-deploy.sh</code>",
+            "<code>ExampleAgentStack</code>"
+          ]
+        ]
+      }
+    ],
+    "w": 940,
+    "h": 540
+  },
+  "resources": {
+    "name": "Resources",
+    "order": 6,
+    "group": "Reference",
+    "audience": "Cost, audit and incident scoping — the detail behind every badge",
+    "blurb": "Every AWS resource the CDK app declares, counted per environment by reading the constructs.",
+    "note": "Counts are read from the source, not synthesised. This repository's CDK app bundles every agent in Docker against a private git dependency, so nothing outside its own CI can synthesise it — which is also why no count here is gated by a build. Environments are ephemeral by default: only <code>stag</code> and <code>prod</code> are durable, and every other name, including a developer's own, gets its own copy of all four stacks.",
+    "inventory": "resources.json"
+  }
+}

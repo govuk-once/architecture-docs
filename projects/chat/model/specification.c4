@@ -1,0 +1,27 @@
+// Shared across every view in this workspace.
+//
+// Element kinds carry ownership — who owns a box is the thing a reader must not get
+// wrong. `boundary` is visual framing (a platform, a stack, an organisation) and nests,
+// so any C4 renderer shows the same containment the explorer does.
+//
+// Identifiers are scoped per view (context_agent, request_agent). They are not the
+// same element: each tab argues something different about the same system.
+//
+// Every link cites a file in the govuk-chat-v2 repository; the
+// build refuses a link into any other repository, and a path that no longer exists.
+
+specification {
+  element actor    { style { shape person } }
+  element platform { style { shape rectangle } }
+  element internal { style { shape rectangle } }
+  element external { style { shape rectangle } }
+  element boundary {
+    style {
+      shape rectangle
+      opacity 10%
+    }
+  }
+
+  tag request-path
+  tag off-request-path
+}

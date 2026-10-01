@@ -1,0 +1,229 @@
+// UDP architecture — Request path.
+//
+// Every hop one consumer call takes, numbered in reading order, with the identity
+// exchange as the worked example: it is the call FLEX makes to turn its own user id into
+// another service's, and it touches every gate on the way in.
+
+model {
+
+  request_flex = internal '1. FLEX udp gateway' {
+    #request-path
+    description 'the consumer'
+    link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/iam-consumer-construct.ts 'iam-consumer-construct.ts'
+    link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/consumer-config-construct.ts 'consumer-config-construct.ts'
+    link https://github.com/govuk-once/user-data-platform/blob/main/libs/utils/schemas/routes/routes.ts 'routes.ts'
+    metadata {
+      type 'GOV.UK Once system · consumer'
+      tech 'STS AssumeRole · SigV4'
+      role 'Assumes the consumer role UDP created for it, signs the request, and adds the two headers every data route requires.'
+      facts [
+        'The role trusts the consumer\'s account, optionally with an external id, and is named <code>{env}-consumer-{name}-role</code>.',
+        '<code>GET /v1/identity/exchange?requiredService=…</code> with <code>requesting-service</code> and <code>requesting-service-user-id</code>: which service is asking, and its own id for the person.',
+        'The consumer secret also carries an API key, and the e2e client sends it as <code>x-api-key</code> — but no method requires one.'
+      ]
+      sourceId 'flex'
+      order '1'
+      x '64'
+      y '30'
+      w '262'
+      h '62'
+      ownership 'govuk'
+    }
+  }
+
+  request_vpce = internal '2. Consumer VPC endpoint' {
+    #request-path
+    description 'execute-api, in FLEX\'s account'
+    link https://github.com/govuk-once/user-data-platform/blob/main/cdk/cdk.context.json 'cdk.context.json'
+    link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/stacks/main-stack.ts 'main-stack.ts'
+    metadata {
+      type 'AWS::EC2::VPCEndpoint · not UDP\'s'
+      tech 'Interface endpoint for execute-api'
+      role 'The only door: the API is private, and its policy names the endpoints allowed through it.'
+      facts [
+        'Each consumer\'s endpoint id is part of its entry in the SSM consumer config, and is added to the API\'s allow list at synth.',
+        'The committed development context lists one for <code>flex</code> and one for <code>gdsuns</code>.'
+      ]
+      sourceId 'vpce'
+      order '2'
+      x '64'
+      y '160'
+      w '262'
+      h '62'
+      ownership 'govuk'
+    }
+  }
+
+  request_account = boundary 'UDP account · VPC' {
+    link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/vpc-construct.ts 'vpc-construct.ts'
+    metadata {
+      type 'AWS account boundary'
+      tech 'One VPC, isolated subnets only'
+      role 'Everything from the API inward runs here; the Lambdas have no route to the internet.'
+      facts [
+        'The Lambdas sit in the isolated subnets, and reach DynamoDB and KMS only through VPC endpoints — see Network.'
+      ]
+      sourceId 'account'
+      order '0'
+      x '40'
+      y '280'
+      w '760'
+      h '404'
+      boundary 'hard'
+    }
+
+    request_api = platform '3. Private REST API' {
+      #request-path
+      description 'PRIVATE · IAM · WAF'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/api-gateway-construct.ts 'api-gateway-construct.ts'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/lambda-construct.ts 'lambda-construct.ts'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/waf-construct.ts 'waf-construct.ts'
+      metadata {
+        type 'AWS::ApiGateway::RestApi'
+        tech 'api-{env} · stage {env}'
+        role 'Three checks before a Lambda runs: the endpoint the call came through, the signature, and the WAF.'
+        facts [
+          'The resource policy denies <code>execute-api:Invoke</code> from any <code>aws:sourceVpce</code> not in the list, then allows the listed ones.',
+          'Every method is <code>AWS_IAM</code>: the SigV4 signature must resolve to a role whose policy names this method — the consumer role\'s does, per permission.',
+          'The stage throttles at 100 requests a second with a burst of 200; the regional WAF rate-limits an IP at 300,000 and applies the SQLi, common and known-bad-inputs rule sets.',
+          'Caching is forced off in the stack — the comment says temporarily.'
+        ]
+        sourceId 'api'
+        order '3'
+        x '64'
+        y '330'
+        w '262'
+        h '62'
+        ownership 'udp'
+        awsIcon 'apigateway'
+      }
+    }
+
+    request_keys = platform 'API key and usage plan' {
+      #request-path
+      description 'sent, never required'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/consumer-usage-plan-construct.ts 'consumer-usage-plan-construct.ts'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/lambda-construct.ts 'lambda-construct.ts'
+      metadata {
+        type 'AWS::ApiGateway::UsagePlan'
+        tech 'one per consumer'
+        role 'A key and a usage plan exist per consumer — 20 requests a second, burst 10, by default — and no method sets <code>apiKeyRequired</code>.'
+        facts [
+          'So the per-consumer throttle applies to nothing; the stage throttle is the only one in force. The key\'s value is read back with a custom resource and exported for the tests.'
+        ]
+        sourceId 'keys'
+        order '4'
+        x '480'
+        y '330'
+        w '262'
+        h '62'
+        ownership 'udp'
+        awsIcon 'apigateway'
+      }
+    }
+
+    request_fn = platform '4. exchangeIdentity Lambda' {
+      #request-path
+      description 'isolated subnet · 512 MB · 30 s'
+      link https://github.com/govuk-once/user-data-platform/blob/main/src/exchangeIdentityLambda/handler.ts 'exchangeIdentityLambda/handler.ts'
+      link https://github.com/govuk-once/user-data-platform/blob/main/libs/utils/middleware/zodValidator.ts 'zodValidator.ts'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/lambda-construct.ts 'lambda-construct.ts'
+      metadata {
+        type 'AWS::Lambda::Function'
+        tech 'nodejs24.x · reserved concurrency 2 (dev) or 50'
+        role 'Validates the headers and query against the route\'s zod schema, resolves the caller\'s user, then looks the wanted service up.'
+        facts [
+          'The middleware chain is the same on all thirteen route Lambdas — see Components. A schema failure is a 400 before the handler runs.',
+          'Two table reads: the requester\'s identity by <code>{service}#{id}</code>, then the <code>sk-index</code> query <code>sk = udpId and begins_with(pk, "{requiredService}#")</code>.'
+        ]
+        sourceId 'fn'
+        order '5'
+        x '64'
+        y '460'
+        w '262'
+        h '62'
+        ownership 'udp'
+        awsIcon 'lambda'
+      }
+    }
+
+    request_table = platform '5. Identity table' {
+      #request-path
+      description 'udp-identity-{env} · sk-index'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/dynamodb-construct.ts 'dynamodb-construct.ts'
+      link https://github.com/govuk-once/user-data-platform/blob/main/libs/data-access/services/DynamoDbIdentityService.ts 'DynamoDbIdentityService.ts'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/vpc-construct.ts 'vpc-construct.ts'
+      metadata {
+        type 'AWS::DynamoDB::Table'
+        tech 'On demand · CMK · point-in-time recovery'
+        role 'One row per link: <code>pk = {service}#{serviceId}</code>, <code>sk = udpId</code>. The GSI inverts that, so a person\'s links are one query.'
+        facts [
+          'Reached through the DynamoDB interface endpoint — see Network; a row past its <code>ttl</code> is treated as absent.',
+          'The response is stripped of <code>pk</code>, <code>sk</code>, <code>udpId</code> and <code>ttl</code> on the way out, leaving <code>serviceName</code> and <code>serviceId</code>.'
+        ]
+        sourceId 'table'
+        order '6'
+        x '64'
+        y '590'
+        w '262'
+        h '62'
+        ownership 'udp'
+        awsIcon 'dynamodb'
+      }
+    }
+  }
+
+  request_flex -> request_vpce 'HTTPS · SigV4' {
+    metadata {
+      protocol 'HTTPS to the private API\'s DNS name'
+      auth 'SigV4 with the assumed consumer role'
+      carries 'The exchange request, with x-api-key and the two requesting-service headers'
+      order '1'
+    }
+  }
+  request_vpce -> request_api 'PrivateLink' {
+    link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/api-gateway-construct.ts 'api-gateway-construct.ts'
+    metadata {
+      protocol 'AWS PrivateLink, across accounts'
+      auth 'The endpoint id, against the resource policy'
+      carries 'The request, unchanged'
+      order '2'
+    }
+  }
+  request_api -> request_keys 'x-api-key' {
+    metadata {
+      protocol '—'
+      auth '—'
+      carries 'A key the gateway does not check'
+      edgeStyle 'dash'
+      order '3'
+    }
+  }
+  request_api -> request_fn 'AWS_PROXY' {
+    link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/lambda-construct.ts 'lambda-construct.ts'
+    metadata {
+      protocol 'Lambda proxy integration'
+      auth 'API Gateway\'s invoke permission on the function'
+      carries 'The whole request as an event'
+      order '4'
+    }
+  }
+  request_fn -> request_table 'Query · sk-index' {
+    link https://github.com/govuk-once/user-data-platform/blob/main/libs/data-access/services/DynamoDbIdentityService.ts 'DynamoDbIdentityService.ts'
+    link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/vpc-construct.ts 'vpc-construct.ts'
+    metadata {
+      protocol 'DynamoDB, through the interface endpoint'
+      auth 'The function\'s role: GetItem and Query on the table and its indexes'
+      carries 'Two reads; the linked record back'
+      order '5'
+    }
+  }
+}
+
+views {
+  view request {
+    title 'Request path'
+    include request_flex, request_vpce
+    include request_account, request_account.**
+  }
+}

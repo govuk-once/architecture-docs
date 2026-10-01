@@ -1,5 +1,5 @@
 /**
- * The source commit a project's committed facts were last derived from.
+ * The source commits a project's committed facts were last derived from.
  *
  * `pnpm sync` pulls a checkout and `pnpm facts` derives from it, and both need an answer
  * to the same question: has this project's source actually moved since the last run? With
@@ -18,8 +18,10 @@
  * all still be what they were — so editing a deriving script or hand-editing the facts
  * re-derives instead of quietly going stale.
  *
- * Everything here takes the project it is asking about. Two projects track two different
- * repositories at two different commits, and nothing about the mechanism cares which.
+ * A project that reads one repository records one state, as the whole file. A project
+ * that reads several records one per source, under `sources`, keyed by the name its
+ * citations use — each repository moves on its own, and each is read up to its own
+ * commit. The git helpers take the source they are asking about for the same reason.
  */
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -30,7 +32,7 @@ import { format } from "prettier";
 
 import type { Derivation } from "../derive/index.js";
 import { inDocs } from "./paths.js";
-import { builtFrom, type Project } from "./projects.js";
+import { builtFrom, type Project, type Source } from "./projects.js";
 
 export const STATE_FILE = "architecture-source.json";
 
@@ -99,10 +101,8 @@ function parseCommit(line: string): Commit {
   return { sha, committed, subject };
 }
 
-export function headCommit(project: Project): Commit {
-  return parseCommit(
-    git(["log", "-1", `--format=${LOG_FORMAT}`], project.sourceRoot),
-  );
+export function headCommit(source: Source): Commit {
+  return parseCommit(git(["log", "-1", `--format=${LOG_FORMAT}`], source.dir));
 }
 
 /**
@@ -119,33 +119,23 @@ export function headCommit(project: Project): Commit {
  * False also covers a commit that is no longer on the branch at all — a force-push or a
  * rebase — which is equally a range nobody should be shown a number for.
  */
-export function ensureRange(
-  project: Project,
-  sha: string,
-  depth = 250,
-): boolean {
-  const at = project.sourceRoot;
+export function ensureRange(source: Source, sha: string, depth = 250): boolean {
+  const at = source.dir;
   const reachable = () =>
     tryGit(["merge-base", "--is-ancestor", sha, "HEAD"], at) !== null;
   if (reachable()) return true;
   if (tryGit(["rev-parse", "--is-shallow-repository"], at) !== "true")
     return false;
-  tryGit(
-    ["fetch", `--deepen=${String(depth)}`, "origin", project.source.ref],
-    at,
-  );
+  tryGit(["fetch", `--deepen=${String(depth)}`, "origin", source.ref], at);
   return reachable();
 }
 
 export function changedFiles(
-  project: Project,
+  source: Source,
   from: string,
   to = "HEAD",
 ): string[] {
-  const out = tryGit(
-    ["diff", "--name-only", `${from}..${to}`],
-    project.sourceRoot,
-  );
+  const out = tryGit(["diff", "--name-only", `${from}..${to}`], source.dir);
   return out ? out.split("\n").filter(Boolean) : [];
 }
 
@@ -155,25 +145,25 @@ export function changedFiles(
  * heard of, which no citation can lead you to.
  */
 export function addedFiles(
-  project: Project,
+  source: Source,
   from: string,
   to = "HEAD",
 ): string[] {
   const out = tryGit(
     ["diff", "--name-only", "--diff-filter=A", `${from}..${to}`],
-    project.sourceRoot,
+    source.dir,
   );
   return out ? out.split("\n").filter(Boolean) : [];
 }
 
 export function commitsBetween(
-  project: Project,
+  source: Source,
   from: string,
   to = "HEAD",
 ): Commit[] {
   const out = tryGit(
     ["log", `--format=${LOG_FORMAT}`, `${from}..${to}`],
-    project.sourceRoot,
+    source.dir,
   );
   return out ? out.split("\n").filter(Boolean).map(parseCommit) : [];
 }
@@ -215,69 +205,109 @@ export function derivationHash(
  * The state file
  * ------------------------------------------------------------------------------------ */
 
-export function readState(project: Project): SourceState | null {
-  if (!existsSync(project.statePath)) return null;
-  try {
-    const parsed = JSON.parse(
-      readFileSync(project.statePath, "utf8"),
-    ) as Partial<SourceState>;
-    // A file of another shape is treated as no record at all, never as a partial one.
-    if (!parsed.derived?.sha || !parsed.repo) return null;
-    return { ...parsed, read: parsed.read ?? null } as SourceState;
-  } catch {
-    return null;
-  }
+/** A record of another shape is treated as no record at all, never as a partial one. */
+function valid(parsed: Partial<SourceState> | undefined): SourceState | null {
+  if (!parsed?.derived?.sha || !parsed.repo) return null;
+  return { ...parsed, read: parsed.read ?? null } as SourceState;
 }
 
-/** Prettier-formatted, like the facts: it is committed, and eslint lints JSON too. */
-export async function writeState(
+/** Every source's recorded state, by source id; null where nothing is recorded. */
+export function readStates(
   project: Project,
-  state: SourceState,
+): Record<string, SourceState | null> {
+  const out: Record<string, SourceState | null> = Object.fromEntries(
+    project.sources.map((s) => [s.id, null]),
+  );
+  if (!existsSync(project.statePath)) return out;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(readFileSync(project.statePath, "utf8"));
+  } catch {
+    return out;
+  }
+  if (project.qualified) {
+    const all =
+      (parsed as { sources?: Record<string, Partial<SourceState>> }).sources ??
+      {};
+    for (const s of project.sources) out[s.id] = valid(all[s.id]);
+  } else {
+    const [only] = project.sources;
+    if (only) out[only.id] = valid(parsed as Partial<SourceState>);
+  }
+  return out;
+}
+
+export const readState = (
+  project: Project,
+  source: Source,
+): SourceState | null => readStates(project)[source.id] ?? null;
+
+/**
+ * Prettier-formatted, like the facts: it is committed, and eslint lints JSON too. A
+ * single-source project's file is its one state, exactly as before there could be more.
+ */
+export async function writeStates(
+  project: Project,
+  states: Record<string, SourceState | null>,
 ): Promise<void> {
+  const kept = project.sources.flatMap((s) => {
+    const st = states[s.id];
+    return st ? [[s.id, st] as const] : [];
+  });
+  const body = project.qualified
+    ? { sources: Object.fromEntries(kept) }
+    : kept[0]?.[1];
+  if (!body) return;
   mkdirSync(path.dirname(project.statePath), { recursive: true });
   writeFileSync(
     project.statePath,
-    await format(JSON.stringify(state), { parser: "json" }),
+    await format(JSON.stringify(body), { parser: "json" }),
   );
 }
 
 /**
- * Records that the model's cited files have been read up to the checkout's HEAD. Nothing
- * else moves `read`: not a build, not a derivation, not a sync. It needs a `derived`
- * record to sit beside, because a state file is one thing, not two, and the facts must
- * exist before anyone can claim to have read against them.
+ * Records that the model's cited files in one source have been read up to that checkout's
+ * HEAD. Nothing else moves `read`: not a build, not a derivation, not a sync. It needs a
+ * `derived` record to sit beside, because the facts must exist before anyone can claim to
+ * have read against them.
  */
 export async function markRead(
   project: Project,
+  source: Source,
   head: Commit,
 ): Promise<SourceState> {
-  const state = readState(project);
+  const states = readStates(project);
+  const state = states[source.id];
+  const from = project.qualified ? ` from ${source.id}` : "";
   if (!state)
     throw new Error(
-      `projects/${project.id}: nothing derived yet — run \`pnpm facts ${project.id}\` before marking anything read`,
+      `projects/${project.id}: nothing derived yet${from} — ` +
+        `run \`pnpm facts ${project.id}\` before marking anything read`,
     );
   const next = { ...state, read: head };
-  await writeState(project, next);
+  await writeStates(project, { ...states, [source.id]: next });
   return next;
 }
 
 /**
- * Why the recorded state cannot be reused, or null when it can.
+ * Why one source's recorded state cannot be reused, or null when it can.
  *
  * The reason is prose because it is printed. "Up to date" with no statement of what was
  * checked is exactly the kind of unbacked claim this repository exists to avoid.
  */
 export function staleness(
   project: Project,
+  source: Source,
   derivation: Derivation | null,
   state: SourceState | null,
   head: Commit,
 ): string | null {
-  const src = project.source;
   if (!state)
-    return `no ${STATE_FILE} — nothing records what the facts came from`;
-  if (state.repo !== src.repo || state.ref !== src.ref)
-    return `built from ${state.repo} (${state.ref}), now pointed at ${src.repo} (${src.ref})`;
+    return project.qualified
+      ? `no record of ${source.id} in ${STATE_FILE} — nothing records what the facts came from`
+      : `no ${STATE_FILE} — nothing records what the facts came from`;
+  if (state.repo !== source.repo || state.ref !== source.ref)
+    return `built from ${state.repo} (${state.ref}), now pointed at ${source.repo} (${source.ref})`;
   const d = state.derived;
   if (d.sha !== head.sha)
     return `the source moved — derived at ${short(d.sha)}, the checkout is at ${short(head.sha)}`;

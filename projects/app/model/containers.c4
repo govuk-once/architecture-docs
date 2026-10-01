@@ -1,0 +1,532 @@
+// GOV.UK App architecture — Containers.
+//
+// Every separately deployable part these repositories create, and the traffic between
+// them and the app. Build and deploy live on Delivery.
+
+model {
+
+  containers_app = internal 'GOV.UK App' {
+    #request-path
+    description 'iOS · Android'
+    link https://github.com/govuk-once/govuk-mobile-ios-app/blob/main/Production/govuk_ios/Services/AppEnvironmentService.swift 'ios · AppEnvironmentService.swift'
+    link https://github.com/govuk-once/govuk-mobile-android-app/blob/main/data/build.gradle.kts 'android · data/build.gradle.kts'
+    metadata {
+      type 'Mobile client'
+      tech 'Swift · Kotlin'
+      role 'The only caller of the token proxy, the chat proxy and the config bucket.'
+      facts [
+        'The token proxy and the linking endpoint share one API Gateway host per environment in the app\'s configuration.'
+      ]
+      sourceId 'app'
+      order '1'
+      x '560'
+      y '30'
+      w '490'
+      h '62'
+      ownership 'app'
+    }
+  }
+
+  containers_auth = boundary 'auth stack · services/auth' {
+    metadata {
+      type 'SAM stack'
+      tech 'AWS SAM · nodejs22.x'
+      role 'Sign-in, tokens, account events, and the alarms on all of it.'
+      facts [
+        'Its Conditions decide what each environment gets: the test-only functions never reach production, and the smoke test runs in development, staging and production but not integration.',
+        'No function sets reserved concurrency, although three alarm comments say 1000.',
+        'Its alarms and their topics are on Delivery, with the people they reach.'
+      ]
+      sourceId 'auth'
+      order '0'
+      x '40'
+      y '150'
+      w '1020'
+      h '524'
+      boundary 'hard'
+    }
+
+    containers_proxyapi = internal 'Token proxy API' {
+      #request-path
+      description 'REST · 3 routes · WAF'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/template.yaml 'backend · services/auth/template.yaml'
+      metadata {
+        type 'AWS::Serverless::Api'
+        tech 'API Gateway REST · no authorizer'
+        role 'The one API the app calls in this stack: token, revoke and linking.'
+        facts [
+          'Stage named for the environment, X-Ray tracing on, INFO execution logs and a JSON access log.',
+          'No route on it has an authorizer — each function checks what it needs itself, or nothing.'
+        ]
+        sourceId 'proxyapi'
+        order '2'
+        x '324'
+        y '200'
+        w '200'
+        h '62'
+        ownership 'app'
+        resources [ 'api-token-proxy' ]
+      }
+    }
+
+    containers_ssapi = internal 'Shared-signals API' {
+      #request-path
+      description 'custom domain · authorizer'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/template.yaml 'backend · services/auth/template.yaml'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/shared-signal-authorizer/app.ts 'backend · shared-signal-authorizer/app.ts'
+      metadata {
+        type 'AWS::Serverless::Api'
+        tech 'API Gateway REST · REGIONAL'
+        role 'Where One Login posts account events, at <code>shared-signals.{env}.app-backend.service.gov.uk</code>.'
+        facts [
+          'Its default authorizer accepts only a Cognito access token issued to the client and pool named in the secret <code>/{ConfigStackName}/shared-signal/secrets-config</code>.',
+          'The only custom domain and the only DNS record either template creates.'
+        ]
+        sourceId 'ssapi'
+        order '3'
+        x '816'
+        y '200'
+        w '220'
+        h '62'
+        ownership 'app'
+        resources [ 'api-shared-signals', 'fn-ss-authorizer', 'ss-domain', 'ss-dns' ]
+      }
+    }
+
+    containers_proxyfn = internal 'Auth proxy' {
+      #request-path
+      description 'token grants · App Check'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/proxy/proxy.ts 'backend · proxy.ts'
+  
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/template.yaml 'backend · services/auth/template.yaml'
+    metadata {
+        type 'AWS::Serverless::Function'
+        tech 'POST /oauth2/token'
+        role 'Forwards code and refresh grants to Cognito with the client secret added.'
+        facts [
+          'Checks the App Check token only while the SSM flag <code>feature-flags/attestation</code> is on — see Sign-in path.'
+        ]
+        sourceId 'proxyfn'
+        order '4'
+        x '64'
+        y '200'
+        w '200'
+        h '62'
+        ownership 'app'
+        resources [ 'fn-auth-proxy' ]
+      }
+    }
+
+    containers_revoke = internal 'Revoke' {
+      #request-path
+      description 'RevokeToken on Cognito'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/revoke-token/revoke-refresh-token.ts 'backend · revoke-refresh-token.ts'
+  
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/template.yaml 'backend · services/auth/template.yaml'
+    metadata {
+        type 'AWS::Serverless::Function'
+        tech 'POST /oauth2/revoke'
+        role 'Revokes a refresh token when the user signs out.'
+        facts [
+          'Looks the client secret up with <code>DescribeUserPoolClient</code> rather than reading the secret the proxy uses.',
+          'No attestation check on this route.'
+        ]
+        sourceId 'revoke'
+        order '5'
+        x '324'
+        y '330'
+        w '200'
+        h '62'
+        ownership 'app'
+        resources [ 'fn-revoke' ]
+      }
+    }
+
+    containers_linking = internal 'Linking verification' {
+      #request-path
+      description 'JWE for DVLA'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/linking-verification/app.ts 'backend · linking-verification/app.ts'
+  
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/template.yaml 'backend · services/auth/template.yaml'
+    metadata {
+        type 'AWS::Serverless::Function'
+        tech 'POST /linking/verification'
+        role 'Mints the token a DVLA account link starts with.'
+        facts [
+          'Hashes the user\'s email and <code>sub</code> with two secret keys, signs a JWT with a KMS key and encrypts it to DVLA\'s public key.',
+          'The JWT expires ten minutes after it is minted.',
+          'Reads the caller\'s token without verifying its signature — see Security.'
+        ]
+        sourceId 'linking'
+        order '6'
+        x '584'
+        y '200'
+        w '200'
+        h '62'
+        ownership 'app'
+        resources [ 'fn-linking' ]
+      }
+    }
+
+    containers_receiver = internal 'Shared-signals receiver' {
+      #request-path
+      description 'sign out, or delete'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/shared-signal-receiver/handlers/credential-change-handler.ts 'backend · credential-change-handler.ts'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/shared-signal-receiver/handlers/account-purged-handler.ts 'backend · account-purged-handler.ts'
+  
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/template.yaml 'backend · services/auth/template.yaml'
+    metadata {
+        type 'AWS::Serverless::Function'
+        tech 'POST /receiver'
+        role 'Acts on One Login\'s account events.'
+        facts [
+          'A credential change signs the user out everywhere; an account purge signs them out and deletes the Cognito user.',
+          'Verifies each Security Event Token\'s signature, issuer, audience and type before acting on it.'
+        ]
+        sourceId 'receiver'
+        order '7'
+        x '816'
+        y '330'
+        w '220'
+        h '62'
+        ownership 'app'
+        resources [ 'fn-ss-receiver' ]
+      }
+    }
+
+    containers_cognito = internal 'Cognito user pool' {
+      #request-path
+      description 'One Login federation · WAF'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/template.yaml 'backend · services/auth/template.yaml'
+      metadata {
+        type 'AWS::Cognito::UserPool'
+        tech 'Cognito · email as username'
+        role 'Holds a user for everyone who has signed in, and issues their tokens.'
+        facts [
+          'The app\'s authorize request lands on its hosted UI, in the browser — drawn on Sign-in path, hop 2.',
+          'Two clients: the app\'s, with the authorization code flow and a secret; and a client-credentials client for shared signals.',
+          'Deletion protection is on unless the stack is ephemeral. Advanced security runs in audit mode, in production only.',
+          'No MFA and no Lambda triggers are configured — One Login does the authenticating.'
+        ]
+        sourceId 'cognito'
+        order '8'
+        x '324'
+        y '460'
+        w '262'
+        h '62'
+        ownership 'app'
+        resources [ 'cognito-pool', 'cognito-domain', 'cognito-idp', 'cognito-clients', 'cognito-resource-server' ]
+      }
+    }
+
+    containers_health = internal 'Health check' {
+      #off-request-path
+      description 'every 10 minutes'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/template.yaml 'backend · services/auth/template.yaml'
+  
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/shared-signal-health-check/service/health-check-service.ts 'backend · health-check-service.ts'
+    metadata {
+        type 'AWS::Serverless::Function'
+        tech 'EventBridge schedule'
+        role 'Checks the shared-signals link is alive.'
+        facts [
+          'Gets a client-credentials token, then posts to a verification URL; both URLs are SSM parameters, and anything but a 204 is a failure.'
+        ]
+        sourceId 'health'
+        order '9'
+        x '64'
+        y '590'
+        w '200'
+        h '62'
+        ownership 'app'
+        resources [ 'fn-ss-health' ]
+      }
+    }
+
+    containers_smoke = internal 'Smoke test' {
+      #off-request-path
+      description 'weekdays, every 5 minutes'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/smoke-test/app.ts 'backend · smoke-test/app.ts'
+  
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/template.yaml 'backend · services/auth/template.yaml'
+    metadata {
+        type 'AWS::Serverless::Function'
+        tech 'cron · Europe/London, 9 to 5'
+        role 'Signs a test user in end to end, through the proxy, and reports success as a metric.'
+        facts [
+          'Mints a real App Check token in development and production; staging runs it without attestation.',
+          'Its alarm has actions disabled, so a failing smoke test notifies nobody.'
+        ]
+        sourceId 'smoke'
+        order '10'
+        x '278'
+        y '590'
+        w '200'
+        h '62'
+        ownership 'app'
+        resources [ 'fn-smoke-test' ]
+      }
+    }
+
+    containers_testfns = internal 'Test-only functions' {
+      #off-request-path
+      description 'never in production'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/template.yaml 'backend · services/auth/template.yaml'
+  
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/tests/lambdas/acceptance/app.ts 'backend · tests/lambdas/acceptance/app.ts'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/tests/lambdas/transmitter/app.ts 'backend · tests/lambdas/transmitter/app.ts'
+    metadata {
+        type 'AWS::Serverless::Function · conditional'
+        tech 'acceptance · mock transmitter · PagerDuty test'
+        role 'Functions that exist for testing, gated by Conditions.'
+        facts [
+          'An acceptance-testing function that runs allowlisted AWS SDK commands, in development and staging.',
+          'A mock shared-signals transmitter, and its API, everywhere except production and integration.',
+          'A PagerDuty stand-in that only logs what the alarm topic sends it, everywhere except production.'
+        ]
+        sourceId 'testfns'
+        order '11'
+        x '492'
+        y '590'
+        w '200'
+        h '62'
+        ownership 'app'
+        resources [ 'fn-acceptance', 'fn-mock-transmitter', 'api-mock-transmitter', 'fn-pagerduty-test' ]
+      }
+    }
+  }
+
+  containers_chatstack = boundary 'chat stack · services/chat' {
+    metadata {
+      type 'SAM stack'
+      tech 'AWS SAM · nodejs22.x'
+      role 'A REST API that authorizes the app\'s token and proxies to the chat service.'
+      facts [
+        'One function, no resource-level Conditions: every environment gets the same stack.'
+      ]
+      sourceId 'chatstack'
+      order '0'
+      x '1080'
+      y '150'
+      w '462'
+      h '264'
+      boundary 'hard'
+    }
+
+    containers_chatapi = internal 'Chat proxy API' {
+      #request-path
+      description '{proxy+} · WAF'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/chat/template.yaml 'backend · services/chat/template.yaml'
+      metadata {
+        type 'AWS::ApiGateway::RestApi'
+        tech 'ANY /{proxy+} · HTTP_PROXY'
+        role 'Passes any path through to the upstream, once the authorizer allows it.'
+        facts [
+          'Replaces the <code>Authorization</code> header with the service token and adds <code>Govuk-Chat-End-User-Id</code>, both from the authorizer.',
+          'Its WAF answers 429 to an IP above 300 requests and applies the known-bad-inputs rules.'
+        ]
+        sourceId 'chatapi'
+        order '13'
+        x '1104'
+        y '200'
+        w '200'
+        h '62'
+        ownership 'app'
+        resources [ 'api-chat' ]
+      }
+    }
+
+    containers_chatauth = internal 'Chat authorizer' {
+      #request-path
+      description 'checks token, swaps it'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/chat/authorizer/client/authorizer-client.ts 'backend · authorizer-client.ts'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/chat/authorizer/client/getAuthorizerResult.ts 'backend · getAuthorizerResult.ts'
+  
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/chat/template.yaml 'backend · services/chat/template.yaml'
+    metadata {
+        type 'AWS::Serverless::Function'
+        tech 'REQUEST authorizer · 300 s cache'
+        role 'Verifies the app\'s Cognito access token and hands back the service token to use instead.'
+        facts [
+          'Verifies against the user pool and client IDs held in <code>/{ConfigStackName}/chat/secrets</code>, with the service bearer token beside them.',
+          'Allows <code>execute-api:Invoke</code> on every resource of the API, not just the one requested.'
+        ]
+        sourceId 'chatauth'
+        order '14'
+        x '1104'
+        y '330'
+        w '200'
+        h '62'
+        ownership 'app'
+        resources [ 'fn-chat-authorizer' ]
+      }
+    }
+  }
+
+  containers_cfgzone = boundary 'remote config' {
+    metadata {
+      type 'S3 objects · another repository'
+      tech 'govuk-mobile-backend-config'
+      role 'Static, signed files the app reads without authenticating.'
+      facts [
+        'The buckets are not created by anything in these repositories; the workflows only sync files into them.'
+      ]
+      sourceId 'cfgzone'
+      order '0'
+      x '1562'
+      y '150'
+      w '270'
+      h '134'
+      boundary 'hard'
+    }
+
+    containers_bucket = internal 'Config bucket' {
+      #request-path
+      description 'signed JSON · S3'
+      link https://github.com/alphagov/govuk-mobile-backend-config/blob/main/tools/deploy-signed-json.sh 'config · deploy-signed-json.sh'
+      link https://github.com/alphagov/govuk-mobile-backend-config/blob/main/tools/create-signature.sh 'config · create-signature.sh'
+      metadata {
+        type 'S3 bucket per environment'
+        tech 'govuk-app-remote-config-{integration,production}'
+        role 'Holds <code>config/appinfo/{ios,android}</code> and <code>static/topics/</code>.'
+        facts [
+          'Every file is signed with the KMS key <code>alias/config-signing-key</code> using ECDSA with SHA-256, and the signature is stored as the object metadata <code>govuk-sig</code>.',
+          'Each deploy then purges a Fastly service\'s cache.'
+        ]
+        sourceId 'bucket'
+        order '15'
+        x '1586'
+        y '200'
+        w '222'
+        h '62'
+        ownership 'app'
+        awsIcon 's3'
+      }
+    }
+  }
+
+  containers_chatup = external 'Chat API' {
+    #request-path
+    description 'upstream · URL from SSM'
+    link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/chat/template.yaml 'backend · services/chat/template.yaml'
+    metadata {
+      type 'Upstream · owner not stated'
+      tech 'HTTPS'
+      role 'The service that answers chat questions.'
+      facts [
+        'Addressed by the SSM parameter <code>/{ConfigStackName}/chat/api-url</code>; nothing in these repositories says what it is.'
+      ]
+      sourceId 'chatup'
+      order '16'
+      x '1318'
+      y '330'
+      w '200'
+      h '62'
+      ownership 'unstated'
+    }
+  }
+
+  containers_onelogin = external 'GOV.UK One Login' {
+    #request-path
+    description 'OIDC · shared signals'
+    link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/template.yaml 'backend · services/auth/template.yaml'
+    metadata {
+      type 'Outside GOV.UK Once'
+      tech 'OIDC · SSF'
+      role 'Authenticates the user for Cognito, and tells the stack when an account changes.'
+      facts [
+        'The user pool\'s only identity provider.',
+        'The receiver trusts events from the issuer <code>https://ssf.account.gov.uk/</code> only.'
+      ]
+      sourceId 'onelogin'
+      order '17'
+      x '1104'
+      y '460'
+      w '242'
+      h '62'
+      ownership 'third'
+    }
+  }
+
+  containers_app -> containers_proxyapi 'token · revoke · linking' {
+    link https://github.com/govuk-once/govuk-mobile-ios-app/blob/main/Production/govuk_ios/Networking/GOVRequest/GovRequest+Authentication.swift 'ios · GovRequest+Authentication.swift'
+    metadata {
+      protocol 'HTTPS'
+      auth 'x-attestation-token on token requests; none on the others'
+      carries 'Token grants, revocations, linking requests'
+      order '1'
+    }
+  }
+  containers_app -> containers_chatapi 'conversations' {
+    link https://github.com/govuk-once/govuk-mobile-ios-app/blob/main/Production/govuk_ios/Networking/GOVRequest/GOVRequest+Chat.swift 'ios · GOVRequest+Chat.swift'
+    metadata {
+      protocol 'HTTPS'
+      auth 'Cognito access token as Bearer'
+      carries '/conversation requests'
+      order '3'
+    }
+  }
+  containers_app -> containers_bucket 'fetches config' {
+    link https://github.com/govuk-once/govuk-mobile-ios-app/blob/main/Production/govuk_ios/Networking/GOVRequest/GOVRequest+App.swift 'ios · GOVRequest+App.swift'
+    metadata {
+      protocol 'HTTPS'
+      auth 'None — the files are signed'
+      carries 'appinfo/{platform} and topic pages'
+      order '4'
+    }
+  }
+  containers_proxyapi -> containers_proxyfn 'token' {
+    metadata { protocol 'Lambda proxy integration' auth 'Invoke permission' carries 'POST /oauth2/token: code and refresh grants' order '5' }
+  }
+  containers_proxyapi -> containers_revoke 'revoke' {
+    metadata { protocol 'Lambda proxy integration' auth 'Invoke permission' carries 'POST /oauth2/revoke: a refresh token and client ID' order '6' }
+  }
+  containers_proxyapi -> containers_linking 'linking' {
+    metadata { protocol 'Lambda proxy integration' auth 'Invoke permission' carries 'POST /linking/verification: the caller\'s access token, in the body' order '7' }
+  }
+  containers_proxyfn -> containers_cognito 'grant + secret' {
+    link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/proxy/proxy.ts 'backend · proxy.ts'
+    metadata { protocol 'HTTPS POST /oauth2/token' auth 'The app client\'s secret' carries 'The grant' order '8' }
+  }
+  containers_revoke -> containers_cognito 'RevokeToken' {
+    link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/revoke-token/revoke-refresh-token.ts 'backend · revoke-refresh-token.ts'
+    metadata { protocol 'Cognito API' auth 'IAM role' carries 'The refresh token to revoke' order '9' }
+  }
+  containers_linking -> containers_cognito 'AdminGetUser' {
+    link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/linking-verification/app.ts 'backend · linking-verification/app.ts'
+    metadata { protocol 'Cognito API' auth 'IAM role' carries 'The user\'s email, by username' order '10' }
+  }
+  containers_ssapi -> containers_receiver 'invokes' {
+    metadata { protocol 'Lambda proxy integration' auth 'The Cognito authorizer, first' carries 'A Security Event Token' order '11' }
+  }
+  containers_receiver -> containers_cognito 'sign out · delete' {
+    link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/template.yaml 'backend · services/auth/template.yaml'
+    metadata { protocol 'Cognito API' auth 'IAM role' carries 'AdminUserGlobalSignOut, AdminDeleteUser' order '12' }
+  }
+  containers_cognito -> containers_onelogin 'federates' {
+    metadata { protocol 'OIDC' auth 'Client ID and secret under /{ConfigStackName}/onelogin/' carries 'The sign-in' order '13' }
+  }
+  containers_onelogin -> containers_ssapi 'account events' {
+    link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/shared-signal-receiver/handlers/credential-change-handler.ts 'backend · credential-change-handler.ts'
+    metadata { protocol 'HTTPS POST /receiver' auth 'Client-credentials token, allowlisted IPs' carries 'Security Event Tokens' order '14' }
+  }
+  containers_chatapi -> containers_chatauth 'authorizes' {
+    link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/chat/template.yaml 'backend · services/chat/template.yaml'
+    metadata { protocol 'Lambda REQUEST authorizer' auth 'Invoke permission' carries 'The Authorization header' order '15' }
+  }
+  containers_chatapi -> containers_chatup 'HTTP proxy' {
+    link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/chat/template.yaml 'backend · services/chat/template.yaml'
+    metadata { protocol 'HTTPS' auth 'Service bearer token' carries 'The request, and the user\'s sub' order '16' }
+  }
+}
+
+views {
+  view containers {
+    title 'Containers'
+    include containers_app
+    include containers_auth, containers_auth.**
+    include containers_chatstack, containers_chatstack.**
+    include containers_cfgzone, containers_cfgzone.**
+    include containers_chatup, containers_onelogin
+  }
+}

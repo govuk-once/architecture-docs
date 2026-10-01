@@ -1,0 +1,1276 @@
+{
+  "context": {
+    "name": "Context",
+    "order": 1,
+    "group": "Architecture",
+    "audience": "Anyone new to the GOV.UK App, including non-engineers",
+    "blurb": "The GOV.UK App among the systems it talks to: the backend built for it, the platform it reaches GOV.UK Once through, and the services outside the programme it calls itself. C4 level 1 — runtime only.",
+    "note": "2 apps · 2 SAM stacks · 1 config repository · FLEX behind a remote flag",
+    "w": 1660,
+    "h": 600
+  },
+  "signin": {
+    "name": "Sign-in path",
+    "order": 2,
+    "group": "Architecture",
+    "audience": "On-call, and anyone tracing a sign-in",
+    "blurb": "Every hop a sign-in takes, numbered in reading order, and what each one checks. The authorize leg runs in a browser and never touches the proxy; the token leg runs from the app to the proxy, which adds the one secret the app never holds.",
+    "note": "Hops 2 and 3 are a browser redirect round trip, drawn both ways. Hops 7a and 7b are what the access token is for; either can come first.",
+    "dashMeans": "a supporting fetch, not the sign-in itself",
+    "tables": [
+      {
+        "name": "What the app keeps, where, and for how long",
+        "code": [
+          ["template.yaml", "backend:services/auth/template.yaml"],
+          ["0.0.85.toml", "config:versions/appinfo/0.0.85.toml"],
+          [
+            "Container+Configs.swift",
+            "ios:Production/govuk_ios/Extensions/Container/Container+Configs.swift"
+          ],
+          [
+            "Constants.swift",
+            "ios:Production/govuk_ios/Extensions/GovKit/Constants.swift"
+          ],
+          [
+            "AuthModule.kt",
+            "android:data/src/main/kotlin/uk/gov/govuk/data/auth/di/AuthModule.kt"
+          ],
+          [
+            "TimeoutManager.kt",
+            "android:app/src/main/kotlin/uk/gov/govuk/TimeoutManager.kt"
+          ]
+        ],
+        "cols": ["Item", "Where", "Lifetime"],
+        "rows": [
+          ["Access token", "Memory", "5 minutes, set on the app client"],
+          ["ID token", "Memory", "1 hour"],
+          [
+            "Refresh token",
+            "Secure store: current biometrics on iOS; biometrics or passcode on Android",
+            "365 days at Cognito. The app stops using it once <code>refreshTokenExpirySeconds</code> from the signed config has passed since the ID token was issued: 31,532,400 by default, 604,800 in integration"
+          ],
+          [
+            "Session",
+            "Memory",
+            "Ends after 15 minutes without interaction, with a warning at 13; the refresh token survives it"
+          ]
+        ]
+      }
+    ],
+    "w": 1200,
+    "h": 740
+  },
+  "linking": {
+    "name": "Account linking",
+    "order": 3,
+    "group": "Architecture",
+    "audience": "Anyone tracing a DVLA link, and anyone reviewing it",
+    "blurb": "The one flow that crosses every system on the Context tab, numbered in reading order: the app backend mints a token, the user signs in at DVLA in the browser, DVLA sends the app back a token of its own, and the app hands that to FLEX.",
+    "note": "Hop 4 is a browser round trip drawn both ways: the app opens DVLA with the minted token, and DVLA returns the user on a govuk:// deep link. What DVLA checks in between is not in any repository here.",
+    "dashMeans": "a read of a secret or key, not a hop the request takes",
+    "tables": [
+      {
+        "name": "What each platform sends to DVLA, and what the backend gives it",
+        "code": [
+          [
+            "linking-verification/app.ts",
+            "backend:services/auth/linking-verification/app.ts"
+          ],
+          [
+            "DVLAAuthenticationViewModel.swift",
+            "ios:Production/govuk_ios/ViewModels/DVLA/DVLAAuthenticationViewModel.swift"
+          ],
+          [
+            "DvlaViewModel.kt",
+            "android:feature/dvla/src/main/kotlin/uk/gov/govuk/dvla/DvlaViewModel.kt"
+          ],
+          [
+            "VerificationResponse.kt",
+            "android:feature/dvla/src/main/kotlin/uk/gov/govuk/dvla/linking/remote/model/VerificationResponse.kt"
+          ],
+          [
+            "FlagRepo.kt",
+            "android:config/src/main/kotlin/uk/gov/govuk/config/data/flags/FlagRepo.kt"
+          ],
+          [
+            "AppConfigService.swift",
+            "ios:Production/govuk_ios/Services/AppConfigService.swift"
+          ]
+        ],
+        "cols": [
+          "",
+          "The backend returns",
+          "The app opens DVLA with",
+          "Gated by"
+        ],
+        "rows": [
+          [
+            "iOS",
+            "<code>{\"token\": jwe}</code>",
+            "<code>?token=</code> the JWE",
+            "The <code>dvla</code> flag: forced on in staging builds, forced off in production builds"
+          ],
+          [
+            "Android",
+            "<code>{\"token\": jwe}</code>",
+            "<code>?verification=</code> and <code>?session=</code>, read from <code>verificationHash</code> and <code>sessionHash</code> — fields the response does not carry",
+            "<code>profile_v2</code>, and a DVLA flag whose remote side is hard-coded off"
+          ]
+        ]
+      }
+    ],
+    "w": 800,
+    "h": 560
+  },
+  "containers": {
+    "name": "Containers",
+    "order": 4,
+    "group": "Architecture",
+    "audience": "Backend engineers, and anyone reviewing a change to the app backend",
+    "blurb": "Every separately deployable part these repositories create, and the traffic between them and the app. Build and deploy live on Delivery. C4 level 2.",
+    "note": "WAFs, keys and log groups are policy on these containers, not containers; they are on Security.",
+    "tables": [
+      {
+        "name": "Every route, and what stands in front of it",
+        "code": [
+          ["auth template.yaml", "backend:services/auth/template.yaml"],
+          ["chat template.yaml", "backend:services/chat/template.yaml"]
+        ],
+        "cols": ["API", "Route", "Handled by", "Guarded by"],
+        "rows": [
+          [
+            "Token proxy",
+            "<code>POST /oauth2/token</code>",
+            "Auth proxy",
+            "WAF; PKCE for code grants; App Check while the flag is on"
+          ],
+          [
+            "Token proxy",
+            "<code>POST /oauth2/revoke</code>",
+            "Revoke",
+            "WAF only"
+          ],
+          [
+            "Token proxy",
+            "<code>POST /linking/verification</code>",
+            "Linking verification",
+            "WAF only"
+          ],
+          [
+            "Shared signals",
+            "<code>POST /receiver</code>",
+            "Shared-signals receiver",
+            "WAF IP allowlist; client-credentials authorizer; the event's signature"
+          ],
+          [
+            "Chat proxy",
+            "<code>ANY /{proxy+}</code>",
+            "HTTP proxy to the chat service",
+            "WAF; Cognito access-token authorizer"
+          ],
+          [
+            "Mock transmitter",
+            "<code>ANY /{proxy+}</code>",
+            "Mock transmitter",
+            "Nothing — never in production or integration"
+          ]
+        ]
+      }
+    ],
+    "w": 1872,
+    "h": 700
+  },
+  "components": {
+    "name": "Components",
+    "order": 5,
+    "group": "Architecture",
+    "audience": "Backend and app engineers — this is the code, not the infrastructure",
+    "blurb": "The middleware each backend function runs a request through, in order, and the layer both apps send every request through. C4 level 3: what a change to one of these files changes.",
+    "note": "Read each column top to bottom. A middleware that throws ends the request at the error handler; nothing below it runs.",
+    "dashMeans": "taken only on an error, or for one kind of request",
+    "tables": [
+      {
+        "name": "What each function reads from outside its own code",
+        "code": [
+          ["proxy/handler.ts", "backend:services/auth/proxy/handler.ts"],
+          ["proxy/config.ts", "backend:services/auth/proxy/config.ts"],
+          ["proxy/secret.ts", "backend:services/auth/proxy/secret.ts"],
+          ["feature-flags.ts", "backend:services/auth/proxy/feature-flags.ts"],
+          [
+            "receiver/config",
+            "backend:services/auth/shared-signal-receiver/config/index.ts"
+          ],
+          ["fetch-jwks.ts", "backend:libs/auth-utils/src/jwks/fetch-jwks.ts"],
+          [
+            "http-with-retry.ts",
+            "backend:libs/http-utils/src/send/http-with-retry.ts"
+          ],
+          ["chat/authorizer/app.ts", "backend:services/chat/authorizer/app.ts"]
+        ],
+        "cols": ["Function", "Reads", "From", "Cached"],
+        "rows": [
+          [
+            "Auth proxy",
+            "Attestation flag",
+            "SSM <code>/{ConfigStackName}/feature-flags/attestation</code>",
+            "15 minutes"
+          ],
+          [
+            "Auth proxy",
+            "Cognito domain prefix",
+            "SSM <code>/{ConfigStackName}/cognito/custom-domain</code>",
+            "Per call to getConfig"
+          ],
+          [
+            "Auth proxy",
+            "Client secret",
+            "Secrets Manager <code>/{ConfigStackName}/cognito/client-secret</code>",
+            "Per request"
+          ],
+          [
+            "Auth proxy",
+            "App Check signing keys",
+            "<code>firebaseappcheck.googleapis.com/v1/jwks</code>",
+            "6 hours, by the shared library"
+          ],
+          [
+            "Shared-signals receiver",
+            "One Login's signing keys",
+            "The JWKS URL the template sets per environment",
+            "6 hours; the 10-minute environment value is never read"
+          ],
+          [
+            "Shared-signals receiver",
+            "Whether it is on",
+            "SSM, resolved at deploy time into <code>ENABLE_SHARED_SIGNAL</code>",
+            "Until the next deploy"
+          ],
+          [
+            "Chat authorizer",
+            "Pool id, client id, service token",
+            "Secrets Manager <code>/{ConfigStackName}/chat/secrets</code>",
+            "For the life of the container"
+          ],
+          [
+            "Any outbound HTTP",
+            "—",
+            "<code>sendHttpRequest</code>: 3 attempts on 408, 500, 502, 503 and 504, with full-jitter backoff, 5 s timeout",
+            "—"
+          ]
+        ]
+      }
+    ],
+    "w": 1760,
+    "h": 830
+  },
+  "client": {
+    "name": "Inside the app",
+    "order": 6,
+    "group": "Architecture",
+    "audience": "App engineers, and anyone asking what the app calls and when",
+    "blurb": "The app's features, grouped by the backend each one calls, with that backend directly beneath. Both platforms have every feature here; the tables say where they differ.",
+    "note": "Most features are switched by release flags in the signed config; iOS also compiles in overrides that beat it.",
+    "tables": [
+      {
+        "name": "Which release flag switches each feature on",
+        "code": [
+          [
+            "Feature.swift",
+            "ios:Production/govuk_ios/Model/AppConfig/Feature.swift"
+          ],
+          [
+            "AppConfigService.swift",
+            "ios:Production/govuk_ios/Services/AppConfigService.swift"
+          ],
+          [
+            "FlagRepo.kt",
+            "android:config/src/main/kotlin/uk/gov/govuk/config/data/flags/FlagRepo.kt"
+          ],
+          [
+            "DebugFlags.kt",
+            "android:config/src/main/kotlin/uk/gov/govuk/config/data/flags/DebugFlags.kt"
+          ],
+          [
+            "ReleaseFlags.kt",
+            "android:config/src/main/kotlin/uk/gov/govuk/config/data/remote/model/ReleaseFlags.kt"
+          ],
+          ["0.0.85.toml", "config:versions/appinfo/0.0.85.toml"]
+        ],
+        "cols": ["Feature", "Flag", "iOS", "Android"],
+        "rows": [
+          [
+            "Your account, and push",
+            "<code>profile_v2</code>",
+            "From the config; forced on in staging builds",
+            "From the config; on by default in debug builds"
+          ],
+          [
+            "Driving (DVLA)",
+            "<code>dvla</code> on iOS; none on Android",
+            "Forced on in staging builds, off in production builds",
+            "Needs <code>profile_v2</code>, and its remote side is hard-coded off"
+          ],
+          [
+            "Messages",
+            "<code>messages</code>",
+            "Forced on in staging builds, off in production builds",
+            "Remote side hard-coded off"
+          ],
+          [
+            "Travel alerts",
+            "<code>travelalerts</code>",
+            "Forced on in staging builds, off in production builds",
+            "Remote side hard-coded off"
+          ],
+          ["Chat", "<code>chat</code>", "From the config", "From the config"],
+          [
+            "Search, topics, local services, notifications",
+            "<code>search</code> · <code>topics</code> · <code>localServices</code> · <code>notifications</code>",
+            "From the config",
+            "From the config"
+          ]
+        ]
+      },
+      {
+        "name": "Every FLEX call the app makes",
+        "code": [
+          [
+            "GOVRequest+UserState.swift",
+            "ios:Production/govuk_ios/Networking/GOVRequest/GOVRequest+UserState.swift"
+          ],
+          [
+            "GOVRequest+DVLA.swift",
+            "ios:Production/govuk_ios/Networking/GOVRequest/GOVRequest+DVLA.swift"
+          ],
+          [
+            "GOVRequest+NotificationCentre.swift",
+            "ios:Production/govuk_ios/Networking/GOVRequest/GOVRequest+NotificationCentre.swift"
+          ],
+          [
+            "GOVRequest+Travel.swift",
+            "ios:Production/govuk_ios/Networking/GOVRequest/GOVRequest+Travel.swift"
+          ],
+          [
+            "UserService.swift",
+            "ios:Production/govuk_ios/Services/UserService.swift"
+          ],
+          [
+            "UserApi.kt",
+            "android:data/src/main/kotlin/uk/gov/govuk/data/user/remote/UserApi.kt"
+          ],
+          [
+            "IdentityApi.kt",
+            "android:data/src/main/kotlin/uk/gov/govuk/data/identity/remote/IdentityApi.kt"
+          ],
+          [
+            "DvlaApi.kt",
+            "android:feature/dvla/src/main/kotlin/uk/gov/govuk/dvla/remote/DvlaApi.kt"
+          ],
+          [
+            "NotificationsApi.kt",
+            "android:feature/messages/src/main/kotlin/uk/gov/govuk/messages/data/remote/NotificationsApi.kt"
+          ],
+          [
+            "GroupsApi.kt",
+            "android:feature/travelalerts/src/main/kotlin/uk/gov/govuk/travelalerts/data/remote/GroupsApi.kt"
+          ],
+          [
+            "TravelApi.kt",
+            "android:feature/travelalerts/src/main/kotlin/uk/gov/govuk/travelalerts/data/remote/TravelApi.kt"
+          ],
+          [
+            "NotificationsViewModel.kt",
+            "android:notifications/src/main/kotlin/uk/gov/govuk/notifications/NotificationsViewModel.kt"
+          ]
+        ],
+        "cols": ["Method", "Path", "iOS", "Android"],
+        "rows": [
+          ["GET", "<code>/app/udp/v1/users/me</code>", "✓", "✓"],
+          [
+            "PATCH",
+            "<code>/app/udp/v1/users/me/notifications</code>",
+            "Written, never sent",
+            "Written, call sites commented out"
+          ],
+          ["GET", "<code>/app/udp/v1/identity</code>", "✓", "✓"],
+          ["POST · DELETE", "<code>/app/udp/v1/identity/dvla</code>", "✓", "✓"],
+          ["GET", "<code>/app/dvla/v1/customer/licence</code>", "✓", "✓"],
+          ["GET", "<code>/app/dvla/v1/customer/vehicles</code>", "✓", "✓"],
+          ["GET", "<code>/app/dvla/v1/customer/vehicle/{id}</code>", "✓", "✓"],
+          [
+            "GET",
+            "<code>/app/dvla/v1/vehicle-enquiry/{registration}</code>",
+            "✓",
+            "—"
+          ],
+          ["POST", "<code>/app/dvla/v1/share-code</code>", "✓", "✓"],
+          ["GET", "<code>/app/dvla/v1/share-codes</code>", "✓", "✓"],
+          [
+            "POST",
+            "<code>/app/dvla/v1/share-code/{id}/cancel</code>",
+            "✓",
+            "✓"
+          ],
+          [
+            "GET · PATCH · DELETE",
+            "<code>/app/uns/v1/notifications</code>, and <code>…/{id}</code>, <code>…/{id}/status</code>",
+            "✓",
+            "✓"
+          ],
+          ["GET", "<code>/app/groups/v1/groups</code>", "✓", "✓"],
+          [
+            "GET",
+            "<code>/app/travel/v1/countries</code>",
+            "Declared, never called",
+            "Declared; a hard-coded list is returned instead"
+          ]
+        ]
+      }
+    ],
+    "w": 970,
+    "h": 1060
+  },
+  "security": {
+    "name": "Security",
+    "order": 7,
+    "group": "Cross-cutting",
+    "audience": "Security review, assurance and threat modelling",
+    "blurb": "The line between the phone and the backend: what the phone does before a request leaves it, what guards each way in, and the controls that bound all of it. Each client-side box sits above the backend box it talks to.",
+    "note": "Two switches decide how much of this is enforced, and both are SSM values outside every repository here: whether the token proxy checks App Check, and whether the receiver acts on account events.",
+    "tables": [
+      {
+        "name": "Where each control is proven",
+        "code": [
+          [
+            "validation/body.ts",
+            "backend:services/auth/proxy/validation/body.ts"
+          ],
+          [
+            "middleware/attestation.ts",
+            "backend:services/auth/proxy/middleware/attestation.ts"
+          ],
+          ["proxy.ts", "backend:services/auth/proxy/proxy.ts"],
+          ["auth template.yaml", "backend:services/auth/template.yaml"],
+          [
+            "credential-change-handler.ts",
+            "backend:services/auth/shared-signal-receiver/handlers/credential-change-handler.ts"
+          ],
+          [
+            "AuthenticationServiceClient.swift",
+            "ios:Production/govuk_ios/ServiceClients/AuthenticationServiceClient.swift"
+          ],
+          [
+            "AuthRepo.kt",
+            "android:data/src/main/kotlin/uk/gov/govuk/data/auth/AuthRepo.kt"
+          ],
+          [
+            "APIServiceClient.swift",
+            "ios:Production/govuk_ios/Networking/APIServiceClient.swift"
+          ],
+          [
+            "SignatureValidator.kt",
+            "android:config/src/main/kotlin/uk/gov/govuk/config/SignatureValidator.kt"
+          ],
+          ["create-signature.sh", "config:tools/create-signature.sh"]
+        ],
+        "cols": ["Control", "What it stops", "Where"],
+        "rows": [
+          [
+            "Ephemeral browser session for sign-in",
+            "A One Login session outliving the sign-in",
+            "Both apps"
+          ],
+          [
+            "PKCE required on code grants",
+            "An intercepted code being exchanged",
+            "Token proxy"
+          ],
+          [
+            "Client secret held by the proxy",
+            "The app's client being used without the proxy",
+            "Token proxy"
+          ],
+          [
+            "App Check on token requests",
+            "Token grants from something other than the app",
+            "Token proxy, <b>only while the attestation flag is on</b>"
+          ],
+          [
+            "Per-IP rate limits and known-bad-inputs rules",
+            "Floods and common exploit payloads",
+            "User pool, token proxy, chat proxy"
+          ],
+          [
+            "IP allowlist, client-credentials authorizer, signed events",
+            "Account events from anyone but One Login",
+            "Shared-signals API and receiver"
+          ],
+          [
+            "Global sign-out on a credential change",
+            "A session surviving a password change",
+            "Receiver, <b>only while its flag is on</b>"
+          ],
+          [
+            "Refresh-token revocation on sign-out",
+            "A signed-out session being refreshed",
+            "Revoke function"
+          ],
+          [
+            "Refresh token behind biometrics",
+            "A token read off an unlocked phone",
+            "Both apps"
+          ],
+          [
+            "Signed config and topic pages",
+            "A tampered config switching features or versions",
+            "Config workflows sign; both apps verify"
+          ]
+        ]
+      },
+      {
+        "name": "What leaves the phone for a third party",
+        "code": [
+          [
+            "GovUKProviderFactory.swift",
+            "ios:Production/govuk_ios/Services/AppAttest/GovUKProviderFactory.swift"
+          ],
+          [
+            "MainActivity.kt",
+            "android:app/src/main/kotlin/uk/gov/govuk/MainActivity.kt"
+          ],
+          ["AndroidManifest.xml", "android:app/src/main/AndroidManifest.xml"],
+          [
+            "OneSignalClient.kt",
+            "android:notifications/src/main/kotlin/uk/gov/govuk/notifications/OneSignalClient.kt"
+          ],
+          [
+            "NotificationService.swift",
+            "ios:Production/govuk_ios/Services/Notifications/NotificationService.swift"
+          ],
+          [
+            "Container+Services.swift",
+            "ios:Production/govuk_ios/Extensions/Container/Container+Services.swift"
+          ],
+          ["analytics/build.gradle.kts", "android:analytics/build.gradle.kts"]
+        ],
+        "cols": ["Recipient", "What", "When"],
+        "rows": [
+          [
+            "Firebase App Check · Google",
+            "An attestation request",
+            "With every token request"
+          ],
+          [
+            "Firebase Analytics and Crashlytics · Google",
+            "Usage events and crash reports",
+            "Only after the user consents"
+          ],
+          [
+            "OneSignal",
+            "The FLEX <code>pushId</code>, and the device's push registration",
+            "Only after consent, and only when FLEX is on"
+          ],
+          [
+            "Qualtrics",
+            "Nothing a survey project could receive",
+            "Its IDs are placeholders on iOS and empty on Android"
+          ],
+          [
+            "www.gov.uk and the search API",
+            "Search terms and postcodes",
+            "When the user searches or looks up a council"
+          ]
+        ]
+      },
+      {
+        "name": "Weaknesses the code shows",
+        "code": [
+          [
+            "linking-verification/app.ts",
+            "backend:services/auth/linking-verification/app.ts"
+          ],
+          [
+            "VerificationResponse.kt",
+            "android:feature/dvla/src/main/kotlin/uk/gov/govuk/dvla/linking/remote/model/VerificationResponse.kt"
+          ],
+          [
+            "DvlaViewModel.kt",
+            "android:feature/dvla/src/main/kotlin/uk/gov/govuk/dvla/DvlaViewModel.kt"
+          ],
+          ["feature-flags.ts", "backend:services/auth/proxy/feature-flags.ts"],
+          [
+            "GovUKProviderFactory.swift",
+            "ios:Production/govuk_ios/Services/AppAttest/GovUKProviderFactory.swift"
+          ],
+          [
+            "getAuthorizerResult.ts",
+            "backend:services/chat/authorizer/client/getAuthorizerResult.ts"
+          ],
+          [
+            "network_security_config.xml",
+            "android:app/src/main/res/xml/network_security_config.xml"
+          ],
+          ["app/build.gradle.kts", "android:app/build.gradle.kts"],
+          ["auth template.yaml", "backend:services/auth/template.yaml"]
+        ],
+        "cols": ["What", "Evidence", "What follows"],
+        "rows": [
+          [
+            "Linking verification trusts an unverified token",
+            "<code>decodeJwt</code>, not a verification; no authorizer or attestation on the route",
+            "A token naming an existing user, signed by anyone, is enough to be issued a DVLA linking token for that user"
+          ],
+          [
+            "Android's DVLA link reads fields the backend does not return",
+            "Android expects <code>verificationHash</code> and <code>sessionHash</code>; the backend returns <code>token</code>",
+            "The link would fail on Android. It is switched off in Android release builds"
+          ],
+          [
+            "App Check is enforced only by a flag",
+            "<code>feature-flags/attestation</code>, read from SSM",
+            "Whether production requires proof of the app is a parameter value in no repository"
+          ],
+          [
+            "iOS staging builds attest with an empty token",
+            "<code>EmptyTokenProvider</code> under <code>#if STAGING</code>",
+            "Staging sign-ins work only with the attestation flag off"
+          ],
+          [
+            "The chat authorizer's Allow covers every route",
+            "<code>Resource: '*'</code>, with a 300-second cache",
+            "One Allow is reused for any path with the same token until it expires"
+          ],
+          [
+            "No certificate pinning",
+            "Android trusts system CAs; nothing pins on iOS",
+            "A CA the phone trusts can intercept traffic"
+          ],
+          [
+            "Android release builds can be signed with the debug key",
+            "<code>signingConfigs.getByName(\"debug\")</code> when <code>RELEASE_KEYSTORE</code> is unset",
+            "A release built without the secret is signed, but not by the release key"
+          ],
+          [
+            "Two alarms notify nobody",
+            "The smoke-test and low-200-proportion alarms set <code>ActionsEnabled: false</code>",
+            "A failing smoke test is seen only by whoever looks"
+          ]
+        ]
+      }
+    ],
+    "w": 1960,
+    "h": 480
+  },
+  "delivery": {
+    "name": "Delivery",
+    "order": 8,
+    "group": "Cross-cutting",
+    "audience": "Anyone shipping a change, and on-call",
+    "blurb": "Four repositories, each in its own zone: what runs on a pull request, what ships a release, and where it lands. The last step each repository takes is here; anything after it happens somewhere these repositories do not show. The last zone is how the deployed backend reaches a person.",
+    "note": "Production for the backend, and the App Store and Play production track for the apps, are all reached by steps outside these repositories.",
+    "dashMeans": "a key used by the step, not a step in the pipeline",
+    "tables": [
+      {
+        "name": "Every workflow that ships something",
+        "code": [
+          ["ios alpha.yml", "ios:.github/workflows/alpha.yml"],
+          ["ios beta.yml", "ios:.github/workflows/beta.yml"],
+          ["ios schedule.yml", "ios:.github/workflows/schedule.yml"],
+          ["android alpha.yml", "android:.github/workflows/alpha.yml"],
+          ["android release.yml", "android:.github/workflows/release.yml"],
+          ["backend ci.yaml", "backend:.github/workflows/ci.yaml"],
+          ["backend publish.yaml", "backend:.github/workflows/publish.yaml"],
+          [
+            "config deploy-integration.yaml",
+            "config:.github/workflows/deploy-integration.yaml"
+          ],
+          [
+            "config deploy-production.yaml",
+            "config:.github/workflows/deploy-production.yaml"
+          ]
+        ],
+        "cols": ["Repository", "Workflow", "Runs on", "Reaches"],
+        "rows": [
+          [
+            "iOS",
+            "<code>alpha.yml</code>",
+            "Push to <code>main</code>, or by hand for Staging or Integration",
+            "Firebase App Distribution, <code>ios-alpha-testers</code>"
+          ],
+          [
+            "iOS",
+            "<code>beta.yml</code>",
+            "Push to <code>release/**</code>, and every Friday at 15:00 through <code>schedule.yml</code>",
+            "TestFlight, external group <code>GOV.UK APP</code>"
+          ],
+          [
+            "Android",
+            "<code>alpha.yml</code>",
+            "Push to <code>main</code>, or by hand",
+            "Firebase App Distribution, <code>android-alpha-testers</code>"
+          ],
+          [
+            "Android",
+            "<code>release.yml</code>",
+            "Push to <code>release/*</code>",
+            "Google Play internal track, as a draft"
+          ],
+          [
+            "Backend",
+            "<code>ci.yaml</code>",
+            "Every push, on any branch",
+            "Nothing: build, validate, test and scan"
+          ],
+          [
+            "Backend",
+            "<code>publish.yaml</code>",
+            "Push to <code>main</code> or <code>production</code>",
+            "<code>dev</code> always; <code>build</code> from <code>main</code> or <code>production</code>"
+          ],
+          [
+            "Config",
+            "<code>deploy-integration.yaml</code>",
+            "Push to <code>main</code>",
+            "<code>govuk-app-remote-config-integration</code>, then a Fastly purge"
+          ],
+          [
+            "Config",
+            "<code>deploy-production.yaml</code>",
+            "By hand only",
+            "<code>govuk-app-remote-config-production</code>, then a Fastly purge"
+          ]
+        ]
+      },
+      {
+        "name": "Every kind of test, where it runs, and what it gates",
+        "note": "Unit tests gate a pull request on both apps and every push on the backend. The tests that need a deployed stack — the backend's acceptance and integration suites — gate a push on the developer's machine, and are packaged into an image whose runner is outside these repositories.",
+        "code": [
+          ["ios .build.yml", "ios:Fastlane/.build.yml"],
+          ["ios Fastfile", "ios:Fastlane/Fastfile"],
+          ["ios lint.yml", "ios:.github/workflows/lint.yml"],
+          [
+            "android pull_request.yml",
+            "android:.github/workflows/pull_request.yml"
+          ],
+          [
+            "android instrumented_test.yml",
+            "android:.github/workflows/instrumented_test.yml"
+          ],
+          ["auth project.json", "backend:services/auth/project.json"],
+          ["vitest.config.ts", "backend:vitest.config.ts"],
+          ["run-tests.sh", "backend:services/auth/run-tests.sh"],
+          [".pre-commit-config.yaml", "backend:.pre-commit-config.yaml"],
+          [
+            "performance Makefile",
+            "backend:services/auth/tests/performance/Makefile"
+          ],
+          ["smoke-test/app.ts", "backend:services/auth/smoke-test/app.ts"],
+          ["config validate.yaml", "config:.github/workflows/validate.yaml"],
+          ["config tests.yaml", "config:.github/workflows/tests.yaml"]
+        ],
+        "cols": [
+          "Repository",
+          "Kind",
+          "What it covers",
+          "Where it runs",
+          "Gates"
+        ],
+        "rows": [
+          [
+            "iOS",
+            "Unit and snapshot tests",
+            "468 test files; snapshots through <code>iOSSnapshotTestCase</code>, so they need the one simulator the lane names, an iPhone 16 Pro on iOS 18.6",
+            "<code>fastlane unit</code>, on macOS runners",
+            "Every pull request, and every alpha and beta build"
+          ],
+          [
+            "iOS",
+            "SwiftLint <code>--strict</code> · SonarQube",
+            "Style, and Sonar's analysis of the coverage slather converts",
+            "GitHub Actions",
+            "Every pull request, and every alpha and beta build"
+          ],
+          [
+            "Android",
+            "Unit tests · Kover",
+            "141 test files; Kover writes the coverage Sonar reads",
+            "<code>gradlew koverXmlReportDebug</code>",
+            "Every pull request, and every alpha build"
+          ],
+          [
+            "Android",
+            "Android lint · SonarQube",
+            "Lint, and Sonar's analysis",
+            "GitHub Actions",
+            "Every pull request, and every alpha build"
+          ],
+          [
+            "Android",
+            "Instrumented tests",
+            "19 test files on a managed Pixel 3 API 33 device",
+            "<code>instrumented_test.yml</code>, call-only",
+            "<b>Nothing</b> — no workflow calls it"
+          ],
+          [
+            "Backend",
+            "Unit tests",
+            "The vitest <code>unit</code> project, with coverage",
+            "<code>ci.yaml</code>, and the pre-commit hook",
+            "Every push, and every commit on the developer's machine"
+          ],
+          [
+            "Backend",
+            "SAM validate · checkov · Semgrep · SonarQube",
+            "Template lint, five custom infrastructure checks, code scanning, a quality gate Sonar waits for",
+            "<code>ci.yaml</code>",
+            "Every push; checkov on every commit too"
+          ],
+          [
+            "Backend",
+            "Acceptance and integration tests",
+            "Sign-in and sign-out journeys, the OIDC client, attestation, and whether each WAF, log group and alarm exists, against a deployed stack",
+            "The pre-push hook, and the test image's entrypoint",
+            "A push from the developer's machine; what runs the image is outside the repository"
+          ],
+          [
+            "Backend",
+            "Load test",
+            "The shared-signals receiver under a k6 rate, up to 150 virtual users",
+            "A laptop, from the Makefile",
+            "Nothing — by hand"
+          ],
+          [
+            "Backend",
+            "Smoke test",
+            "A real sign-in through the proxy, with attestation in development and production",
+            "A scheduled Lambda in AWS, weekdays 9 to 5",
+            "Nothing — its alarm has actions disabled"
+          ],
+          [
+            "Config",
+            "Schema validation · JSON check · Jest",
+            "Every version file against its schema, every static file as JSON, the build's own tests",
+            "<code>validate.yaml</code> and <code>tests.yaml</code>",
+            "Every push"
+          ]
+        ]
+      },
+      {
+        "name": "How a change is named, numbered and gated",
+        "code": [
+          [".cz.toml", "backend:.cz.toml"],
+          ["ios Fastfile", "ios:Fastlane/Fastfile"],
+          ["app_version.sh", "ios:Scripts/app_version.sh"],
+          ["android app/build.gradle.kts", "android:app/build.gradle.kts"],
+          ["android Fastfile", "android:fastlane/Fastfile"],
+          ["config README.md", "config:README.md"],
+          [
+            "version-tracker.yaml",
+            "backend:.github/workflows/version-tracker.yaml"
+          ]
+        ],
+        "cols": ["Repository", "Commits", "Version", "Gate before a person"],
+        "rows": [
+          [
+            "iOS",
+            "Not enforced in the repository",
+            "Build number: the latest TestFlight or Firebase build plus one, set by the lane. Marketing version: Xcode's <code>MARKETING_VERSION</code>, not bumped in CI",
+            "TestFlight external testers; nothing submits to the App Store"
+          ],
+          [
+            "Android",
+            "Not enforced in the repository",
+            "<code>versionCode</code> from <code>VERSION_CODE</code> — the Play internal track's last plus one — else the run number, else 1. <code>versionName</code> is <code>1.6</code>, set in Gradle",
+            "A draft on the Play internal track; nothing promotes it"
+          ],
+          [
+            "Backend",
+            "commitizen: a type from nine, a scope, a Jira id, GPG-signed; squashed before commit by convention",
+            "<code>v{major}.{minor}.{patch}</code> tags from the npm version, bumped by commitizen; <code>major_version_zero</code> is set",
+            "None the repository shows beyond <code>build</code>. A cross-repo version tracker exists and never fires: its trigger is <code>branches: [main production]</code>, one branch name"
+          ],
+          [
+            "Config",
+            "Not enforced in the repository",
+            "A new version file, copied from the newest and bumped by hand",
+            "Production deploys only when run by hand, with no environment approval"
+          ]
+        ]
+      },
+      {
+        "name": "Every alarm, its threshold, and which topic it reaches",
+        "note": "43 alarms: 38 in the auth stack and 5 in the chat stack, 42 in integration, which has no smoke test. Paging reaches PagerDuty in production and a stand-in Lambda elsewhere; both topics reach Slack. Datapoints are how many of the evaluation periods must breach.",
+        "code": [
+          ["auth template.yaml", "backend:services/auth/template.yaml"],
+          ["chat template.yaml", "backend:services/chat/template.yaml"]
+        ],
+        "derived": { "from": "counts.alarms", "key": "id", "col": "Alarm" },
+        "cols": [
+          "Stack",
+          "Alarm",
+          "Metric",
+          "Fires when",
+          "Datapoints",
+          "Topic"
+        ],
+        "rows": [
+          [
+            "auth",
+            "<code>AttestationConcurrencyAlarm</code>",
+            "<code>AWS/Lambda ConcurrentExecutions</code>",
+            "at or above 800",
+            "1 of 1 × 60 s",
+            "PagerDuty"
+          ],
+          [
+            "auth",
+            "<code>AttestationLambdaErrorRateAlarm</code>",
+            "metric math",
+            "at or above 10",
+            "1 of 1",
+            "PagerDuty"
+          ],
+          [
+            "auth",
+            "<code>AttestationLow200ResponseProportionAlarm</code>",
+            "metric math",
+            "below the band",
+            "5 of 5",
+            "PagerDuty · actions disabled"
+          ],
+          [
+            "auth",
+            "<code>AttestationLowCompletionAlarm</code>",
+            "metric math",
+            "at or below 75",
+            "1 of 1",
+            "PagerDuty"
+          ],
+          [
+            "auth",
+            "<code>AttestationThrottlesAlarm</code>",
+            "<code>AWS/Lambda Throttles</code>",
+            "at or above 1",
+            "1 of 1 × 60 s",
+            "PagerDuty"
+          ],
+          [
+            "auth",
+            "<code>AttestationTimeoutAlarm</code>",
+            "<code>{stack}/Timeouts AttestationFunctionTimeout</code>",
+            "at or above 5",
+            "1 of 1 × 60 s",
+            "PagerDuty"
+          ],
+          [
+            "auth",
+            "<code>AuthProxyWafAlarm</code>",
+            "<code>AWS/WAFV2 BlockedRequests</code>",
+            "above 300",
+            "5 of 5 × 300 s",
+            "PagerDuty"
+          ],
+          [
+            "chat",
+            "<code>CloudWatchAlarmAuthorizerConcurrency</code>",
+            "<code>AWS/Lambda ConcurrentExecutions</code>",
+            "at or above 800",
+            "1 of 1 × 60 s",
+            "PagerDuty"
+          ],
+          [
+            "chat",
+            "<code>CloudWatchAlarmAuthorizerThrottles</code>",
+            "<code>AWS/Lambda Throttles</code>",
+            "at or above 1",
+            "1 of 1 × 60 s",
+            "PagerDuty"
+          ],
+          [
+            "chat",
+            "<code>CloudWatchAlarmAuthorizerTimeouts</code>",
+            "<code>{stack}/Timeouts ChatAuthorizerFunctionTimeout</code>",
+            "at or above 5",
+            "1 of 1 × 60 s",
+            "PagerDuty"
+          ],
+          [
+            "auth",
+            "<code>CloudwatchAlarmAuthProxy4xxErrors</code>",
+            "<code>Custom/ApiGateway AttestationProxyApiNonWAF4xxMetricFilter</code>",
+            "above 0.05",
+            "5 of 5 × 60 s",
+            "Warnings"
+          ],
+          [
+            "auth",
+            "<code>CloudwatchAlarmAuthProxy5xxErrors</code>",
+            "<code>AWS/ApiGateway 5XXError</code>",
+            "above 0.05",
+            "3 of 3 × 60 s",
+            "Warnings"
+          ],
+          [
+            "auth",
+            "<code>CloudwatchAlarmAuthProxyLatencyErrors</code>",
+            "<code>AWS/ApiGateway Latency</code>",
+            "at or above 2500",
+            "5 of 5 × 60 s",
+            "PagerDuty"
+          ],
+          [
+            "auth",
+            "<code>CloudwatchAlarmAuthProxyLowCount</code>",
+            "metric math",
+            "below the band",
+            "5 of 5",
+            "Warnings"
+          ],
+          [
+            "chat",
+            "<code>CloudwatchAlarmChatProxy5xxErrors</code>",
+            "<code>AWS/ApiGateway 5XXError</code>",
+            "above 0.05",
+            "3 of 3 × 60 s",
+            "Warnings"
+          ],
+          [
+            "chat",
+            "<code>CloudWatchAlarmChatProxyWafAlarm</code>",
+            "<code>AWS/WAFV2 BlockedRequests</code>",
+            "above 300",
+            "5 of 5 × 300 s",
+            "PagerDuty"
+          ],
+          [
+            "auth",
+            "<code>CloudWatchAlarmFederationThrottles</code>",
+            "<code>AWS/Cognito FederationThrottles</code>",
+            "above 5",
+            "5 of 5 × 60 s",
+            "PagerDuty"
+          ],
+          [
+            "auth",
+            "<code>CloudwatchAlarmRevokeToken4xxErrors</code>",
+            "<code>AWS/ApiGateway 4XXError</code>",
+            "above 0.05",
+            "5 of 5 × 60 s",
+            "Warnings"
+          ],
+          [
+            "auth",
+            "<code>CloudWatchAlarmSignInThrottles</code>",
+            "<code>AWS/Cognito SignInThrottles</code>",
+            "above 5",
+            "5 of 5 × 60 s",
+            "PagerDuty"
+          ],
+          [
+            "auth",
+            "<code>CloudWatchAlarmSignUpThrottles</code>",
+            "<code>AWS/Cognito SignUpThrottles</code>",
+            "above 5",
+            "5 of 5 × 60 s",
+            "PagerDuty"
+          ],
+          [
+            "auth",
+            "<code>CloudWatchAlarmTokenRefreshThrottles</code>",
+            "<code>AWS/Cognito TokenRefreshThrottles</code>",
+            "above 5",
+            "5 of 5 × 60 s",
+            "PagerDuty"
+          ],
+          [
+            "auth",
+            "<code>CognitoWebApplicationFirewallAlarm</code>",
+            "<code>AWS/WAFV2 WAFErrorRate</code>",
+            "above 5",
+            "5 of 5 × 60 s",
+            "PagerDuty"
+          ],
+          [
+            "auth",
+            "<code>LinkingVerificationConcurrencyAlarm</code>",
+            "<code>AWS/Lambda ConcurrentExecutions</code>",
+            "at or above 800",
+            "1 of 1 × 60 s",
+            "PagerDuty"
+          ],
+          [
+            "auth",
+            "<code>LinkingVerificationThrottlesAlarm</code>",
+            "<code>AWS/Lambda Throttles</code>",
+            "at or above 1",
+            "1 of 1 × 60 s",
+            "PagerDuty"
+          ],
+          [
+            "auth",
+            "<code>LinkingVerificationTimeoutAlarm</code>",
+            "<code>{stack}/Timeouts LinkingVerificationFunctionTimeout</code>",
+            "at or above 5",
+            "1 of 1 × 60 s",
+            "PagerDuty"
+          ],
+          [
+            "auth",
+            "<code>RevokeRefreshTokenConcurrencyAlarm</code>",
+            "<code>AWS/Lambda ConcurrentExecutions</code>",
+            "at or above 800",
+            "1 of 1 × 60 s",
+            "PagerDuty"
+          ],
+          [
+            "auth",
+            "<code>RevokeRefreshTokenThrottlesAlarm</code>",
+            "<code>AWS/Lambda Throttles</code>",
+            "at or above 1",
+            "1 of 1 × 60 s",
+            "PagerDuty"
+          ],
+          [
+            "auth",
+            "<code>RevokeRefreshTokenTimeoutAlarm</code>",
+            "<code>{stack}/Timeouts RevokeRefreshTokenFunctionTimeout</code>",
+            "at or above 5",
+            "1 of 1 × 60 s",
+            "PagerDuty"
+          ],
+          [
+            "auth",
+            "<code>SharedSignalApiGatewayAlarm4xxErrors</code>",
+            "<code>Custom/ApiGateway SharedSignalApiNonWAF4xxMetricFilter</code>",
+            "above 0.05",
+            "5 of 5 × 60 s",
+            "Warnings"
+          ],
+          [
+            "auth",
+            "<code>SharedSignalApiGatewayAlarm5xxErrors</code>",
+            "<code>AWS/ApiGateway 5XXError</code>",
+            "above 0.05",
+            "3 of 3 × 60 s",
+            "Warnings"
+          ],
+          [
+            "auth",
+            "<code>SharedSignalAuthorizerConcurrencyAlarm</code>",
+            "<code>AWS/Lambda ConcurrentExecutions</code>",
+            "at or above 800",
+            "1 of 1 × 60 s",
+            "PagerDuty"
+          ],
+          [
+            "auth",
+            "<code>SharedSignalAuthorizerThrottlesAlarm</code>",
+            "<code>AWS/Lambda Throttles</code>",
+            "at or above 1",
+            "1 of 1 × 60 s",
+            "PagerDuty"
+          ],
+          [
+            "auth",
+            "<code>SharedSignalAuthorizerTimeoutAlarm</code>",
+            "<code>{stack}/Timeouts SharedSignalAuthFunctionTimeout</code>",
+            "at or above 5",
+            "1 of 1 × 60 s",
+            "PagerDuty"
+          ],
+          [
+            "auth",
+            "<code>SharedSignalHealthCheckAlarmErrors</code>",
+            "<code>AWS/Lambda Errors</code>",
+            "above 1",
+            "2 of 2 × 600 s",
+            "PagerDuty"
+          ],
+          [
+            "auth",
+            "<code>SharedSignalHealthCheckAlarmFailedInvocations</code>",
+            "<code>AWS/Lambda Invocations</code>",
+            "at or below 0",
+            "2 of 2 × 600 s",
+            "PagerDuty"
+          ],
+          [
+            "auth",
+            "<code>SharedSignalHealthCheckConcurrencyAlarm</code>",
+            "<code>AWS/Lambda ConcurrentExecutions</code>",
+            "at or above 800",
+            "1 of 1 × 60 s",
+            "PagerDuty"
+          ],
+          [
+            "auth",
+            "<code>SharedSignalHealthCheckThrottlesAlarm</code>",
+            "<code>AWS/Lambda Throttles</code>",
+            "at or above 1",
+            "1 of 1 × 60 s",
+            "PagerDuty"
+          ],
+          [
+            "auth",
+            "<code>SharedSignalHealthCheckTimeoutAlarm</code>",
+            "<code>{stack}/Timeouts SharedSignalHealthCheckFunctionTimeout</code>",
+            "at or above 5",
+            "1 of 1 × 60 s",
+            "PagerDuty"
+          ],
+          [
+            "auth",
+            "<code>SharedSignalReceiverConcurrencyAlarm</code>",
+            "<code>AWS/Lambda ConcurrentExecutions</code>",
+            "at or above 800",
+            "1 of 1 × 60 s",
+            "PagerDuty"
+          ],
+          [
+            "auth",
+            "<code>SharedSignalReceiverThrottlesAlarm</code>",
+            "<code>AWS/Lambda Throttles</code>",
+            "at or above 1",
+            "1 of 1 × 60 s",
+            "PagerDuty"
+          ],
+          [
+            "auth",
+            "<code>SharedSignalReceiverTimeoutAlarm</code>",
+            "<code>{stack}/Timeouts SharedSignalReceiverFunctionTimeout</code>",
+            "at or above 5",
+            "1 of 1 × 60 s",
+            "PagerDuty"
+          ],
+          [
+            "auth",
+            "<code>SharedSignalWafThrottlingAlarm</code>",
+            "<code>AWS/WAFV2 BlockedRequests</code>",
+            "above 6000",
+            "5 of 5 × 60 s",
+            "PagerDuty"
+          ],
+          [
+            "auth",
+            "<code>SmokeTestAlarm</code>",
+            "<code>GOVUKMobileAuth SmokeTestSuccess</code>",
+            "below 1",
+            "2 of 2 × 300 s",
+            "Warnings · actions disabled · not in integration"
+          ]
+        ]
+      }
+    ],
+    "w": 1740,
+    "h": 1160
+  },
+  "resources": {
+    "name": "Resources",
+    "order": 9,
+    "group": "Reference",
+    "audience": "Cost, audit and incident scoping — the detail behind every badge",
+    "blurb": "Every AWS resource the two SAM templates declare, counted per environment by evaluating each template's Conditions against that environment.",
+    "note": "Counts are of resources as written in the templates. SAM expands functions and APIs into more resources at deploy time; those are not counted here. The config buckets and the config signing key are created outside these repositories.",
+    "inventory": "resources.json"
+  }
+}

@@ -1,0 +1,112 @@
+name: Publish to Confluence
+
+# The architecture overview goes where the people are, one page per project, rewritten on
+# every build. The review page for the planned states beneath it is published from
+# architecture-docs-states, which finds this page by its title. After every push to main
+# this takes the site the build workflow just produced, exports the page from it, and
+# publishes it — only when a page would change, because every update notifies the
+# people whose attention the pages exist to get. A merge that touched nothing a reader
+# sees writes nothing.
+#
+# It follows the build rather than repeating it: the pictures are rendered from the built
+# page, and building needs every documented source checked out and synthesised. The build
+# uploads the plain site as an artifact; this downloads it.
+#
+# Secrets live in the `confluence` environment so a fork's pull request can never see them:
+#   CONFLUENCE_BASE_URL   https://<site>.atlassian.net/wiki
+#   CONFLUENCE_USER       the account's email — a service account with write access to the
+#                         one space and nothing else, because this repository is public
+#   CONFLUENCE_TOKEN      an API token for that account
+# Which space and where: `confluence` in each project's config.
+on:
+  workflow_run:
+    workflows: ["Build and publish"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Say what would be published, write nothing"
+        type: boolean
+        default: false
+      force:
+        description: "Publish even when the page has not changed"
+        type: boolean
+        default: false
+
+concurrency:
+  group: confluence
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  publish:
+    name: Export and publish
+    # A manual run always runs; a triggered one only after a build of main that passed.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: confluence
+    steps:
+      - name: Checkout the docs
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup node
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # The site as the build made it. Triggered by a build: that run's artifact. Started by
+      # hand: the artifact of the most recent successful build of main.
+      - name: Find the build to take the site from
+        id: build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            run_id="${{ github.event.workflow_run.id }}"
+          else
+            run_id=$(gh run list --workflow "Build and publish" --branch main --status success --limit 1 --json databaseId --jq '.[0].databaseId')
+          fi
+          [ -n "$run_id" ] || { echo "::error::no successful build of main to take the site from"; exit 1; }
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+
+      # The plain site the build uploaded — not what Pages serves, which may be sealed
+      # behind a password and would photograph as a login form.
+      - name: Download the built site
+        uses: actions/download-artifact@v4
+        with:
+          name: site
+          run-id: ${{ steps.build.outputs.run_id }}
+          github-token: ${{ github.token }}
+          path: site
+
+      - name: Install Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Export and publish
+        env:
+          CONFLUENCE_BASE_URL: ${{ secrets.CONFLUENCE_BASE_URL }}
+          CONFLUENCE_USER: ${{ secrets.CONFLUENCE_USER }}
+          CONFLUENCE_TOKEN: ${{ secrets.CONFLUENCE_TOKEN }}
+        run: >-
+          pnpm confluence
+          ${{ inputs.dry_run && '--dry-run' || '' }}
+          ${{ inputs.force && '--force' || '' }}
+          | tee -a "$GITHUB_STEP_SUMMARY"
