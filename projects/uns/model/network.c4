@@ -45,14 +45,17 @@ model {
     }
   }
 
-  network_vpc = boundary 'VPC · uns-{env}-main-vpc' {
+  network_vpc = boundary 'VPC 10.0.0.0/16 · uns-{env}-main-vpc' {
+    link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/constructs/bases/UNSVpcConstruct.ts 'UNSVpcConstruct.ts'
+    link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/config.ts 'config.ts'
     metadata {
       type 'AWS::EC2::VPC'
-      tech '10.0.0.0/16 · 3 AZs · UNSVpcConstruct.ts'
+      tech 'Amazon VPC · 65,536 addresses · 3 AZs'
       role 'Two tiers of /23 subnets across three availability zones, a NAT gateway in each, and no isolated tier.'
       facts [
         'A developer sandbox imports development\'s VPC from <code>/shared/vpc</code> instead of creating one.',
-        'Flow logs to an S3 bucket in staging and production only; development has none.'
+        'Flow logs to an S3 bucket in staging and production only; development has none.',
+        'The CIDR and the zones come from the deploy environment — <code>cidr</code> and <code>availability_zones</code> — with 10.0.0.0/16 and a, b, c as the defaults; nothing in the repository overrides them.'
       ]
       sourceId 'vpc'
       order '0'

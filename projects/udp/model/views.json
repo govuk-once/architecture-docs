@@ -332,7 +332,7 @@
     "order": 6,
     "group": "Cross-cutting",
     "audience": "Anyone changing a subnet, an endpoint or a security group",
-    "blurb": "The one VPC per environment, its two isolated subnets, and the endpoints that are the only way out of them. Every Lambda and both test builds sit in those subnets; everything they reach is an endpoint beside them.",
+    "blurb": "The one VPC per environment, its six subnets — the isolated pair holds every workload — and the endpoints that are the only way out of them. Every Lambda and both test builds sit in those isolated subnets; everything they reach is an endpoint beside them.",
     "note": "The private API is not in the VPC. It is a regional service that accepts calls only through the execute-api endpoints its resource policy lists — the consumers' own, and this VPC's, which the test builds use. The test builds also reach CodeBuild and ECR through the interface endpoints; that edge is a fact on their box.",
     "tables": [
       {

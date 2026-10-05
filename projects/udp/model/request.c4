@@ -58,7 +58,7 @@ model {
     link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/vpc-construct.ts 'vpc-construct.ts'
     metadata {
       type 'AWS account boundary'
-      tech 'One VPC, isolated subnets only'
+      tech 'One VPC · workloads in isolated subnets only'
       role 'Everything from the API inward runs here; the Lambdas have no route to the internet.'
       facts [
         'The Lambdas sit in the isolated subnets, and reach DynamoDB and KMS only through VPC endpoints — see Network.'

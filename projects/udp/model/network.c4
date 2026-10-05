@@ -1,6 +1,6 @@
 // UDP architecture — Network.
 //
-// The one VPC per environment, its two isolated subnets, and the endpoints that are the only
+// The one VPC per environment, its six subnets, the isolated pair that holds every workload, and the endpoints that are the only
 // way out of them. Traffic runs top to bottom: the API invokes a function in an isolated
 // subnet, and everything the function reaches is an endpoint beside it.
 
@@ -28,15 +28,16 @@ model {
     }
   }
 
-  network_vpc = boundary 'VPC · {env}-vpc' {
+  network_vpc = boundary 'VPC 10.0.0.0/16 · {env}-vpc' {
     link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/vpc-construct.ts 'vpc-construct.ts'
     metadata {
       type 'AWS::EC2::VPC'
-      tech '10.0.0.0/16 · 2 AZs · vpc-construct.ts'
-      role 'One per environment, shared by every pull-request deployment in it. Two /24 subnets, both isolated, one in each of two availability zones; no internet gateway and no NAT gateway.'
+      tech 'Amazon VPC · 65,536 addresses · 2 AZs'
+      role 'One per environment, shared by every pull-request deployment in it. Six /24 subnets across two availability zones: public, private-egress and isolated, one of each per zone. An internet gateway; no NAT gateway.'
       facts [
         'Can be deployed alone first: a <code>skipMainStack</code> context flag leaves every other stack out of the app.',
-        'DNS support and hostnames are on, so the interface endpoints answer the services\' own names.'
+        'DNS support and hostnames are on, so the interface endpoints answer the services\' own names.',
+        'Every workload, every endpoint ENI and both test builds sit in the isolated pair. The public and private-egress tiers hold their address ranges, and with no NAT gateway the egress tier has no route out.'
       ]
       sourceId 'vpc'
       order '0'
@@ -120,7 +121,7 @@ model {
       metadata {
         type 'AWS::EC2::VPCEndpoint ×12'
         tech 'endpoint security group · 443 from the VPC'
-        role 'The isolated subnets\' only way out. Every one is an interface endpoint with an ENI in each subnet: KMS, SQS, Secrets Manager, CloudWatch Logs, execute-api, CodeBuild, ECR API, ECR Docker, STS, Cognito IdP, DynamoDB and S3.'
+        role 'The isolated subnets\' only way out. Every one is an interface endpoint with an ENI in each isolated subnet: KMS, SQS, Secrets Manager, CloudWatch Logs, execute-api, CodeBuild, ECR API, ECR Docker, STS, Cognito IdP, DynamoDB and S3.'
         facts [
           'The KMS endpoint is what makes envelope encryption possible from an isolated subnet.',
           'DynamoDB\'s endpoint has private DNS off, so the service\'s usual name does not reach it. The main, sar and dvla-pilot stacks give every function the endpoint\'s own DNS name as <code>DYNAMODB_ENDPOINT</code>, and the clients are pointed there.',
