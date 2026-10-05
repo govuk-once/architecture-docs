@@ -100,6 +100,7 @@
           "^ShieldAlarms$": "Shield",
           "Waf": "WAF",
           "FlexSmokeTest$": "Smoke test",
+          "FlexGlobal$": "Alarm relay",
           "Alarm$": "Lambda"
         },
         "capture": [
@@ -185,6 +186,18 @@
       "kmsRelay": {
         "type": "AWS::KMS::Key",
         "logicalId": "^AlarmTopicRelayKey"
+      },
+      "kmsRelayHealth": {
+        "type": "AWS::KMS::Key",
+        "logicalId": "^AlarmRelayHealthKey"
+      },
+      "snsRelayHealth": {
+        "type": "AWS::SNS::Topic",
+        "logicalId": "^AlarmRelayHealthTopic"
+      },
+      "sqsRelayFailures": {
+        "type": "AWS::SQS::Queue",
+        "logicalId": "RelayFailureQueue"
       },
       "kmsLogGroup": {
         "type": "AWS::KMS::Key",

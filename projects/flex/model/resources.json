@@ -720,15 +720,25 @@
           "d": {
             "type": "AWS::Lambda::Function",
             "tech": "Code.fromInline · 10s",
-            "role": "Republish a us-east-1 SNS message onto the eu-west-2 alarm topic — <b>currently non-functional</b>.",
+            "role": "Republish a us-east-1 SNS message onto the eu-west-2 alarm topic.",
             "facts": [
-              "The inline handler interpolates <code>TopicArn: ${targetTopicArn},</code> without quotes, so the deployed source is a JavaScript syntax error and the function fails at module load on every invocation. Cross-region alarms do not reach Slack today.",
               "One per severity, because CloudWatch cannot target a cross-region topic.",
-              "Passes through message and message attributes; truncates the subject to 100 characters.",
-              "No explicit log group and no alarms — these are plain Function constructs, not Flex ones."
+              "The handler is <code>relay-handler.ts</code> and reads the target topic from <code>TARGET_TOPIC_ARN</code>; until FLEX-404 the ARN was interpolated unquoted into the inline source, a syntax error that failed every invocation.",
+              "Forwards the subject, truncated to 100 characters, and the message; message attributes are not forwarded.",
+              "Granted <code>sns:Publish</code> on the target topic and <code>kms:GenerateDataKey*</code>/<code>kms:Decrypt</code> on the eu-west-2 alerts key — the old relay had only the first.",
+              "After Lambda's two retries the event goes to a per-severity SQS failure queue, and three alarms per relay watch errors, queue depth and undelivered destinations.",
+              "No explicit log group and not Flex's Lambda alarm set — these are plain Function constructs, watched only by the three relay alarms."
             ],
             "code": [
-              ["stacks/global.ts", "platform/infra/flex/src/stacks/global.ts"]
+              ["stacks/global.ts", "platform/infra/flex/src/stacks/global.ts"],
+              [
+                "alarms/alarm-relay.ts",
+                "platform/infra/flex/src/constructs/alarms/alarm-relay.ts"
+              ],
+              [
+                "alarms/relay-handler.ts",
+                "platform/infra/flex/src/constructs/alarms/relay-handler.ts"
+              ]
             ]
           }
         },
@@ -1365,11 +1375,36 @@
             "role": "Encrypts the us-east-1 relay topics.",
             "facts": [
               "Per stage, so every ephemeral and personal stage creates its own.",
-              "One key shared by both relay topics — <code>#buildRelay</code> is called twice and handed the same key.",
+              "One key shared by both relay topics — <code>createAlarmRelay</code> is called twice and handed the same <code>relayTopicKey</code>. The failure queues and the health topic use a second key, <code>alias/{stage}-flex-alerts-relay-health-key</code>.",
               "The Chatbot role is granted decrypt on the eu-west-2 key, not this one."
             ],
             "code": [
-              ["stacks/global.ts", "platform/infra/flex/src/stacks/global.ts"]
+              ["stacks/global.ts", "platform/infra/flex/src/stacks/global.ts"],
+              [
+                "alarms/alarm-relay.ts",
+                "platform/infra/flex/src/constructs/alarms/alarm-relay.ts"
+              ]
+            ]
+          }
+        },
+        {
+          "id": "kms-relay-health",
+          "name": "KMS key · relay health",
+          "n": 1,
+          "from": "counts.kmsRelayHealth",
+          "meta": ["us-east-1", "FlexGlobalStack"],
+          "d": {
+            "type": "AWS::KMS::Key + Alias",
+            "tech": "alias/{stage}-flex-alerts-relay-health-key",
+            "role": "Encrypts the relay health topic and both relay failure queues.",
+            "facts": [
+              "Per stage, rotation enabled; CloudWatch is granted encrypt and decrypt so the relay alarms can publish to the topic it protects."
+            ],
+            "code": [
+              [
+                "alarms/relay-health.ts",
+                "platform/infra/flex/src/constructs/alarms/relay-health.ts"
+              ]
             ]
           }
         },
@@ -1646,10 +1681,54 @@
             "role": "Cross-region alarm forwarding.",
             "facts": [
               "Encrypted with <code>alias/{stage}-flex-alerts-relay-key</code>.",
-              "The topics and subscriptions are correct; the subscribed Lambdas are not — see the relay functions above."
+              "A third topic, <code>{stage}-flex-alerts-relay-health</code>, receives the relay's own alarms and has no subscription — see the relay health row."
             ],
             "code": [
               ["stacks/global.ts", "platform/infra/flex/src/stacks/global.ts"]
+            ]
+          }
+        },
+        {
+          "id": "sns-relay-health",
+          "name": "Relay health topic",
+          "n": 1,
+          "from": "counts.snsRelayHealth",
+          "meta": ["us-east-1", "FlexGlobalStack"],
+          "d": {
+            "type": "AWS::SNS::Topic",
+            "tech": "{stage}-flex-alerts-relay-health",
+            "role": "Where the six alarms that watch the relay publish. Nothing subscribes to it.",
+            "facts": [
+              "Encrypted with <code>alias/{stage}-flex-alerts-relay-health-key</code>; CloudWatch is granted publish.",
+              "No subscription and no Chatbot configuration lists it, in any stage — a relay failure is recorded here and reaches nobody."
+            ],
+            "code": [
+              [
+                "alarms/relay-health.ts",
+                "platform/infra/flex/src/constructs/alarms/relay-health.ts"
+              ]
+            ]
+          }
+        },
+        {
+          "id": "sqs-relay-failures",
+          "name": "Relay failure queues",
+          "n": 2,
+          "from": "counts.sqsRelayFailures",
+          "meta": ["us-east-1", "FlexGlobalStack"],
+          "d": {
+            "type": "AWS::SQS::Queue",
+            "tech": "{stage}-flex-alarm-relay-{severity}-failures · 14 days",
+            "role": "On-failure destination for each relay function.",
+            "facts": [
+              "KMS-encrypted with the relay health key, SSL enforced, 14-day retention.",
+              "A message here is a notification the relay gave up on after Lambda's two retries; nothing replays it, and the queue-depth alarm that would say so publishes to the unsubscribed health topic."
+            ],
+            "code": [
+              [
+                "alarms/alarm-relay.ts",
+                "platform/infra/flex/src/constructs/alarms/alarm-relay.ts"
+              ]
             ]
           }
         },

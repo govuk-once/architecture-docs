@@ -152,7 +152,7 @@ determines the work:
 | Nothing                   | Nothing that these docs derive from | Still read on — see below                |
 
 An empty diff is **not** proof the docs are current. Only the resource counts the config
-declares — 28 for FLEX — and the nineteen alarm kinds are derived; everything else is prose
+declares — 32 for FLEX — and the twenty-five alarm kinds are derived; everything else is prose
 written by reading the code. A rewrite of a CDK stack changes no number here and can still
 make a paragraph false.
 

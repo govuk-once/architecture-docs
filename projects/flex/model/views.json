@@ -912,7 +912,7 @@
     "group": "Cross-cutting",
     "audience": "Platform engineers and on-call",
     "blurb": "How code reaches production, and how production reaches a human when it goes wrong. Nothing on this tab is on a user's request path.",
-    "note": "A <b>solid line blocks the release; a dashed one runs beside it and blocks nothing</b> — the spine down the middle is the only path to production. Two of the paths drawn here do not work today. The canary's alarm has no alarm action, and the cross-region relay's inline handler has a syntax error, so the smoke test and every us-east-1 edge alarm reach nobody. A third is worth reading the test table for: the platform suite is the only test that can fail a deploy, and it is skipped in production.",
+    "note": "A <b>solid line blocks the release; a dashed one runs beside it and blocks nothing</b> — the spine down the middle is the only path to production. One of the paths drawn here does not work today: the canary's alarm has no alarm action, so the smoke test reaches nobody. The cross-region relay now forwards, but the six alarms that watch it publish to a topic nothing subscribes to. Another is worth reading the test table for: the platform suite is the only test that can fail a deploy, and it is skipped in production.",
     "dashMeans": "runs beside the release and blocks nothing",
     "tables": [
       {
@@ -1004,7 +1004,7 @@
       },
       {
         "name": "Every alarm, its threshold, and which topic it reaches",
-        "note": "19 alarm kinds: 18 from six constructs in <code>constructs/alarms/</code>, plus the smoke-test alarm in <code>stacks/smoke-test.ts</code>, which sets no action and so reaches nobody. Every one sets <code>treatMissingData: NOT_BREACHING</code>, so silence never fires an alarm. Critical and Warning are two separate SNS topics, wired in <code>constructs/alarms/actions.ts</code>. The CloudFront, CloudFront Function and Shield rows are measured in us-east-1, because that is the only region those metrics are emitted to — they reach the eu-west-2 topics through the cross-region relay.",
+        "note": "25 alarm kinds: 24 from seven constructs in <code>constructs/alarms/</code>, plus the smoke-test alarm in <code>stacks/smoke-test.ts</code>, which sets no action and so reaches nobody. All but the canary set <code>treatMissingData: NOT_BREACHING</code>, so silence never fires an alarm; the canary treats missing data as breaching. Critical and Warning are two separate SNS topics, wired in <code>constructs/alarms/actions.ts</code>; the six Alarm relay rows publish to a third, <code>{stage}-flex-alerts-relay-health</code>, which has no subscription in any stage. The CloudFront, CloudFront Function, Shield and Alarm relay rows are measured in us-east-1, because that is the only region those metrics are emitted to — the first three reach the eu-west-2 topics through the cross-region relay.",
         "code": [
           [
             "api-gateway.ts",
@@ -1025,7 +1025,19 @@
             "actions.ts",
             "platform/infra/flex/src/constructs/alarms/actions.ts"
           ],
-          ["smoke-test.ts", "platform/infra/flex/src/stacks/smoke-test.ts"]
+          ["smoke-test.ts", "platform/infra/flex/src/stacks/smoke-test.ts"],
+          [
+            "alarm-relay.ts",
+            "platform/infra/flex/src/constructs/alarms/alarm-relay.ts"
+          ],
+          [
+            "above-zero-alarm.ts",
+            "platform/infra/flex/src/constructs/alarms/above-zero-alarm.ts"
+          ],
+          [
+            "relay-health.ts",
+            "platform/infra/flex/src/constructs/alarms/relay-health.ts"
+          ]
         ],
         "derived": {
           "from": "counts.alarms",
@@ -1177,6 +1189,54 @@
             "outside the band",
             "3 × 5 min, 2 must breach",
             "Warning"
+          ],
+          [
+            "Alarm relay",
+            "<code>CriticalRelayErrors</code>",
+            "<code>Errors</code> sum",
+            "above 0",
+            "1 × 5 min",
+            "Relay health — no subscriber"
+          ],
+          [
+            "Alarm relay",
+            "<code>CriticalRelayFailureQueueNotEmpty</code>",
+            "<code>ApproximateNumberOfMessagesVisible</code> max",
+            "above 0",
+            "1 × 5 min",
+            "Relay health — no subscriber"
+          ],
+          [
+            "Alarm relay",
+            "<code>CriticalRelayFailureQueueUndelivered</code>",
+            "<code>DestinationDeliveryFailures</code> sum",
+            "above 0",
+            "1 × 5 min",
+            "Relay health — no subscriber"
+          ],
+          [
+            "Alarm relay",
+            "<code>WarningRelayErrors</code>",
+            "<code>Errors</code> sum",
+            "above 0",
+            "1 × 5 min",
+            "Relay health — no subscriber"
+          ],
+          [
+            "Alarm relay",
+            "<code>WarningRelayFailureQueueNotEmpty</code>",
+            "<code>ApproximateNumberOfMessagesVisible</code> max",
+            "above 0",
+            "1 × 5 min",
+            "Relay health — no subscriber"
+          ],
+          [
+            "Alarm relay",
+            "<code>WarningRelayFailureQueueUndelivered</code>",
+            "<code>DestinationDeliveryFailures</code> sum",
+            "above 0",
+            "1 × 5 min",
+            "Relay health — no subscriber"
           ],
           [
             "Smoke test",
