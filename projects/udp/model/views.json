@@ -336,6 +336,101 @@
     "note": "The private API is not in the VPC. It is a regional service that accepts calls only through the execute-api endpoints its resource policy lists — the consumers' own, and this VPC's, which the test builds use. The test builds also reach CodeBuild and ECR through the interface endpoints; that edge is a fact on their box.",
     "tables": [
       {
+        "name": "Address plan",
+        "code": [["vpc-construct.ts", "cdk/lib/constructs/vpc-construct.ts"]],
+        "note": "Six /24s out of a /16: 10.0.0.0/24 and 10.0.1.0/24 public, 10.0.2.0/24 and 10.0.3.0/24 private with egress, 10.0.4.0/24 and 10.0.5.0/24 isolated — the lower availability zone first in each pair. Identical in every environment: the CIDR is the construct's default and no stack overrides it.",
+        "cols": [
+          "Tier",
+          "Mask",
+          "Subnets",
+          "Usable IPs each",
+          "Route to internet",
+          "What runs there"
+        ],
+        "rows": [
+          [
+            "Public",
+            "/24",
+            "2 · one per AZ",
+            "251",
+            "Internet gateway; public IPs assigned on launch",
+            "Nothing — the tier holds its address range"
+          ],
+          [
+            "Private with egress",
+            "/24",
+            "2 · one per AZ",
+            "251",
+            "None — <code>natGateways: 0</code>, so no default route",
+            "Nothing"
+          ],
+          [
+            "Private isolated",
+            "/24",
+            "2 · one per AZ",
+            "251",
+            "None",
+            "Every Lambda, both CodeBuild projects, and the ENIs of all twelve endpoints"
+          ]
+        ]
+      },
+      {
+        "name": "Network ACL · subnet-level, stateless, first match wins in ascending rule order",
+        "code": [["vpc-construct.ts", "cdk/lib/constructs/vpc-construct.ts"]],
+        "note": "One custom ACL, associated with the two isolated subnets only; the public and private-egress subnets have no association in the template and so keep the VPC's default ACL. The two denies come from the construct's <code>ADMIN_PORTS</code> table, which lists Telnet, 8080, 8443 and 10000 as well but has them commented out. There is no ephemeral-return rule: outbound is allowed only to 10.0.0.0/16, which is consistent with a tier that has no route out.",
+        "cols": [
+          "Rule",
+          "Direction",
+          "Traffic",
+          "Source / destination",
+          "Action"
+        ],
+        "rows": [
+          ["50", "Inbound", "TCP 22", "0.0.0.0/0", "Deny"],
+          ["51", "Inbound", "TCP 3389", "0.0.0.0/0", "Deny"],
+          ["100", "Inbound", "All", "10.0.0.0/16", "Allow"],
+          ["100", "Outbound", "All", "10.0.0.0/16", "Allow"]
+        ]
+      },
+      {
+        "name": "Security groups · instance-level, stateful",
+        "code": [
+          ["vpc-construct.ts", "cdk/lib/constructs/vpc-construct.ts"],
+          ["lambda-construct.ts", "cdk/lib/constructs/lambda-construct.ts"],
+          [
+            "codebuild-e2e-construct.ts",
+            "cdk/lib/constructs/codebuild-e2e-construct.ts"
+          ]
+        ],
+        "note": "The Lambda group's three inbound rules — 53/tcp and 53/udp from the VPC CIDR, and 443 from 0.0.0.0/0 — carry descriptions written for outbound traffic (<i>Allow HTTPS to VPC endpoints</i>). Lambda ENIs accept no inbound connections, so they admit nothing in practice, but they are inbound rules in the template. The endpoint group keeps CDK's default allow-all egress.",
+        "cols": [
+          "Security group",
+          "allowAllOutbound",
+          "Explicit rules",
+          "Attached to"
+        ],
+        "rows": [
+          [
+            "<code>vpcEndpointSg</code>",
+            "true",
+            "In: 443 from the VPC CIDR, 443 from the Lambda group, 443 from the CodeBuild group",
+            "All twelve interface endpoints"
+          ],
+          [
+            "<code>lambdaSg</code>",
+            "false",
+            "Out: 443 to the endpoint group; 53 tcp and udp to the VPC CIDR. In: 53 tcp and udp from the VPC CIDR; 443 from 0.0.0.0/0",
+            "Every Lambda in main, sar and dvla-pilot"
+          ],
+          [
+            "<code>CodeBuildSG</code>",
+            "false",
+            "Out: 443 to the endpoint group; 53 tcp and udp to the VPC CIDR. No inbound rules",
+            "Both CodeBuild projects"
+          ]
+        ]
+      },
+      {
         "name": "The twelve endpoints",
         "code": [
           ["vpc-construct.ts", "cdk/lib/constructs/vpc-construct.ts"],
@@ -386,6 +481,98 @@
             "The test builds assuming the <code>test</code> consumer role"
           ],
           ["Cognito IdP", "Interface", "Nothing in the code"]
+        ]
+      },
+      {
+        "name": "Egress paths",
+        "code": [
+          ["vpc-construct.ts", "cdk/lib/constructs/vpc-construct.ts"],
+          ["lambda-construct.ts", "cdk/lib/constructs/lambda-construct.ts"],
+          [
+            "codebuild-e2e-construct.ts",
+            "cdk/lib/constructs/codebuild-e2e-construct.ts"
+          ]
+        ],
+        "note": "All twelve endpoints are interface endpoints with ENIs in the isolated subnets; there are no gateway endpoints and no route-table entries for S3 or DynamoDB. Private DNS is on for every endpoint except DynamoDB, which the code reaches by the URL in <code>DYNAMODB_ENDPOINT</code>.",
+        "cols": ["From", "Path", "Reaches", "Notes"],
+        "rows": [
+          [
+            "Lambda",
+            "443 → endpoint group → interface endpoint",
+            "KMS, DynamoDB, S3, SQS, Secrets Manager, CloudWatch Logs, execute-api, STS, Cognito IdP",
+            "The only outbound the group allows besides DNS"
+          ],
+          [
+            "Lambda",
+            "53 tcp/udp → the VPC's Route 53 resolver",
+            "Name resolution, including the endpoints' private names",
+            "Scoped to the VPC CIDR"
+          ],
+          [
+            "CodeBuild",
+            "443 → endpoint group → interface endpoint",
+            "CodeBuild, ECR API, ECR Docker, S3, STS, execute-api, CloudWatch Logs",
+            "Image pulls and the private API without leaving the VPC"
+          ],
+          [
+            "Isolated subnets",
+            "—",
+            "Nothing else",
+            "No default route, and the ACL allows outbound only to 10.0.0.0/16"
+          ],
+          [
+            "Private with egress",
+            "—",
+            "Nothing",
+            "Named for egress, but with no NAT gateway there is no route out"
+          ],
+          [
+            "Public",
+            "0.0.0.0/0 → internet gateway",
+            "The internet",
+            "Nothing is placed there"
+          ]
+        ]
+      },
+      {
+        "name": "Ingress · the private API",
+        "code": [
+          [
+            "api-gateway-construct.ts",
+            "cdk/lib/constructs/api-gateway-construct.ts"
+          ],
+          ["waf-construct.ts", "cdk/lib/constructs/waf-construct.ts"],
+          ["lambda-construct.ts", "cdk/lib/constructs/lambda-construct.ts"],
+          ["main-stack.ts", "cdk/lib/stacks/main-stack.ts"]
+        ],
+        "note": "There is no public path: a PRIVATE REST API answers no public DNS name, and its resource policy denies any caller not arriving through a listed execute-api VPC endpoint. The list is the VPC's own endpoint plus each external consumer's, read from SSM at synth. No method sets <code>apiKeyRequired</code>, so the usage-plan API key is not needed to call; when one is sent it selects that consumer's usage plan for throttling.",
+        "cols": ["Hop", "Termination", "Policy"],
+        "rows": [
+          [
+            "The internet",
+            "—",
+            "No route: PRIVATE endpoint type, resolvable only inside a VPC that has an execute-api endpoint"
+          ],
+          [
+            "Consumer's execute-api endpoint",
+            "TLS from the caller to the endpoint ENI",
+            "Must be an endpoint ID the resource policy lists"
+          ],
+          [
+            "API Gateway resource policy",
+            "TLS terminates at API Gateway",
+            "Deny unless <code>aws:sourceVpce</code> matches a listed endpoint; then Allow for any principal; a further Allow per external consumer account, when any are configured"
+          ],
+          [
+            "Regional WAF",
+            "—",
+            "Block above 300,000 requests per IP in five minutes; AWS managed Common, SQLi and Known-bad-inputs rule sets; default allow"
+          ],
+          [
+            "Every method",
+            "—",
+            "<code>AWS_IAM</code> — SigV4 from the consumer role. <code>apiKeyRequired</code> is never set"
+          ]
         ]
       }
     ],
