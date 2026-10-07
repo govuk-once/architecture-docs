@@ -14,6 +14,9 @@ model {
       type 'AWS::ApiGateway::RestApi ×2 · ×3 in development'
       tech 'REGIONAL with a custom domain · PRIVATE through FLEX\'s endpoints'
       role 'Regional services. The private one is bound to this VPC\'s own execute-api endpoint as well as FLEX\'s, so the tests inside the account can reach it.'
+      facts [
+        'The PSO API\'s mutual TLS is CloudFront\'s alone: the API domain configures none, and the origin-secret WAF rule meant to pin it to CloudFront checks x-origin-verify while CloudFront sends x-origin-header — see the ingress table.'
+      ]
       sourceId 'apis'
       order '1'
       x '188'

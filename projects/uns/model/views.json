@@ -491,6 +491,116 @@
     "h": 580,
     "tables": [
       {
+        "name": "Address plan",
+        "code": [
+          [
+            "UNSVpcConstruct.ts",
+            "infrastructure/cdk/constructs/bases/UNSVpcConstruct.ts"
+          ],
+          ["config.ts", "infrastructure/cdk/config.ts"],
+          [
+            "UNSE2EConstruct.ts",
+            "infrastructure/cdk/constructs/bases/UNSE2EConstruct.ts"
+          ]
+        ],
+        "note": "Not synthesised here, so these are read from the construct rather than a template. The CIDR and the zones are the deploy environment's, defaulting to 10.0.0.0/16 and a, b, c. By CDK's allocation order the public subnets take 10.0.0.0/23, 10.0.2.0/23 and 10.0.4.0/23 and the private ones 10.0.6.0/23, 10.0.8.0/23 and 10.0.10.0/23 — inferred, not read.",
+        "cols": [
+          "Tier",
+          "Mask",
+          "Subnets",
+          "Usable IPs each",
+          "Route to internet",
+          "What runs there"
+        ],
+        "rows": [
+          [
+            "Public",
+            "/23",
+            "3 · one per AZ",
+            "507",
+            "Internet gateway",
+            "NAT gateways only"
+          ],
+          [
+            "Private with egress",
+            "/23",
+            "3 · one per AZ",
+            "507",
+            "Via the NAT gateway in the same AZ",
+            "The five pipeline Lambdas, the Valkey cache, the e2e CodeBuild runner, and the ENIs of the eleven interface endpoints"
+          ],
+          [
+            "Private isolated",
+            "—",
+            "none",
+            "—",
+            "—",
+            "No isolated tier: the construct tags isolated subnets if any exist, and the <code>privateIsolated</code> group has nothing to attach to"
+          ]
+        ]
+      },
+      {
+        "name": "Network ACL · subnet-level, stateless, first match wins in ascending rule order",
+        "code": [
+          [
+            "UNSVpcConstruct.ts",
+            "infrastructure/cdk/constructs/bases/UNSVpcConstruct.ts"
+          ]
+        ],
+        "note": "On the private subnet group only; the public subnets keep the VPC's default ACL. Everything but 22 and 3389 is admitted from anywhere, and everything is allowed out — unlike UDP's ACL, which scopes both directions to the VPC CIDR.",
+        "cols": [
+          "Rule",
+          "Direction",
+          "Traffic",
+          "Source / destination",
+          "Action"
+        ],
+        "rows": [
+          ["100", "Inbound", "TCP 22", "0.0.0.0/0", "Deny"],
+          ["110", "Inbound", "TCP 3389", "0.0.0.0/0", "Deny"],
+          ["200", "Inbound", "All", "0.0.0.0/0", "Allow"],
+          ["100", "Outbound", "All", "0.0.0.0/0", "Allow"]
+        ]
+      },
+      {
+        "name": "Security groups · instance-level, stateful",
+        "code": [
+          [
+            "UNSVpcConstruct.ts",
+            "infrastructure/cdk/constructs/bases/UNSVpcConstruct.ts"
+          ],
+          [
+            "UNSLambdaConstruct.ts",
+            "infrastructure/cdk/constructs/bases/UNSLambdaConstruct.ts"
+          ],
+          [
+            "UNSElasticacheConstruct.ts",
+            "infrastructure/cdk/constructs/bases/UNSElasticacheConstruct.ts"
+          ]
+        ],
+        "note": "Every interface endpoint is created with <code>open: true</code>, which adds a 443-from-the-VPC-CIDR rule to the group it is given — <code>privateEgress</code>, every time. A sandbox imports <code>privateEgress</code>'s ID under both names (<code>imports()</code>), so there <code>privateIsolated</code> is <code>privateEgress</code>.",
+        "cols": [
+          "Security group",
+          "allowAllOutbound",
+          "Explicit rules",
+          "Attached to"
+        ],
+        "rows": [
+          [
+            "<code>privateEgress</code>",
+            "true",
+            "In: 6379 from the VPC CIDR; 443 from the VPC CIDR. Out: all, plus an explicit 6379 to the VPC CIDR",
+            "Every in-VPC Lambda, the eleven interface endpoints, and the Valkey cache"
+          ],
+          [
+            "<code>privateIsolated</code>",
+            "false",
+            "In: 6379 from the VPC CIDR. Out: 6379 to the VPC CIDR",
+            "Nothing — exported for sandboxes to import"
+          ]
+        ]
+      },
+      {
         "name": "The thirteen endpoints",
         "code": [
           ["UNSCommon.ts", "infrastructure/cdk/constructs/UNSCommon.ts"],
@@ -534,6 +644,123 @@
           ],
           ["Application Insights", "Interface", "No caller in the code"],
           ["Network Firewall", "Interface", "No caller in the code"]
+        ]
+      },
+      {
+        "name": "Egress paths",
+        "code": [
+          [
+            "UNSVpcConstruct.ts",
+            "infrastructure/cdk/constructs/bases/UNSVpcConstruct.ts"
+          ],
+          [
+            "UNSLambdaConstruct.ts",
+            "infrastructure/cdk/constructs/bases/UNSLambdaConstruct.ts"
+          ],
+          [
+            "UNSE2EConstruct.ts",
+            "infrastructure/cdk/constructs/bases/UNSE2EConstruct.ts"
+          ],
+          [
+            "notificationAdapterOneSignal.ts",
+            "src/common/services/adapters/notificationAdapterOneSignal.ts"
+          ]
+        ],
+        "note": "Most of UNS is not in the VPC at all: the eleven route handlers and the authorizer have no VpcConfig and reach AWS over the public service endpoints. The paths below are the five pipeline functions', the cache's and the e2e runner's.",
+        "cols": ["From", "Path", "Reaches", "Notes"],
+        "rows": [
+          [
+            "Pipeline Lambdas",
+            "NAT in the same AZ → internet gateway",
+            "<code>api.onesignal.com</code>, and the host UDP's secret names for its private API",
+            "<code>privateEgress</code> allows all outbound"
+          ],
+          [
+            "Pipeline Lambdas",
+            "443 → interface endpoint",
+            "SQS, KMS, SSM, Secrets Manager, CloudWatch Logs, X-Ray, API Gateway, Lambda, Monitoring, Application Insights, Network Firewall",
+            "Private DNS on every one"
+          ],
+          [
+            "Pipeline Lambdas",
+            "Gateway endpoint route",
+            "DynamoDB, S3",
+            "Prefix-list routes in the private route tables"
+          ],
+          [
+            "Pipeline Lambdas",
+            "6379 inside the VPC",
+            "ElastiCache Valkey, in the private subnets",
+            "Both groups allow it to and from the VPC CIDR"
+          ],
+          [
+            "e2e CodeBuild runner",
+            "The private tier: the NAT, and the execute-api endpoint for the private FLEX API",
+            "<code>UNS_FLEX_BASE_URL</code>",
+            "Runs the suite from inside the VPC"
+          ],
+          [
+            "HTTP Lambdas · 11 routes and the authorizer",
+            "No VpcConfig → public AWS endpoints",
+            "DynamoDB, SQS, SSM, Secrets Manager",
+            "Outside the VPC entirely"
+          ],
+          [
+            "Public subnets",
+            "0.0.0.0/0 → internet gateway",
+            "The internet",
+            "NAT gateways only"
+          ]
+        ]
+      },
+      {
+        "name": "Ingress · two APIs, three in development",
+        "code": [
+          [
+            "UNSApiGatewayConstruct.ts",
+            "infrastructure/cdk/constructs/bases/UNSApiGatewayConstruct.ts"
+          ],
+          [
+            "UNSPSOResources.ts",
+            "infrastructure/cdk/constructs/UNSPSOResources.ts"
+          ],
+          [
+            "UNSFlexResources.ts",
+            "infrastructure/cdk/constructs/UNSFlexResources.ts"
+          ],
+          [
+            "UNSGlobalStack.ts",
+            "infrastructure/cdk/constructs/UNSGlobalStack.ts"
+          ]
+        ],
+        "note": "The PSO API's mutual TLS is CloudFront's: the viewer trust store lives there, the API's own domain configures none, and the custom authorizer reads <code>CloudFront-Viewer-Cert-*</code> headers. The control meant to pin the API to CloudFront is the regional WAF's <code>RequireOriginSecret</code> rule — which matches <code>x-origin-verify</code> while CloudFront sends <code>x-origin-header</code>, with <i>allow</i> as both its action and the ACL's default. So it never matches, and would change nothing if it did; nothing in this construct distinguishes a request that came through CloudFront from one that did not.",
+        "cols": ["Hop", "Termination", "Policy"],
+        "rows": [
+          [
+            "The internet → CloudFront · PSO",
+            "TLS at the edge; viewer mTLS against the trust store in S3",
+            "CloudFront WAF: managed Common and Known-bad-inputs rules, default allow. Redirect to HTTPS, no caching, <code>PRICE_CLASS_100</code>"
+          ],
+          [
+            "CloudFront → the PSO API's custom domain",
+            "TLS 1.2 at a REGIONAL custom domain; the execute-api hostname is disabled",
+            "Origin sends <code>x-origin-header</code>; the regional WAF's origin-secret rule checks <code>x-origin-verify</code> and allows either way. Managed Common and Known-bad-inputs rules"
+          ],
+          [
+            "PSO method",
+            "—",
+            "<code>CUSTOM</code> — a Lambda authorizer reads the viewer-certificate headers and a revocation table, cache TTL 0. API key required: 500 rps, burst 1,000, quota 20,000"
+          ],
+          [
+            "FLEX's execute-api endpoint → the private FLEX API",
+            "TLS to the endpoint ENI; PRIVATE endpoint, no custom domain",
+            "Deny unless <code>aws:SourceVpce</code> is one of FLEX's endpoint IDs from SSM or UNS's own; FLEX assumes an invoker role in this account. <code>AWS_IAM</code> on every method; API key required: 100 rps, burst 200, quota 100,000"
+          ],
+          [
+            "Development and sandboxes only · a public FLEX API",
+            "TLS 1.2 at a REGIONAL custom domain",
+            "No IAM and no authorizer: an API key alone, on the e2e usage plan. Tagged <i>Perimeter</i>"
+          ]
         ]
       }
     ]
