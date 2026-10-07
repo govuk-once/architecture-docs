@@ -229,12 +229,282 @@
     "order": 4,
     "group": "Architecture",
     "audience": "Engineers changing a handler — this is the code, not the infrastructure",
-    "blurb": "Inside one route Lambda: the middleware every request runs through, in the order it runs, and the data-access layer beneath the handler. All thirteen route functions are wired the same way. C4 level 3.",
+    "blurb": "Inside one route Lambda: the middleware every request runs through, in the order it runs, and the data-access layer beneath the handler. Thirteen route functions share it, with two variations the first table lists. C4 level 3.",
     "note": "Read the chain top to bottom for a request coming in, and bottom to top for the response going out: the serialiser and sanitiser are <code>after</code> middleware, so they run on the way back.",
     "dashMeans": "a hand-off inside the library, not a call the handler makes",
     "w": 1480,
     "h": 1360,
     "tables": [
+      {
+        "name": "Which middleware each function runs",
+        "code": [
+          ["middleware/index.ts", "libs/utils/middleware/index.ts"],
+          ["createUserLambda/handler.ts", "src/createUserLambda/handler.ts"],
+          [
+            "exchangeIdentityLambda/handler.ts",
+            "src/exchangeIdentityLambda/handler.ts"
+          ],
+          [
+            "createIdentityLambda/handler.ts",
+            "src/createIdentityLambda/handler.ts"
+          ],
+          [
+            "readIdentityLambda/handler.ts",
+            "src/readIdentityLambda/handler.ts"
+          ],
+          [
+            "deleteIdentityLambda/handler.ts",
+            "src/deleteIdentityLambda/handler.ts"
+          ],
+          [
+            "getAllLinkedServiceLambda/handler.ts",
+            "src/getAllLinkedServiceLambda/handler.ts"
+          ],
+          ["postDataLambda/handler.ts", "src/postDataLambda/handler.ts"],
+          ["patchDataLambda/handler.ts", "src/patchDataLambda/handler.ts"],
+          ["getDataLambda/handler.ts", "src/getDataLambda/handler.ts"],
+          ["deleteDataLambda/handler.ts", "src/deleteDataLambda/handler.ts"],
+          ["startSarLambda/handler.ts", "src/startSarLambda/handler.ts"],
+          ["startDsarLambda/handler.ts", "src/startDsarLambda/handler.ts"],
+          [
+            "getSarStatusLambda/handler.ts",
+            "src/getSarStatusLambda/handler.ts"
+          ],
+          [
+            "createSarFileLambda/handler.ts",
+            "src/createSarFileLambda/handler.ts"
+          ],
+          ["dsarRequestLambda/handler.ts", "src/dsarRequestLambda/handler.ts"],
+          ["dsarDeleteLambda/handler.ts", "src/dsarDeleteLambda/handler.ts"],
+          [
+            "generateSarPresignedUrlLambda/handler.ts",
+            "src/generateSarPresignedUrlLambda/handler.ts"
+          ],
+          [
+            "dvlaPilotPurgeLambda/handler.ts",
+            "src/dvlaPilotPurgeLambda/handler.ts"
+          ]
+        ],
+        "note": "Every API-triggered handler runs the same six: logger, tracer, annotation, serialiser, error handler and validator. The two variations are the sanitiser, which the four message-returning routes skip, and the JSON body parser, which only the four routes with a body add.",
+        "cols": ["Function", "Trigger", "Chain, in file order"],
+        "rows": [
+          [
+            "<code>createUser</code>",
+            "API Gateway",
+            "logger · tracer · annotation · serialiser · errors · <b>json body parser</b> · validator — <b>no sanitiser</b>"
+          ],
+          [
+            "<code>exchangeIdentity</code>",
+            "API Gateway",
+            "logger · tracer · annotation · serialiser · sanitiser · errors · validator"
+          ],
+          [
+            "<code>createIdentity</code>",
+            "API Gateway",
+            "logger · tracer · annotation · serialiser · errors · <b>json body parser</b> · validator — <b>no sanitiser</b>"
+          ],
+          [
+            "<code>readIdentity</code>",
+            "API Gateway",
+            "logger · tracer · annotation · serialiser · sanitiser · errors · validator"
+          ],
+          [
+            "<code>deleteIdentity</code>",
+            "API Gateway",
+            "logger · tracer · annotation · serialiser · errors · validator — <b>no sanitiser</b>"
+          ],
+          [
+            "<code>getAllLinkedService</code>",
+            "API Gateway",
+            "logger · tracer · annotation · serialiser · sanitiser · errors · validator"
+          ],
+          [
+            "<code>postData</code>",
+            "API Gateway",
+            "logger · tracer · annotation · serialiser · sanitiser · errors · <b>json body parser</b> · validator"
+          ],
+          [
+            "<code>patchData</code>",
+            "API Gateway",
+            "logger · tracer · annotation · serialiser · sanitiser · errors · <b>json body parser</b> · validator"
+          ],
+          [
+            "<code>getData</code>",
+            "API Gateway",
+            "logger · tracer · annotation · serialiser · sanitiser · errors · validator"
+          ],
+          [
+            "<code>deleteData</code>",
+            "API Gateway",
+            "logger · tracer · annotation · serialiser · errors · validator — <b>no sanitiser</b>"
+          ],
+          [
+            "<code>startSar</code>",
+            "API Gateway",
+            "logger · tracer · annotation · serialiser · sanitiser · errors · validator"
+          ],
+          [
+            "<code>startDsar</code>",
+            "API Gateway",
+            "logger · tracer · annotation · serialiser · sanitiser · errors · validator"
+          ],
+          [
+            "<code>getSarStatus</code>",
+            "API Gateway",
+            "logger · tracer · annotation · serialiser · sanitiser · errors · validator"
+          ],
+          ["<code>createSarFile</code>", "SQS", "logger · tracer · annotation"],
+          ["<code>dsarRequest</code>", "SQS", "logger · tracer · annotation"],
+          ["<code>dsarDelete</code>", "SQS", "logger · tracer · annotation"],
+          [
+            "<code>generateSarPresignedUrl</code>",
+            "S3 event",
+            "logger · tracer · annotation"
+          ],
+          [
+            "<code>dvlaPilotPurge</code>",
+            "untyped — the handler reads no event",
+            "logger · tracer · annotation"
+          ]
+        ]
+      },
+      {
+        "name": "What each route does, and with which services",
+        "code": [
+          ["routes.ts", "libs/utils/schemas/routes/routes.ts"],
+          ["ServiceFactory.ts", "libs/data-access/factory/ServiceFactory.ts"],
+          ["lambda-construct.ts", "cdk/lib/constructs/lambda-construct.ts"],
+          ["createUserLambda/handler.ts", "src/createUserLambda/handler.ts"],
+          [
+            "exchangeIdentityLambda/handler.ts",
+            "src/exchangeIdentityLambda/handler.ts"
+          ],
+          [
+            "createIdentityLambda/handler.ts",
+            "src/createIdentityLambda/handler.ts"
+          ],
+          [
+            "readIdentityLambda/handler.ts",
+            "src/readIdentityLambda/handler.ts"
+          ],
+          [
+            "deleteIdentityLambda/handler.ts",
+            "src/deleteIdentityLambda/handler.ts"
+          ],
+          [
+            "getAllLinkedServiceLambda/handler.ts",
+            "src/getAllLinkedServiceLambda/handler.ts"
+          ],
+          ["postDataLambda/handler.ts", "src/postDataLambda/handler.ts"],
+          ["patchDataLambda/handler.ts", "src/patchDataLambda/handler.ts"],
+          ["getDataLambda/handler.ts", "src/getDataLambda/handler.ts"],
+          ["deleteDataLambda/handler.ts", "src/deleteDataLambda/handler.ts"],
+          ["startSarLambda/handler.ts", "src/startSarLambda/handler.ts"],
+          ["startDsarLambda/handler.ts", "src/startDsarLambda/handler.ts"],
+          ["getSarStatusLambda/handler.ts", "src/getSarStatusLambda/handler.ts"]
+        ],
+        "note": "<code>{resourcePath+}</code> is greedy, so <code>/v1/notifications</code>, <code>/v1/groups</code> and <code>/v1/local-council/…</code> are all the same four data handlers with a different sort key. Every route declares an <code>authorizationScopes</code> value and nothing enforces it: every method is <code>AWS_IAM</code> with no authorizer, so the scope is documentation.",
+        "cols": [
+          "Route",
+          "Method · path",
+          "Services",
+          "Declared scope",
+          "Deployed"
+        ],
+        "rows": [
+          [
+            "<code>createUser</code>",
+            "POST <code>/v1/user</code>",
+            "identity",
+            "<code>udp/write</code>",
+            "yes"
+          ],
+          [
+            "<code>exchangeIdentity</code>",
+            "GET <code>/v1/identity/exchange</code>",
+            "identity",
+            "<code>udp/read</code>",
+            "yes"
+          ],
+          [
+            "<code>createIdentity</code>",
+            "POST <code>/v1/identity/{serviceName}/{identifier}</code>",
+            "identity",
+            "<code>udp/write</code>",
+            "yes"
+          ],
+          [
+            "<code>readIdentity</code>",
+            "GET <code>/v1/identity/{serviceName}/{identifier}</code>",
+            "identity",
+            "<code>udp/read</code>",
+            "yes"
+          ],
+          [
+            "<code>deleteIdentity</code>",
+            "DELETE <code>/v1/identity/{serviceName}/{identifier}</code>",
+            "identity",
+            "<code>udp/delete</code>",
+            "yes"
+          ],
+          [
+            "<code>getAllLinkedService</code>",
+            "GET <code>/v1/identity/{serviceName}/{identifier}/linked-services</code>",
+            "identity",
+            "<code>udp/read</code>",
+            "yes"
+          ],
+          [
+            "<code>postData</code>",
+            "POST <code>/v1/{resourcePath+}</code>",
+            "identity, data",
+            "<code>udp/write</code>",
+            "yes"
+          ],
+          [
+            "<code>patchData</code>",
+            "PATCH <code>/v1/{resourcePath+}</code>",
+            "identity, data",
+            "<code>udp/write</code>",
+            "yes"
+          ],
+          [
+            "<code>getData</code>",
+            "GET <code>/v1/{resourcePath+}</code>",
+            "identity, data",
+            "<code>udp/read</code>",
+            "yes"
+          ],
+          [
+            "<code>deleteData</code>",
+            "DELETE <code>/v1/{resourcePath+}</code>",
+            "identity, data",
+            "<code>udp/delete</code>",
+            "yes"
+          ],
+          [
+            "<code>startSar</code>",
+            "POST <code>/v1/sar</code>",
+            "none — publishes to the SAR queue",
+            "<code>udp/write</code>",
+            "no — <code>disableRoute</code>"
+          ],
+          [
+            "<code>startDsar</code>",
+            "POST <code>/v1/dsar</code>",
+            "none — publishes to the DSAR queue",
+            "<code>udp/write</code>",
+            "no — <code>disableRoute</code>"
+          ],
+          [
+            "<code>getSarStatus</code>",
+            "GET <code>/v1/sar/{sarId}</code>",
+            "identity, sar",
+            "<code>udp/read</code>",
+            "no — <code>disableRoute</code>"
+          ]
+        ]
+      },
       {
         "name": "How an error becomes a response",
         "code": [

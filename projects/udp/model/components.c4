@@ -1,8 +1,8 @@
 // UDP architecture — Components.
 //
 // Inside one route Lambda: the middleware every request runs through, in the order it
-// runs, and the data-access layer beneath the handler. Every one of the thirteen route
-// functions is wired the same way, so this is drawn once. C4 level 3.
+// runs, and the data-access layer beneath the handler. The thirteen route
+// functions share it with two variations, so it is drawn once and a table lists them. C4 level 3.
 
 model {
 
@@ -30,7 +30,11 @@ model {
       tech 'src/*/handler.ts'
       role 'Read top to bottom: a <code>before</code> runs in this order, an <code>after</code> in reverse, and a thrown error stops at the error handler.'
       facts [
-        'The order in the file is logger, tracer, a stack annotation, response serialiser, sanitiser, error handling, then the validator — so validation is the last <code>before</code> and runs just ahead of the handler.'
+        'The order in the file is logger, tracer, a stack annotation, response serialiser, sanitiser, error handling, then the validator — so validation is the last <code>before</code> and runs just ahead of the handler.',
+        'Nine of the thirteen routes run the sanitiser. createIdentity, createUser, deleteData and deleteIdentity do not — each returns a message, not a record.',
+        'The four routes with a body — createUser, createIdentity, postData, patchData — add <code>@middy/http-json-body-parser</code> between the error handler and the validator. It is not drawn.',
+        'The five queue- and event-driven functions run the logger, the tracer and the annotation only: no serialiser, no sanitiser, no error handler, no validator.',
+        'An <code>envValidator</code> middleware exists in libs/utils, with a test; nothing uses it. <code>requireEnvVars</code> at cold start does that job.'
       ]
       sourceId 'chain'
       order '0'
