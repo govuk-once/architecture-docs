@@ -1,0 +1,1578 @@
+{
+  "context": {
+    "name": "Context",
+    "order": 1,
+    "group": "Architecture",
+    "audience": "Anyone new to UDP, including non-engineers",
+    "blurb": "UDP among the systems that call it. Every caller is a GOV.UK Once system in its own AWS account; the person never reaches UDP directly, and nothing outside the programme does either. C4 level 1 — runtime only.",
+    "note": "The consumers a deployment admits are an SSM parameter, not code. The two named here are the ones the committed development context lists.",
+    "w": 840,
+    "h": 440
+  },
+  "request": {
+    "name": "Request path",
+    "order": 2,
+    "group": "Architecture",
+    "audience": "On-call, and anyone tracing a consumer call",
+    "blurb": "Every hop a consumer call takes, numbered in reading order, with the identity exchange as the worked example: it is the call FLEX makes to turn its own user id into another service's, and it meets every gate on the way in.",
+    "note": "Three gates before a function runs — the VPC endpoint the call came through, the SigV4 signature, and the WAF — and one thing that looks like a gate and is not: the API key.",
+    "dashMeans": "a header the gateway reads but never checks",
+    "tables": [
+      {
+        "name": "The thirteen routes — ten in production — and the consumer permission each needs",
+        "code": [
+          ["routes.ts", "libs/utils/schemas/routes/routes.ts"],
+          [
+            "iam-consumer-construct.ts",
+            "cdk/lib/constructs/iam-consumer-construct.ts"
+          ],
+          ["main-stack.ts", "cdk/lib/stacks/main-stack.ts"]
+        ],
+        "cols": ["Method and path", "Permission", "Lambda", "Does"],
+        "rows": [
+          [
+            "<code>POST /v1/user</code>",
+            "write",
+            "createUser",
+            "Mints a <code>udpId</code> and its first link"
+          ],
+          [
+            "<code>GET /v1/identity/exchange</code>",
+            "read",
+            "exchangeIdentity",
+            "The caller's id for a person → another service's id for them"
+          ],
+          [
+            "<code>POST /v1/identity/{serviceName}/{identifier}</code>",
+            "write",
+            "createIdentity",
+            "Adds a link to an existing person"
+          ],
+          [
+            "<code>GET /v1/identity/{serviceName}/{identifier}</code>",
+            "read",
+            "readIdentity",
+            "Reads one link"
+          ],
+          [
+            "<code>DELETE /v1/identity/{serviceName}/{identifier}</code>",
+            "delete",
+            "deleteIdentity",
+            "Removes one link"
+          ],
+          [
+            "<code>GET /v1/identity/{serviceName}/{identifier}/linked-services</code>",
+            "read",
+            "getAllLinkedService",
+            "Every link the person has"
+          ],
+          [
+            "<code>POST /v1/{resourcePath+}</code>",
+            "write",
+            "postData",
+            "Stores a record under the path"
+          ],
+          [
+            "<code>PATCH /v1/{resourcePath+}</code>",
+            "write",
+            "patchData",
+            "Merges into it"
+          ],
+          [
+            "<code>GET /v1/{resourcePath+}</code>",
+            "read",
+            "getData",
+            "Reads it"
+          ],
+          [
+            "<code>DELETE /v1/{resourcePath+}</code>",
+            "delete",
+            "deleteData",
+            "Removes it"
+          ],
+          [
+            "<code>POST /v1/sar</code>",
+            "write",
+            "startSar",
+            "Queues an export; see Rights requests. Not in production"
+          ],
+          [
+            "<code>GET /v1/sar/{sarId}</code>",
+            "read",
+            "getSarStatus",
+            "The download link, once there is one. Not in production"
+          ],
+          [
+            "<code>POST /v1/dsar</code>",
+            "write",
+            "startDsar",
+            "Queues a deletion; see Rights requests. Not in production"
+          ]
+        ]
+      },
+      {
+        "name": "What a consumer is given, and what every data route needs",
+        "code": [
+          [
+            "consumer-config-construct.ts",
+            "cdk/lib/constructs/consumer-config-construct.ts"
+          ],
+          [
+            "iam-consumer-construct.ts",
+            "cdk/lib/constructs/iam-consumer-construct.ts"
+          ],
+          ["data/defaults.ts", "libs/utils/schemas/endpoints/data/defaults.ts"],
+          [
+            "api-gateway-construct.ts",
+            "cdk/lib/constructs/api-gateway-construct.ts"
+          ]
+        ],
+        "cols": ["Item", "Where it comes from", "What it is for"],
+        "rows": [
+          [
+            "<code>consumerRoleArn</code>",
+            "The consumer secret",
+            "The role to assume; trusts the consumer's account, with an external id when configured"
+          ],
+          [
+            "<code>apiUrl</code> · <code>apiAccountId</code> · <code>region</code>",
+            "The consumer secret",
+            "Where to send the SigV4 request"
+          ],
+          [
+            "<code>apiKey</code>",
+            "The consumer secret",
+            "Sent as <code>x-api-key</code>; no method checks it"
+          ],
+          [
+            "VPC endpoint id",
+            "Written into the SSM consumer config by hand",
+            "Must appear in the API's <code>aws:sourceVpce</code> allow list, or the call is denied before authorisation"
+          ],
+          [
+            "<code>requesting-service</code>",
+            "A header on every data route",
+            "Which service is asking — <code>GOVUKAPP</code> in the schema example, <code>dvla</code> from UNS"
+          ],
+          [
+            "<code>requesting-service-user-id</code>",
+            "A header on every data route",
+            "That service's own id for the person; resolved to a <code>udpId</code> in the identity table"
+          ],
+          [
+            "Stage throttle",
+            "<code>api-gateway-construct.ts</code>",
+            "100 requests a second, burst 200, for all consumers together; the only throttle in force"
+          ]
+        ]
+      }
+    ],
+    "w": 840,
+    "h": 720
+  },
+  "containers": {
+    "name": "Containers",
+    "order": 3,
+    "group": "Architecture",
+    "audience": "UDP engineers, and anyone reviewing a change to a stack",
+    "blurb": "Every separately deployable part the CDK app creates per environment, grouped by the stack that owns it, and the traffic between them. C4 level 2.",
+    "note": "The VPC stack is on Network; the monitoring, backup, Macie and test stacks are on Security and Delivery. Counts on the boxes are of functions as deployed; the Resources tab binds them to the synthesised templates.",
+    "w": 1900,
+    "h": 920,
+    "tables": [
+      {
+        "name": "What differs by environment",
+        "code": [
+          ["lambda-construct.ts", "cdk/lib/constructs/lambda-construct.ts"],
+          ["environment.ts", "cdk/constants/environment.ts"],
+          ["cdk/bin/app.ts", "cdk/bin/app.ts"],
+          ["main-stack.ts", "cdk/lib/stacks/main-stack.ts"],
+          ["routes.ts", "libs/utils/schemas/routes/routes.ts"]
+        ],
+        "cols": ["Setting", "Development", "Staging", "Production"],
+        "rows": [
+          ["Reserved concurrency per function", "2", "50", "50"],
+          ["Log retention", "1 month", "1 year", "1 year"],
+          [
+            "Removal policy and deletion protection",
+            "destroy",
+            "RETAIN, protected",
+            "RETAIN, protected"
+          ],
+          ["Backup stack", "—", "vault, 3 plans", "vault, 3 plans"],
+          ["End-to-end and performance stacks", "yes", "yes", "—"],
+          [
+            "SAR and DSAR routes, their queues, and the sar stack",
+            "yes",
+            "yes",
+            "—"
+          ],
+          ["API caching", "off", "off", "off — forced in the stack"],
+          [
+            "Stack name prefix",
+            "<code>dev-</code>, or <code>pr-{n}-dev-</code>",
+            "<code>stag-</code>",
+            "<code>prod-</code>"
+          ],
+          [
+            "Slack alarm channel",
+            "from SSM <code>…/udp/monitoring</code>, when set",
+            "the same",
+            "the same"
+          ]
+        ]
+      }
+    ]
+  },
+  "components": {
+    "name": "Components",
+    "order": 4,
+    "group": "Architecture",
+    "audience": "Engineers changing a handler — this is the code, not the infrastructure",
+    "blurb": "Inside one route Lambda: the middleware every request runs through, in the order it runs, and the data-access layer beneath the handler. Thirteen route functions share it, with two variations the first table lists. C4 level 3.",
+    "note": "Read the chain top to bottom for a request coming in, and bottom to top for the response going out: the serialiser and sanitiser are <code>after</code> middleware, so they run on the way back.",
+    "dashMeans": "a hand-off inside the library, not a call the handler makes",
+    "w": 1480,
+    "h": 1360,
+    "tables": [
+      {
+        "name": "Which middleware each function runs",
+        "code": [
+          ["middleware/index.ts", "libs/utils/middleware/index.ts"],
+          ["createUserLambda/handler.ts", "src/createUserLambda/handler.ts"],
+          [
+            "exchangeIdentityLambda/handler.ts",
+            "src/exchangeIdentityLambda/handler.ts"
+          ],
+          [
+            "createIdentityLambda/handler.ts",
+            "src/createIdentityLambda/handler.ts"
+          ],
+          [
+            "readIdentityLambda/handler.ts",
+            "src/readIdentityLambda/handler.ts"
+          ],
+          [
+            "deleteIdentityLambda/handler.ts",
+            "src/deleteIdentityLambda/handler.ts"
+          ],
+          [
+            "getAllLinkedServiceLambda/handler.ts",
+            "src/getAllLinkedServiceLambda/handler.ts"
+          ],
+          ["postDataLambda/handler.ts", "src/postDataLambda/handler.ts"],
+          ["patchDataLambda/handler.ts", "src/patchDataLambda/handler.ts"],
+          ["getDataLambda/handler.ts", "src/getDataLambda/handler.ts"],
+          ["deleteDataLambda/handler.ts", "src/deleteDataLambda/handler.ts"],
+          ["startSarLambda/handler.ts", "src/startSarLambda/handler.ts"],
+          ["startDsarLambda/handler.ts", "src/startDsarLambda/handler.ts"],
+          [
+            "getSarStatusLambda/handler.ts",
+            "src/getSarStatusLambda/handler.ts"
+          ],
+          [
+            "createSarFileLambda/handler.ts",
+            "src/createSarFileLambda/handler.ts"
+          ],
+          ["dsarRequestLambda/handler.ts", "src/dsarRequestLambda/handler.ts"],
+          ["dsarDeleteLambda/handler.ts", "src/dsarDeleteLambda/handler.ts"],
+          [
+            "generateSarPresignedUrlLambda/handler.ts",
+            "src/generateSarPresignedUrlLambda/handler.ts"
+          ],
+          [
+            "dvlaPilotPurgeLambda/handler.ts",
+            "src/dvlaPilotPurgeLambda/handler.ts"
+          ]
+        ],
+        "note": "Every API-triggered handler runs the same six: logger, tracer, annotation, serialiser, error handler and validator. The two variations are the sanitiser, which the four message-returning routes skip, and the JSON body parser, which only the four routes with a body add.",
+        "cols": ["Function", "Trigger", "Chain, in file order"],
+        "rows": [
+          [
+            "<code>createUser</code>",
+            "API Gateway",
+            "logger · tracer · annotation · serialiser · errors · <b>json body parser</b> · validator — <b>no sanitiser</b>"
+          ],
+          [
+            "<code>exchangeIdentity</code>",
+            "API Gateway",
+            "logger · tracer · annotation · serialiser · sanitiser · errors · validator"
+          ],
+          [
+            "<code>createIdentity</code>",
+            "API Gateway",
+            "logger · tracer · annotation · serialiser · errors · <b>json body parser</b> · validator — <b>no sanitiser</b>"
+          ],
+          [
+            "<code>readIdentity</code>",
+            "API Gateway",
+            "logger · tracer · annotation · serialiser · sanitiser · errors · validator"
+          ],
+          [
+            "<code>deleteIdentity</code>",
+            "API Gateway",
+            "logger · tracer · annotation · serialiser · errors · validator — <b>no sanitiser</b>"
+          ],
+          [
+            "<code>getAllLinkedService</code>",
+            "API Gateway",
+            "logger · tracer · annotation · serialiser · sanitiser · errors · validator"
+          ],
+          [
+            "<code>postData</code>",
+            "API Gateway",
+            "logger · tracer · annotation · serialiser · sanitiser · errors · <b>json body parser</b> · validator"
+          ],
+          [
+            "<code>patchData</code>",
+            "API Gateway",
+            "logger · tracer · annotation · serialiser · sanitiser · errors · <b>json body parser</b> · validator"
+          ],
+          [
+            "<code>getData</code>",
+            "API Gateway",
+            "logger · tracer · annotation · serialiser · sanitiser · errors · validator"
+          ],
+          [
+            "<code>deleteData</code>",
+            "API Gateway",
+            "logger · tracer · annotation · serialiser · errors · validator — <b>no sanitiser</b>"
+          ],
+          [
+            "<code>startSar</code>",
+            "API Gateway",
+            "logger · tracer · annotation · serialiser · sanitiser · errors · validator"
+          ],
+          [
+            "<code>startDsar</code>",
+            "API Gateway",
+            "logger · tracer · annotation · serialiser · sanitiser · errors · validator"
+          ],
+          [
+            "<code>getSarStatus</code>",
+            "API Gateway",
+            "logger · tracer · annotation · serialiser · sanitiser · errors · validator"
+          ],
+          ["<code>createSarFile</code>", "SQS", "logger · tracer · annotation"],
+          ["<code>dsarRequest</code>", "SQS", "logger · tracer · annotation"],
+          ["<code>dsarDelete</code>", "SQS", "logger · tracer · annotation"],
+          [
+            "<code>generateSarPresignedUrl</code>",
+            "S3 event",
+            "logger · tracer · annotation"
+          ],
+          [
+            "<code>dvlaPilotPurge</code>",
+            "untyped — the handler reads no event",
+            "logger · tracer · annotation"
+          ]
+        ]
+      },
+      {
+        "name": "What each route does, and with which services",
+        "code": [
+          ["routes.ts", "libs/utils/schemas/routes/routes.ts"],
+          ["ServiceFactory.ts", "libs/data-access/factory/ServiceFactory.ts"],
+          ["lambda-construct.ts", "cdk/lib/constructs/lambda-construct.ts"],
+          ["createUserLambda/handler.ts", "src/createUserLambda/handler.ts"],
+          [
+            "exchangeIdentityLambda/handler.ts",
+            "src/exchangeIdentityLambda/handler.ts"
+          ],
+          [
+            "createIdentityLambda/handler.ts",
+            "src/createIdentityLambda/handler.ts"
+          ],
+          [
+            "readIdentityLambda/handler.ts",
+            "src/readIdentityLambda/handler.ts"
+          ],
+          [
+            "deleteIdentityLambda/handler.ts",
+            "src/deleteIdentityLambda/handler.ts"
+          ],
+          [
+            "getAllLinkedServiceLambda/handler.ts",
+            "src/getAllLinkedServiceLambda/handler.ts"
+          ],
+          ["postDataLambda/handler.ts", "src/postDataLambda/handler.ts"],
+          ["patchDataLambda/handler.ts", "src/patchDataLambda/handler.ts"],
+          ["getDataLambda/handler.ts", "src/getDataLambda/handler.ts"],
+          ["deleteDataLambda/handler.ts", "src/deleteDataLambda/handler.ts"],
+          ["startSarLambda/handler.ts", "src/startSarLambda/handler.ts"],
+          ["startDsarLambda/handler.ts", "src/startDsarLambda/handler.ts"],
+          ["getSarStatusLambda/handler.ts", "src/getSarStatusLambda/handler.ts"]
+        ],
+        "note": "<code>{resourcePath+}</code> is greedy, so <code>/v1/notifications</code>, <code>/v1/groups</code> and <code>/v1/local-council/…</code> are all the same four data handlers with a different sort key. Every route declares an <code>authorizationScopes</code> value and nothing enforces it: every method is <code>AWS_IAM</code> with no authorizer, so the scope is documentation.",
+        "cols": [
+          "Route",
+          "Method · path",
+          "Services",
+          "Declared scope",
+          "Deployed"
+        ],
+        "rows": [
+          [
+            "<code>createUser</code>",
+            "POST <code>/v1/user</code>",
+            "identity",
+            "<code>udp/write</code>",
+            "yes"
+          ],
+          [
+            "<code>exchangeIdentity</code>",
+            "GET <code>/v1/identity/exchange</code>",
+            "identity",
+            "<code>udp/read</code>",
+            "yes"
+          ],
+          [
+            "<code>createIdentity</code>",
+            "POST <code>/v1/identity/{serviceName}/{identifier}</code>",
+            "identity",
+            "<code>udp/write</code>",
+            "yes"
+          ],
+          [
+            "<code>readIdentity</code>",
+            "GET <code>/v1/identity/{serviceName}/{identifier}</code>",
+            "identity",
+            "<code>udp/read</code>",
+            "yes"
+          ],
+          [
+            "<code>deleteIdentity</code>",
+            "DELETE <code>/v1/identity/{serviceName}/{identifier}</code>",
+            "identity",
+            "<code>udp/delete</code>",
+            "yes"
+          ],
+          [
+            "<code>getAllLinkedService</code>",
+            "GET <code>/v1/identity/{serviceName}/{identifier}/linked-services</code>",
+            "identity",
+            "<code>udp/read</code>",
+            "yes"
+          ],
+          [
+            "<code>postData</code>",
+            "POST <code>/v1/{resourcePath+}</code>",
+            "identity, data",
+            "<code>udp/write</code>",
+            "yes"
+          ],
+          [
+            "<code>patchData</code>",
+            "PATCH <code>/v1/{resourcePath+}</code>",
+            "identity, data",
+            "<code>udp/write</code>",
+            "yes"
+          ],
+          [
+            "<code>getData</code>",
+            "GET <code>/v1/{resourcePath+}</code>",
+            "identity, data",
+            "<code>udp/read</code>",
+            "yes"
+          ],
+          [
+            "<code>deleteData</code>",
+            "DELETE <code>/v1/{resourcePath+}</code>",
+            "identity, data",
+            "<code>udp/delete</code>",
+            "yes"
+          ],
+          [
+            "<code>startSar</code>",
+            "POST <code>/v1/sar</code>",
+            "none — publishes to the SAR queue",
+            "<code>udp/write</code>",
+            "no — <code>disableRoute</code>"
+          ],
+          [
+            "<code>startDsar</code>",
+            "POST <code>/v1/dsar</code>",
+            "none — publishes to the DSAR queue",
+            "<code>udp/write</code>",
+            "no — <code>disableRoute</code>"
+          ],
+          [
+            "<code>getSarStatus</code>",
+            "GET <code>/v1/sar/{sarId}</code>",
+            "identity, sar",
+            "<code>udp/read</code>",
+            "no — <code>disableRoute</code>"
+          ]
+        ]
+      },
+      {
+        "name": "How an error becomes a response",
+        "code": [
+          ["udpErrorHandling.ts", "libs/utils/middleware/udpErrorHandling.ts"],
+          ["zodValidator.ts", "libs/utils/middleware/zodValidator.ts"]
+        ],
+        "cols": ["Thrown", "Status", "Body"],
+        "rows": [
+          [
+            "<code>ZodValidationError</code> — the request failed its route schema",
+            "400",
+            "<code>errorCode</code> 400 and the validation issues"
+          ],
+          [
+            "<code>IdentityRecordNotFoundError</code> — no link for the two headers",
+            "404",
+            "identity not found"
+          ],
+          [
+            "<code>DataRecordNotFoundError</code> — nothing under that resource path",
+            "404",
+            "data not found"
+          ],
+          [
+            "<code>SarNotFoundError</code> — no record for that sarId under this person",
+            "404",
+            "SAR not found"
+          ],
+          [
+            "Any other <code>BaseUDPError</code>",
+            "500",
+            "<code>errorCode</code> 500"
+          ],
+          ["Anything else", "500", "a generic body; the error is logged"]
+        ]
+      }
+    ]
+  },
+  "rights": {
+    "name": "Rights requests",
+    "order": 5,
+    "group": "Architecture",
+    "audience": "Anyone answering a subject access or deletion request, and anyone reviewing how they are met",
+    "blurb": "The two asynchronous flows side by side, numbered in reading order: an export that ends in a seven-day download link, and a deletion that ends with the person's links gone. Both answer 202 at the API and do the work off a queue.",
+    "note": "Development and staging only: production deploys neither the three rights routes nor the sar stack. Neither flow tells the consumer when it is done. An export is polled for; a deletion has no status route at all.",
+    "dashMeans": "where a failure goes — and nothing in the repository reads either dead-letter queue",
+    "tables": [
+      {
+        "name": "How long each thing lives",
+        "code": [
+          ["s3-construct.ts", "cdk/lib/constructs/s3-construct.ts"],
+          [
+            "generateSarPresignedUrlLambda/handler.ts",
+            "src/generateSarPresignedUrlLambda/handler.ts"
+          ],
+          ["sar-stack.ts", "cdk/lib/stacks/sar-stack.ts"],
+          ["dynamodb-construct.ts", "cdk/lib/constructs/dynamodb-construct.ts"]
+        ],
+        "cols": ["Item", "Lives", "Set by"],
+        "rows": [
+          ["The export object", "90 days", "A lifecycle rule on the bucket"],
+          [
+            "The download link",
+            "7 days",
+            "<code>expiresIn</code> on the presigned URL"
+          ],
+          [
+            "The SAR record",
+            "90 days",
+            "A <code>ttl</code> on the item, matched to the object"
+          ],
+          [
+            "Bucket access logs",
+            "360 days",
+            "A lifecycle rule on the logs bucket"
+          ],
+          [
+            "A page of keys that keeps failing",
+            "3 receives, then the dead-letter queue",
+            "<code>maxReceiveCount</code> on the delete queue"
+          ],
+          [
+            "A deleted record",
+            "Recoverable for the point-in-time window, and from AWS Backup outside development",
+            "Point-in-time recovery on both tables; the backup plans"
+          ]
+        ]
+      }
+    ],
+    "w": 1420,
+    "h": 980
+  },
+  "network": {
+    "name": "Network",
+    "order": 6,
+    "group": "Cross-cutting",
+    "audience": "Anyone changing a subnet, an endpoint or a security group",
+    "blurb": "The one VPC per environment, its six subnets — the isolated pair holds every workload — and the endpoints that are the only way out of them. Every Lambda and both test builds sit in those isolated subnets; everything they reach is an endpoint beside them.",
+    "note": "The private API is not in the VPC. It is a regional service that accepts calls only through the execute-api endpoints its resource policy lists — the consumers' own, and this VPC's, which the test builds use. The test builds also reach CodeBuild and ECR through the interface endpoints; that edge is a fact on their box.",
+    "tables": [
+      {
+        "name": "Address plan",
+        "code": [["vpc-construct.ts", "cdk/lib/constructs/vpc-construct.ts"]],
+        "note": "Six /24s out of a /16: 10.0.0.0/24 and 10.0.1.0/24 public, 10.0.2.0/24 and 10.0.3.0/24 private with egress, 10.0.4.0/24 and 10.0.5.0/24 isolated — the lower availability zone first in each pair. Identical in every environment: the CIDR is the construct's default and no stack overrides it.",
+        "cols": [
+          "Tier",
+          "Mask",
+          "Subnets",
+          "Usable IPs each",
+          "Route to internet",
+          "What runs there"
+        ],
+        "rows": [
+          [
+            "Public",
+            "/24",
+            "2 · one per AZ",
+            "251",
+            "Internet gateway; public IPs assigned on launch",
+            "Nothing — the tier holds its address range"
+          ],
+          [
+            "Private with egress",
+            "/24",
+            "2 · one per AZ",
+            "251",
+            "None — <code>natGateways: 0</code>, so no default route",
+            "Nothing"
+          ],
+          [
+            "Private isolated",
+            "/24",
+            "2 · one per AZ",
+            "251",
+            "None",
+            "Every Lambda, both CodeBuild projects, and the ENIs of all twelve endpoints"
+          ]
+        ]
+      },
+      {
+        "name": "Network ACL · subnet-level, stateless, first match wins in ascending rule order",
+        "code": [["vpc-construct.ts", "cdk/lib/constructs/vpc-construct.ts"]],
+        "note": "One custom ACL, associated with the two isolated subnets only; the public and private-egress subnets have no association in the template and so keep the VPC's default ACL. The two denies come from the construct's <code>ADMIN_PORTS</code> table, which lists Telnet, 8080, 8443 and 10000 as well but has them commented out. There is no ephemeral-return rule: outbound is allowed only to 10.0.0.0/16, which is consistent with a tier that has no route out.",
+        "cols": [
+          "Rule",
+          "Direction",
+          "Traffic",
+          "Source / destination",
+          "Action"
+        ],
+        "rows": [
+          ["50", "Inbound", "TCP 22", "0.0.0.0/0", "Deny"],
+          ["51", "Inbound", "TCP 3389", "0.0.0.0/0", "Deny"],
+          ["100", "Inbound", "All", "10.0.0.0/16", "Allow"],
+          ["100", "Outbound", "All", "10.0.0.0/16", "Allow"]
+        ]
+      },
+      {
+        "name": "Security groups · instance-level, stateful",
+        "code": [
+          ["vpc-construct.ts", "cdk/lib/constructs/vpc-construct.ts"],
+          ["lambda-construct.ts", "cdk/lib/constructs/lambda-construct.ts"],
+          [
+            "codebuild-e2e-construct.ts",
+            "cdk/lib/constructs/codebuild-e2e-construct.ts"
+          ]
+        ],
+        "note": "The Lambda group's three inbound rules — 53/tcp and 53/udp from the VPC CIDR, and 443 from 0.0.0.0/0 — carry descriptions written for outbound traffic (<i>Allow HTTPS to VPC endpoints</i>). Lambda ENIs accept no inbound connections, so they admit nothing in practice, but they are inbound rules in the template. The endpoint group keeps CDK's default allow-all egress.",
+        "cols": [
+          "Security group",
+          "allowAllOutbound",
+          "Explicit rules",
+          "Attached to"
+        ],
+        "rows": [
+          [
+            "<code>vpcEndpointSg</code>",
+            "true",
+            "In: 443 from the VPC CIDR, 443 from the Lambda group, 443 from the CodeBuild group",
+            "All twelve interface endpoints"
+          ],
+          [
+            "<code>lambdaSg</code>",
+            "false",
+            "Out: 443 to the endpoint group; 53 tcp and udp to the VPC CIDR. In: 53 tcp and udp from the VPC CIDR; 443 from 0.0.0.0/0",
+            "Every Lambda in main, sar and dvla-pilot"
+          ],
+          [
+            "<code>CodeBuildSG</code>",
+            "false",
+            "Out: 443 to the endpoint group; 53 tcp and udp to the VPC CIDR. No inbound rules",
+            "Both CodeBuild projects"
+          ]
+        ]
+      },
+      {
+        "name": "The twelve endpoints",
+        "code": [
+          ["vpc-construct.ts", "cdk/lib/constructs/vpc-construct.ts"],
+          [
+            "codebuild-e2e-construct.ts",
+            "cdk/lib/constructs/codebuild-e2e-construct.ts"
+          ],
+          ["main-stack.ts", "cdk/lib/stacks/main-stack.ts"],
+          ["sar-stack.ts", "cdk/lib/stacks/sar-stack.ts"],
+          ["dvla-pilot-stack.ts", "cdk/lib/stacks/dvla-pilot-stack.ts"],
+          ["sigv4-signer.ts", "e2e/src/helpers/sigv4-signer.ts"]
+        ],
+        "cols": ["Service", "Type", "Used by"],
+        "rows": [
+          [
+            "DynamoDB",
+            "Interface · no private DNS",
+            "Every route, rights and purge function, by the URL in <code>DYNAMODB_ENDPOINT</code>"
+          ],
+          [
+            "S3",
+            "Interface",
+            "The export function; the test builds fetching their source"
+          ],
+          ["KMS", "Interface", "Envelope encryption in every function"],
+          [
+            "SQS",
+            "Interface",
+            "The start functions; the sar stack's event sources"
+          ],
+          ["Secrets Manager", "Interface", "The DVLA purge function"],
+          ["CloudWatch Logs", "Interface", "Every function's log group"],
+          [
+            "execute-api",
+            "Interface",
+            "The test builds calling the private API"
+          ],
+          ["CodeBuild", "Interface", "The test builds themselves"],
+          ["ECR API", "Interface", "The test builds' image pulls"],
+          [
+            "ECR Docker registry",
+            "Interface",
+            "The same image pulls, alongside ECR API"
+          ],
+          [
+            "STS",
+            "Interface",
+            "The test builds assuming the <code>test</code> consumer role"
+          ],
+          ["Cognito IdP", "Interface", "Nothing in the code"]
+        ]
+      },
+      {
+        "name": "Egress paths",
+        "code": [
+          ["vpc-construct.ts", "cdk/lib/constructs/vpc-construct.ts"],
+          ["lambda-construct.ts", "cdk/lib/constructs/lambda-construct.ts"],
+          [
+            "codebuild-e2e-construct.ts",
+            "cdk/lib/constructs/codebuild-e2e-construct.ts"
+          ]
+        ],
+        "note": "All twelve endpoints are interface endpoints with ENIs in the isolated subnets; there are no gateway endpoints and no route-table entries for S3 or DynamoDB. Private DNS is on for every endpoint except DynamoDB, which the code reaches by the URL in <code>DYNAMODB_ENDPOINT</code>.",
+        "cols": ["From", "Path", "Reaches", "Notes"],
+        "rows": [
+          [
+            "Lambda",
+            "443 → endpoint group → interface endpoint",
+            "KMS, DynamoDB, S3, SQS, Secrets Manager, CloudWatch Logs, execute-api, STS, Cognito IdP",
+            "The only outbound the group allows besides DNS"
+          ],
+          [
+            "Lambda",
+            "53 tcp/udp → the VPC's Route 53 resolver",
+            "Name resolution, including the endpoints' private names",
+            "Scoped to the VPC CIDR"
+          ],
+          [
+            "CodeBuild",
+            "443 → endpoint group → interface endpoint",
+            "CodeBuild, ECR API, ECR Docker, S3, STS, execute-api, CloudWatch Logs",
+            "Image pulls and the private API without leaving the VPC"
+          ],
+          [
+            "Isolated subnets",
+            "—",
+            "Nothing else",
+            "No default route, and the ACL allows outbound only to 10.0.0.0/16"
+          ],
+          [
+            "Private with egress",
+            "—",
+            "Nothing",
+            "Named for egress, but with no NAT gateway there is no route out"
+          ],
+          [
+            "Public",
+            "0.0.0.0/0 → internet gateway",
+            "The internet",
+            "Nothing is placed there"
+          ]
+        ]
+      },
+      {
+        "name": "Ingress · the private API",
+        "code": [
+          [
+            "api-gateway-construct.ts",
+            "cdk/lib/constructs/api-gateway-construct.ts"
+          ],
+          ["waf-construct.ts", "cdk/lib/constructs/waf-construct.ts"],
+          ["lambda-construct.ts", "cdk/lib/constructs/lambda-construct.ts"],
+          ["main-stack.ts", "cdk/lib/stacks/main-stack.ts"]
+        ],
+        "note": "There is no public path: a PRIVATE REST API answers no public DNS name, and its resource policy denies any caller not arriving through a listed execute-api VPC endpoint. The list is the VPC's own endpoint plus each external consumer's, read from SSM at synth. No method sets <code>apiKeyRequired</code>, so the usage-plan API key is not needed to call; when one is sent it selects that consumer's usage plan for throttling.",
+        "cols": ["Hop", "Termination", "Policy"],
+        "rows": [
+          [
+            "The internet",
+            "—",
+            "No route: PRIVATE endpoint type, resolvable only inside a VPC that has an execute-api endpoint"
+          ],
+          [
+            "Consumer's execute-api endpoint",
+            "TLS from the caller to the endpoint ENI",
+            "Must be an endpoint ID the resource policy lists"
+          ],
+          [
+            "API Gateway resource policy",
+            "TLS terminates at API Gateway",
+            "Deny unless <code>aws:sourceVpce</code> matches a listed endpoint; then Allow for any principal; a further Allow per external consumer account, when any are configured"
+          ],
+          [
+            "Regional WAF",
+            "—",
+            "Block above 300,000 requests per IP in five minutes; AWS managed Common, SQLi and Known-bad-inputs rule sets; default allow"
+          ],
+          [
+            "Every method",
+            "—",
+            "<code>AWS_IAM</code> — SigV4 from the consumer role. <code>apiKeyRequired</code> is never set"
+          ]
+        ]
+      }
+    ],
+    "w": 1460,
+    "h": 660
+  },
+  "security": {
+    "name": "Security",
+    "order": 7,
+    "group": "Cross-cutting",
+    "audience": "Security review, on-call, and anyone answering an audit question",
+    "blurb": "The controls that bound every box on the other tabs, in five columns: who may call, what is encrypted and with which key, what watches, what wakes someone, and what can be restored.",
+    "note": "The alarms are all against the same NFR constants the performance tests use: p95 under 200 ms at the API, 150 ms in a function, errors under 0.1%.",
+    "tables": [
+      {
+        "name": "Where each control is proven",
+        "code": [
+          ["restore.yaml", ".github/workflows/restore.yaml"],
+          ["environment.ts", "cdk/constants/environment.ts"],
+          [
+            "api-gateway-construct.ts",
+            "cdk/lib/constructs/api-gateway-construct.ts"
+          ],
+          [
+            "consumer-config-construct.ts",
+            "cdk/lib/constructs/consumer-config-construct.ts"
+          ],
+          [
+            "consumer-usage-plan-construct.ts",
+            "cdk/lib/constructs/consumer-usage-plan-construct.ts"
+          ],
+          ["dynamodb-construct.ts", "cdk/lib/constructs/dynamodb-construct.ts"],
+          [
+            "iam-consumer-construct.ts",
+            "cdk/lib/constructs/iam-consumer-construct.ts"
+          ],
+          ["kms-construct.ts", "cdk/lib/constructs/kms-construct.ts"],
+          ["lambda-construct.ts", "cdk/lib/constructs/lambda-construct.ts"],
+          ["s3-construct.ts", "cdk/lib/constructs/s3-construct.ts"],
+          ["vpc-construct.ts", "cdk/lib/constructs/vpc-construct.ts"],
+          ["waf-construct.ts", "cdk/lib/constructs/waf-construct.ts"],
+          ["macie-stack.ts", "cdk/lib/macie/macie-stack.ts"],
+          ["backup-stack.ts", "cdk/lib/stacks/backup-stack.ts"],
+          ["dvla-pilot-stack.ts", "cdk/lib/stacks/dvla-pilot-stack.ts"],
+          ["monitoring-stack.ts", "cdk/lib/stacks/monitoring-stack.ts"],
+          [
+            "EncryptionService.ts",
+            "libs/data-access/services/EncryptionService.ts"
+          ]
+        ],
+        "note": "A map from each box above to the file that creates it and the zone it sits in, in the order the zones are numbered. The counts those boxes carry are gated on Resources; this mapping is read from the model's own citations.",
+        "cols": ["Control", "Enforces", "Created in", "Zone"],
+        "rows": [
+          [
+            "API resource policy",
+            "The endpoint ids come from the consumer config in SSM at synth. A new consumer is a deploy, not a runtime change.",
+            "<code>api-gateway-construct.ts</code>",
+            "1 · Access"
+          ],
+          [
+            "AWS_IAM on every method",
+            "The signature must belong to a principal allowed <code>execute-api:Invoke</code> on that method — a consumer role, or the test CodeBuild role.",
+            "<code>lambda-construct.ts</code>",
+            "1 · Access"
+          ],
+          [
+            "Consumer roles",
+            "Permission is by HTTP method over every path: a consumer with <code>read</code> can read any resource path any other consumer wrote.",
+            "<code>iam-consumer-construct.ts</code>",
+            "1 · Access"
+          ],
+          [
+            "API keys · not required",
+            "A key per consumer is minted, read back by a custom resource and put in the consumer secret. Without <code>apiKeyRequired</code> the usage plan throttles are idle.",
+            "<code>consumer-usage-plan-construct.ts</code>",
+            "1 · Access"
+          ],
+          [
+            "DVLA purge key",
+            "The one shared secret: whoever invokes the purge function must pass its value in the event. Invoking the function at all is an IAM permission in the account.",
+            "<code>dvla-pilot-stack.ts</code>",
+            "1 · Access"
+          ],
+          [
+            "DB key",
+            "Encrypts both tables and is <code>KMS_KEY_ID</code> in every function, so it also wraps each item's data key.",
+            "<code>kms-construct.ts</code>",
+            "2 · Encryption"
+          ],
+          [
+            "Envelope encryption in code",
+            "The <code>data</code> field, the three token fields on an identity, and a SAR's <code>presignedURL</code>. Everything else in an item — the keys, the service name — is plain.",
+            "<code>EncryptionService.ts</code>",
+            "2 · Encryption"
+          ],
+          [
+            "Main key",
+            "The log groups, and outside production the SAR and DSAR queues, their dead-letter queues and the SAR bucket.",
+            "<code>kms-construct.ts</code>",
+            "2 · Encryption"
+          ],
+          [
+            "Consumer config key",
+            "Encrypts the per-consumer secrets. Its policy names every consumer account, so any of them can decrypt any of the secrets the key protects; the secret's own policy is what scopes each to its consumer.",
+            "<code>consumer-config-construct.ts</code>",
+            "2 · Encryption"
+          ],
+          [
+            "In transit",
+            "The bucket refuses plain HTTP; the API is only reachable over PrivateLink; every AWS call from a function goes to an endpoint on 443. No mutual TLS anywhere.",
+            "<code>s3-construct.ts</code>",
+            "2 · Encryption"
+          ],
+          [
+            "Web ACL",
+            "SQLi, Common and KnownBadInputs rule sets, and a rate rule set so high on a private API it can only ever count. Logged to <code>aws-waf-logs-…</code>.",
+            "<code>waf-construct.ts</code>",
+            "3 · Detection"
+          ],
+          [
+            "Macie",
+            "Turned on for the account by a custom resource, with a results bucket and key. An aspect grants Macie's service-linked role decrypt on every key marked for it, so it can read the SAR bucket outside production; production has none.",
+            "<code>macie-stack.ts</code>",
+            "3 · Detection"
+          ],
+          [
+            "Log groups",
+            "Each function gets its own group at creation, the WAF and the VPC flow log theirs. Retention is a year in staging and production, a month in development.",
+            "<code>environment.ts</code>",
+            "3 · Detection"
+          ],
+          [
+            "X-Ray tracing",
+            "Every invocation is a trace segment annotated with the stack; response bodies are not captured.",
+            "<code>lambda-construct.ts</code>",
+            "3 · Detection"
+          ],
+          [
+            "VPC flow log",
+            "Accepted and rejected flows for the whole VPC.",
+            "<code>vpc-construct.ts</code>",
+            "3 · Detection"
+          ],
+          [
+            "Per-function alarms · 3 each",
+            "Errors ≥ 2 in two periods; p95 duration over 150 ms in three; any throttle in three. All critical.",
+            "<code>monitoring-stack.ts</code>",
+            "4 · Alerting"
+          ],
+          [
+            "API alarms · 3",
+            "5xx and latency are critical; the 4xx count is a warning, which is the only alarm that goes to the warning topic.",
+            "<code>monitoring-stack.ts</code>",
+            "4 · Alerting"
+          ],
+          [
+            "DynamoDB alarms · 3",
+            "On-demand tables can still throttle; any event is critical.",
+            "<code>monitoring-stack.ts</code>",
+            "4 · Alerting"
+          ],
+          [
+            "Critical and warning topics",
+            "The critical topic is subscribed by a Chatbot Slack channel when the SSM parameter names one. Nothing in the repository subscribes the warning topic — 4xx bursts and failed performance builds land there.",
+            "<code>monitoring-stack.ts</code>",
+            "4 · Alerting"
+          ],
+          [
+            "Dashboards · 2",
+            "One operational, one for the performance test metrics under <code>UDP/PerformanceTests</code>.",
+            "<code>monitoring-stack.ts</code>",
+            "4 · Alerting"
+          ],
+          [
+            "Point-in-time recovery",
+            "The one recovery path development has. A deleted record is recoverable for as long as the PITR window, whatever a DSAR promised.",
+            "<code>dynamodb-construct.ts</code>",
+            "5 · Backup · stag and prod"
+          ],
+          [
+            "Backup vault",
+            "Failed backup and copy jobs publish to a topic with no subscriber, because no address is passed to the stack.",
+            "<code>backup-stack.ts</code>",
+            "5 · Backup · stag and prod"
+          ],
+          [
+            "Backup plans · 3",
+            "Short, medium and long. The medium plan selects every DynamoDB table and RDS instance by ARN; the others select by a <code>backup-plan</code> tag nothing in the repository sets.",
+            "<code>backup-stack.ts</code>",
+            "5 · Backup · stag and prod"
+          ],
+          [
+            "Restore workflow",
+            "Restores a table beside the live one under the environment's deployment role; the swap is a manual step the script prints.",
+            "<code>restore.yaml</code>",
+            "5 · Backup · stag and prod"
+          ],
+          [
+            "Removal policies",
+            "A stack deletion in staging or production leaves the data behind; in development, and in a pull-request stack, it goes with the stack.",
+            "<code>environment.ts</code>",
+            "5 · Backup · stag and prod"
+          ]
+        ]
+      },
+      {
+        "name": "Where each log stream goes",
+        "code": [
+          ["lambda-construct.ts", "cdk/lib/constructs/lambda-construct.ts"],
+          ["environment.ts", "cdk/constants/environment.ts"],
+          ["Logger.ts", "libs/utils/logger/Logger.ts"],
+          [
+            "api-gateway-construct.ts",
+            "cdk/lib/constructs/api-gateway-construct.ts"
+          ],
+          ["waf-construct.ts", "cdk/lib/constructs/waf-construct.ts"],
+          ["vpc-construct.ts", "cdk/lib/constructs/vpc-construct.ts"],
+          [
+            "consumer-usage-plan-construct.ts",
+            "cdk/lib/constructs/consumer-usage-plan-construct.ts"
+          ],
+          ["macie-stack.ts", "cdk/lib/macie/macie-stack.ts"],
+          [
+            "codebuild-e2e-construct.ts",
+            "cdk/lib/constructs/codebuild-e2e-construct.ts"
+          ],
+          [
+            "codebuild-perf-construct.ts",
+            "cdk/lib/constructs/codebuild-perf-construct.ts"
+          ]
+        ],
+        "note": "Read the encryption column against itself: every log group a stack names is on the main key; the two CDK custom-resource providers and the two CodeBuild projects leave it unset. Retention is 30 days in development and 365 in production for everything the project names; the providers' 731 is set by nothing in this repository. Read from <code>cdk.out/dev</code> and <code>cdk.out/prod</code>.",
+        "cols": [
+          "Stream",
+          "Destination",
+          "Retention",
+          "Encryption at rest",
+          "Fields written",
+          "Set in"
+        ],
+        "rows": [
+          [
+            "Lambda — the 13 route functions",
+            "CloudWatch · <code>/aws/lambda/{name}-{env}</code>, one per function",
+            "30 days dev · 365 prod",
+            "Main key",
+            "Powertools JSON: service, environment, request and function context, the message and any fields; the error handler writes <code>error.message</code> only",
+            "<code>lambda-construct.ts</code> · <code>environment.ts</code>"
+          ],
+          [
+            "Lambda — the four sar-stack functions",
+            "CloudWatch · one per function",
+            "30 days dev · 365 prod",
+            "Main key",
+            "The same",
+            "<code>sar-stack.ts</code>"
+          ],
+          [
+            "Lambda — dvla-pilot-purge",
+            "CloudWatch · one group",
+            "30 days dev · 365 prod",
+            "Main key",
+            "The same",
+            "<code>dvla-pilot-stack.ts</code>"
+          ],
+          [
+            "API access log",
+            "CloudWatch · <code>/aws/apigateway/api-{env}</code>",
+            "30 days dev · 365 prod",
+            "Main key",
+            "requestId, requestTime, httpMethod, resourcePath, protocol, status, responseLength, identity.sourceIp, identity.caller, identity.user",
+            "<code>api-gateway-construct.ts</code>"
+          ],
+          [
+            "API execution log",
+            "CloudWatch · API Gateway's own group",
+            "—",
+            "—",
+            "<code>INFO</code> on every method; data trace off",
+            "<code>api-gateway-construct.ts</code>"
+          ],
+          [
+            "WAF",
+            "CloudWatch · <code>aws-waf-logs-api-{env}</code>",
+            "30 days dev · 365 prod",
+            "Main key",
+            "AWS's WAF record per inspected request; sampled requests on",
+            "<code>waf-construct.ts</code>"
+          ],
+          [
+            "VPC flow log",
+            "CloudWatch · <code>/aws/vpc/flow-logs-{env}</code>",
+            "30 days dev · 365 prod",
+            "Main key",
+            "<code>ALL</code>: accepted and rejected flows for the whole VPC",
+            "<code>vpc-construct.ts</code>"
+          ],
+          [
+            "X-Ray traces",
+            "X-Ray",
+            "—",
+            "—",
+            "A segment per invocation and per API request, annotated <code>stack</code>; nine functions add an outcome annotation; responses are not captured",
+            "<code>lambda-construct.ts</code>"
+          ],
+          [
+            "CDK custom-resource provider ×2",
+            "CloudWatch · the provider's own group, in main (API-key read-back) and in macie (enabling Macie)",
+            "731 days",
+            "<b>No key</b>",
+            "The provider's own output",
+            "<code>consumer-usage-plan-construct.ts</code> · <code>macie-stack.ts</code>"
+          ],
+          [
+            "CodeBuild e2e and perf · dev and staging",
+            "CloudWatch · <code>/aws/codebuild/{env}-…</code>",
+            "30 days",
+            "<b>No key</b>",
+            "Build output",
+            "<code>codebuild-e2e-construct.ts</code> · <code>codebuild-perf-construct.ts</code>"
+          ],
+          [
+            "Macie findings",
+            "A results bucket, and the Macie console",
+            "—",
+            "—",
+            "Findings, published every fifteen minutes",
+            "<code>macie-stack.ts</code>"
+          ]
+        ]
+      },
+      {
+        "name": "What the sanitiser removes, and what the logger redacts",
+        "code": [
+          [
+            "responseSanitiser.ts",
+            "libs/utils/middleware/responseSanitiser.ts"
+          ],
+          ["Logger.ts", "libs/utils/logger/Logger.ts"],
+          ["udpErrorHandling.ts", "libs/utils/middleware/udpErrorHandling.ts"]
+        ],
+        "note": "Two mechanisms, one of them unused. The response sanitiser strips storage keys from what a handler returns; the logger can replace named fields with <code>***REDACTED***</code> but is never told which, so request and response fields reach the logs as they are.",
+        "cols": ["Layer", "Removes", "Scope", "Bypass"],
+        "rows": [
+          [
+            "Response sanitiser",
+            "<code>ttl</code>, <code>pk</code>, <code>sk</code>, <code>udpId</code>, <code>lsi</code>, <code>lsi_1</code>, <code>__dataKey</code>",
+            "The response body's top level only: <code>deep</code> defaults to false and every caller passes <code>{}</code>",
+            "Nine routes run it; createIdentity, createUser, deleteData and deleteIdentity do not"
+          ],
+          [
+            "Logger redaction",
+            "Any field named in <code>redact</code>, recursively, replaced with <code>***REDACTED***</code>",
+            "Every <code>info</code>, <code>warn</code> and <code>error</code> call's fields",
+            "No caller passes a <code>redact</code> list, so nothing is redacted"
+          ],
+          [
+            "Error handler",
+            "—",
+            "Logs <code>error.message</code> only; an unexpected error's response carries a fixed message and the error's name",
+            "—"
+          ]
+        ]
+      },
+      {
+        "name": "Trace annotations written by the functions",
+        "code": [
+          [
+            "createIdentityLambda/handler.ts",
+            "src/createIdentityLambda/handler.ts"
+          ],
+          [
+            "createSarFileLambda/handler.ts",
+            "src/createSarFileLambda/handler.ts"
+          ],
+          ["createUserLambda/handler.ts", "src/createUserLambda/handler.ts"],
+          ["deleteDataLambda/handler.ts", "src/deleteDataLambda/handler.ts"],
+          [
+            "deleteIdentityLambda/handler.ts",
+            "src/deleteIdentityLambda/handler.ts"
+          ],
+          ["dsarDeleteLambda/handler.ts", "src/dsarDeleteLambda/handler.ts"],
+          ["dsarRequestLambda/handler.ts", "src/dsarRequestLambda/handler.ts"],
+          [
+            "dvlaPilotPurgeLambda/handler.ts",
+            "src/dvlaPilotPurgeLambda/handler.ts"
+          ],
+          [
+            "exchangeIdentityLambda/handler.ts",
+            "src/exchangeIdentityLambda/handler.ts"
+          ],
+          [
+            "generateSarPresignedUrlLambda/handler.ts",
+            "src/generateSarPresignedUrlLambda/handler.ts"
+          ],
+          [
+            "getAllLinkedServiceLambda/handler.ts",
+            "src/getAllLinkedServiceLambda/handler.ts"
+          ],
+          ["getDataLambda/handler.ts", "src/getDataLambda/handler.ts"],
+          [
+            "getSarStatusLambda/handler.ts",
+            "src/getSarStatusLambda/handler.ts"
+          ],
+          ["patchDataLambda/handler.ts", "src/patchDataLambda/handler.ts"],
+          ["postDataLambda/handler.ts", "src/postDataLambda/handler.ts"],
+          [
+            "readIdentityLambda/handler.ts",
+            "src/readIdentityLambda/handler.ts"
+          ],
+          ["startDsarLambda/handler.ts", "src/startDsarLambda/handler.ts"],
+          ["startSarLambda/handler.ts", "src/startSarLambda/handler.ts"]
+        ],
+        "note": "UDP's telemetry is X-Ray annotations: no Powertools Metrics and no embedded-metric log lines are emitted anywhere in <code>src/</code> or <code>libs/</code>. Every function annotates its segment with the stack before the handler runs; nine add one outcome annotation.",
+        "cols": ["Annotation", "Written by"],
+        "rows": [
+          ["<code>stack</code>", "every function"],
+          ["<code>dsarRequestSuccess</code>", "startDsar"],
+          ["<code>patchEntitySuccess</code>", "patchData"],
+          ["<code>putEntitySuccess</code>", "postData"],
+          ["<code>sarFileCreated</code>", "createSarFile"],
+          ["<code>sarFileFailed</code>", "createSarFile"],
+          ["<code>sarRecordCreated</code>", "generateSarPresignedUrl"],
+          ["<code>sarRecordFailed</code>", "generateSarPresignedUrl"],
+          ["<code>sarRecordFound</code>", "getSarStatus"],
+          ["<code>sarRequestSuccess</code>", "startSar"]
+        ]
+      },
+      {
+        "name": "Detective controls: what this repository does and does not create",
+        "code": [
+          ["macie-stack.ts", "cdk/lib/macie/macie-stack.ts"],
+          ["app.ts", "cdk/bin/app.ts"],
+          ["checkov.ts", "cdk/lib/checkov/checkov.ts"],
+          ["ci.yml", ".github/workflows/ci.yml"],
+          ["dependabot.yml", ".github/dependabot.yml"],
+          ["package.json", "package.json"]
+        ],
+        "note": "\"None\" means no construct or workflow in this repository creates it. Any of these may still be enabled at the AWS Organisation or account level, outside this codebase — this table describes the CDK app and its CI only.",
+        "cols": ["Control", "Searched for", "Found in this repository"],
+        "rows": [
+          [
+            "AWS CloudTrail",
+            "<code>Trail(</code>, <code>CloudTrail</code>",
+            "None"
+          ],
+          ["Amazon GuardDuty", "<code>GuardDuty</code>", "None"],
+          ["AWS Security Hub", "<code>SecurityHub</code>", "None"],
+          [
+            "AWS Config",
+            "<code>ConfigRule</code>, <code>Config::</code>",
+            "None"
+          ],
+          ["Amazon Inspector", "<code>Inspector</code>", "None"],
+          ["IAM Access Analyzer", "<code>AccessAnalyzer</code>", "None"],
+          ["Amazon Detective", "<code>Detective</code>", "None"],
+          [
+            "Amazon Macie",
+            "<code>Macie</code>",
+            "<code>macie-stack.ts</code>: enabled for the account by a custom resource, findings every fifteen minutes to a results bucket"
+          ],
+          ["Permissions boundary", "<code>PermissionsBoundary</code>", "None"],
+          ["Lambda code signing", "<code>CodeSigningConfig</code>", "None"],
+          [
+            "Checkov",
+            "<code>checkov</code>",
+            "An aspect in <code>cdk/bin/app.ts</code> and a custom check for the KMS rotation period; suppressions in five files"
+          ],
+          [
+            "cdk-nag",
+            "<code>cdk-nag</code>, <code>AwsSolutionsChecks</code>",
+            "A dependency in <code>package.json</code>; no aspect applies it"
+          ],
+          [
+            "SonarCloud",
+            "<code>sonar</code>",
+            "<code>ci.yml</code>, <code>release.yml</code>, <code>sonar-scan.yml</code>"
+          ],
+          [
+            "Dependabot",
+            "<code>dependabot</code>",
+            "<code>.github/dependabot.yml</code>"
+          ],
+          [
+            "Dependency audit",
+            "<code>trivy</code>, <code>snyk</code>, <code>pnpm audit</code>",
+            "None"
+          ],
+          ["DAST", "<code>zap</code>, <code>dast</code>", "None"]
+        ]
+      },
+      {
+        "name": "Every alarm, and where it goes",
+        "code": [
+          ["monitoring-stack.ts", "cdk/lib/stacks/monitoring-stack.ts"],
+          ["nfr.ts", "cdk/constants/nfr.ts"],
+          ["perf-stack.ts", "cdk/lib/stacks/perf-stack.ts"],
+          ["cdk/bin/app.ts", "cdk/bin/app.ts"]
+        ],
+        "cols": ["Alarm", "Fires when", "Topic"],
+        "rows": [
+          [
+            "Lambda errors · ×17, ×10 in production",
+            "≥ 2 errors in each of two 1-minute periods",
+            "critical"
+          ],
+          [
+            "Lambda duration · ×17, ×10 in production",
+            "p95 over 150 ms in each of three periods",
+            "critical"
+          ],
+          [
+            "Lambda throttles · ×17, ×10 in production",
+            "≥ 1 throttle in each of three periods",
+            "critical"
+          ],
+          [
+            "DynamoDB read throttled, write throttled, system errors",
+            "≥ 1 in each of two periods",
+            "critical"
+          ],
+          ["API 5xx", "over 0.1% in each of two periods", "critical"],
+          [
+            "API p95 latency",
+            "over 200 ms in each of three periods",
+            "critical"
+          ],
+          [
+            "API 4xx",
+            "≥ 50 in each of two periods",
+            "warning — no subscriber in the repository"
+          ],
+          [
+            "Performance build failed",
+            "CodeBuild FAILED, STOPPED or TIMED_OUT",
+            "warning — no subscriber in the repository"
+          ]
+        ]
+      }
+    ],
+    "w": 1680,
+    "h": 720
+  },
+  "delivery": {
+    "name": "Delivery",
+    "order": 8,
+    "group": "Cross-cutting",
+    "audience": "Anyone shipping a change, and on-call",
+    "blurb": "Three zones: what a pull request gets, what a merge to main ships and where it stops, and the test infrastructure in the account that both use. Every step is a GitHub Actions job or a CodeBuild project; read each zone top to bottom.",
+    "note": "The path from a merge to production is one workflow with no manual step in it. Whether a GitHub environment holds a required reviewer is configured outside the repository and is not shown here.",
+    "dashMeans": "a step that starts something and does not wait for it, or a trigger rather than a dependency",
+    "tables": [
+      {
+        "name": "Which checks run where",
+        "code": [
+          [".pre-commit-config.yaml", ".pre-commit-config.yaml"],
+          ["ci.yml", ".github/workflows/ci.yml"],
+          ["release.yml", ".github/workflows/release.yml"],
+          ["sonar-scan.yml", ".github/workflows/sonar-scan.yml"],
+          ["vitest.config.ts", "vitest.config.ts"]
+        ],
+        "cols": [
+          "Check",
+          "Before a commit or push",
+          "On a pull request",
+          "On main"
+        ],
+        "rows": [
+          [
+            "Secrets scan (detect-secrets, private keys)",
+            "commit",
+            "yes, via pre-commit",
+            "—"
+          ],
+          ["Type check, format, lint", "commit", "yes", "—"],
+          [
+            "OpenAPI regenerated from the zod schemas",
+            "commit",
+            "yes, via pre-commit",
+            "—"
+          ],
+          [
+            "Unit tests (vitest, 26 files, v8 coverage, no threshold)",
+            "push",
+            "yes, and again for Sonar",
+            "again for Sonar"
+          ],
+          [
+            "Build every Lambda (esbuild, node20 target)",
+            "push",
+            "yes",
+            "in each deploy"
+          ],
+          ["Checkov on the synthesised templates", "push", "yes", "—"],
+          ["Semgrep (six rule packs)", "push", "yes", "—"],
+          ["Dependency review, high severity fails", "—", "yes", "—"],
+          ["Sonar quality gate", "—", "yes", "yes, before deploy-dev"],
+          [
+            "Cucumber end-to-end against a deployed API",
+            "—",
+            "the PR's own stacks",
+            "dev, then staging"
+          ],
+          [
+            "k6 performance",
+            "—",
+            "smoke, not waited for",
+            "smoke on dev, baseline on staging, neither waited for"
+          ]
+        ]
+      },
+      {
+        "name": "The end-to-end features, as Cucumber runs them",
+        "code": [
+          ["e2e/project.json", "e2e/project.json"],
+          ["identity-api.feature", "e2e/src/features/identity-api.feature"],
+          ["sar.feature-old", "e2e/src/features/sar.feature-old"],
+          ["dsar.feature-old", "e2e/src/features/dsar.feature-old"],
+          [
+            "consumer-config-steps.ts",
+            "e2e/src/step-definitions/consumer-config-steps.ts"
+          ]
+        ],
+        "cols": ["Feature", "Scenarios", "Note"],
+        "rows": [
+          [
+            "Identity API",
+            "14",
+            "Create, read, exchange, delete, linked services"
+          ],
+          [
+            "SAR API",
+            "12",
+            "Start, poll, download — parked as <code>.feature-old</code>; the routes are still disabled"
+          ],
+          [
+            "DSAR API",
+            "9",
+            "Start, then verify the records are gone — parked as <code>.feature-old</code>; the routes are still disabled"
+          ],
+          [
+            "Patch data",
+            "8",
+            "Merge semantics on <code>PATCH /v1/{resourcePath+}</code>"
+          ],
+          ["User data API", "5", "Post, get, delete"],
+          [
+            "Consumer config API access",
+            "2",
+            "Report themselves skipped: the stack passes no secret ARN into the build"
+          ],
+          [
+            "KMS key rotation",
+            "1",
+            "Tagged <code>@kms</code>; every target excludes it"
+          ]
+        ]
+      },
+      {
+        "name": "The performance scenarios, as k6 runs them",
+        "code": [
+          ["performance/project.json", "performance/project.json"],
+          ["config.ts", "performance/src/config.ts"],
+          ["smoke-test.ts", "performance/src/smoke-test.ts"],
+          ["baseline.ts", "performance/src/scenarios/baseline.ts"],
+          [
+            "read-heavy-spike.ts",
+            "performance/src/scenarios/read-heavy-spike.ts"
+          ],
+          ["stress-reads.ts", "performance/src/scenarios/stress-reads.ts"],
+          [
+            "write-heavy-burst.ts",
+            "performance/src/scenarios/write-heavy-burst.ts"
+          ],
+          [
+            "cold-start-impact.ts",
+            "performance/src/scenarios/cold-start-impact.ts"
+          ]
+        ],
+        "cols": ["Scenario", "Load", "Passes when", "Runs"],
+        "rows": [
+          [
+            "smoke",
+            "1 user, 1 iteration",
+            "no failed request, p95 under 2 s",
+            "every dev deploy, every PR"
+          ],
+          [
+            "baseline",
+            "100 requests a second for 15 minutes",
+            "p95 under 200 ms, errors under 0.1%",
+            "every staging deploy"
+          ],
+          [
+            "read-heavy-spike",
+            "ramps 10 → 150 a second over 10 minutes",
+            "the NFR thresholds",
+            "by hand, staging"
+          ],
+          [
+            "stress-reads · stress-writes · stress-deletes",
+            "one-minute steps of 10 a second, up to 300",
+            "the NFR thresholds; aborts on failure",
+            "by hand, staging"
+          ],
+          [
+            "write-heavy-burst",
+            "10 → 50 → 150 a second over 13 minutes",
+            "p95 under 200 ms, p99 under 400 ms on writes",
+            "by hand"
+          ],
+          [
+            "cold-start-impact",
+            "100 then 200 a second with a cool-down",
+            "thresholds keyed to a scenario name that does not match; the nx target points at a file the build does not produce",
+            "by hand — broken as committed"
+          ]
+        ]
+      }
+    ],
+    "w": 1680,
+    "h": 1110
+  },
+  "resources": {
+    "name": "Resources",
+    "order": 9,
+    "group": "Reference",
+    "audience": "Cost, audit and incident scoping — the detail behind every badge",
+    "blurb": "Every AWS resource the CDK app declares, counted per environment from the CloudFormation it synthesises.",
+    "note": "Counts follow the <b>stage selector</b>. The synth runs without AWS credentials, so every SSM lookup resolves to its default: the consumer config is empty and only the built-in <code>test</code> consumer is counted. A real deployment adds a role, a secret, a usage plan and an API key per consumer, and one KMS key for the secrets. Nothing in the VPC is counted twice for a pull-request deployment: the VPC stack is shared per environment.",
+    "inventory": "resources.json"
+  }
+}

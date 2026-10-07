@@ -1,0 +1,28 @@
+// Shared across every view in this workspace.
+//
+// Element kinds carry ownership — who owns a box is the thing a reader must not get
+// wrong. `boundary` is visual framing (a platform, a stack, an organisation) and nests,
+// so any C4 renderer shows the same containment the explorer does.
+//
+// Identifiers are scoped per view (context_cognito, signin_cognito). They are not the
+// same element: each tab argues something different about the same system.
+//
+// This project reads four repositories, so every link names the one it cites — the
+// explorer turns a link's URL into `<source>:<path>`, and the build refuses a link into
+// a repository project.config.json does not list.
+
+specification {
+  element actor    { style { shape person } }
+  element platform { style { shape rectangle } }
+  element internal { style { shape rectangle } }
+  element external { style { shape rectangle } }
+  element boundary {
+    style {
+      shape rectangle
+      opacity 10%
+    }
+  }
+
+  tag request-path
+  tag off-request-path
+}

@@ -9,6 +9,31 @@ The build measures geometry twice: statically in `pnpm build`, which refuses the
 in a browser in `pnpm check`, which counts what only rendering can see. The numbers below
 are those gates.
 
+They apply to a **planned state's** views exactly as they apply to the as-is. Those views
+are composed at build time, not in the renderer, precisely so these rules can run over them
+— a layout only a person ever sees is a layout nothing checks. A failure names the state it
+first appears at, and the later states that inherit it: `containers@s3/router: … — also at
+s4`. See [STATES.md](https://github.com/govuk-once/architecture-docs-states/blob/main/STATES.md).
+
+## Let the build do the arithmetic
+
+Everything below is a number you can avoid choosing. A box in a planned state may name a
+**slot** — `"zone": "tenant", "row": 1, "col": 1` — and the build sizes it from its own label
+using the advances in the table below, widens each column to its widest box, and grows the
+zone to hold the grid and its own label. Explicit `x`/`y`/`w`/`h` still wins where a grid
+cannot express the intent.
+
+A zone given no `w`/`h` starts at 320 × 160 and grows from there — around the grid, and
+around any hand-placed box that overlaps it — never below that. The grid's own numbers, for
+placing beside it by hand: 24 at the sides, 50 above the first row for the zone label, 22
+below the last, and gutters of 14 across and 20 down. The state editor's **Fix** puts the
+three arithmetic faults right — a box too narrow for its text, one over a zone edge, two on
+top of each other — and never moves a box to the other side of a boundary; see
+[STATES.md](https://github.com/govuk-once/architecture-docs-states/blob/main/STATES.md).
+
+Reach for the table when you are placing a zone on the canvas, or laying out an as-is view,
+where there is no grid to fall back on.
+
 ## What the build refuses
 
 | Rule                                  | Number                              | Why                                                      |
@@ -51,12 +76,14 @@ Containers. The zone tails are gone.
   means the zones inside it as well as the boxes. Counting boxes alone called half the
   first eight empty while a nested zone sat in the space.
 
-Design to the wider platform, and do not trust a local pass. Linux Chromium renders IBM
-Plex about **17% wider** than macOS at 13px — "OpenAPI breaking check" is 140.6px here and
-164.9px on CI. A box clearing its edge by 20px on a Mac can clear it by 5px on CI and fail
-the render check there. The build's static rule is calibrated to the wider platform for
-exactly this reason; the render check can only measure the machine it runs on, and on a Mac
-it under-reports.
+Do not trust a local pass over the render check on CI. The two used to disagree by a lot:
+Linux Chromium hints glyphs to whole pixels at the size the text is drawn at, so the same
+label measured **17% wider** than on macOS at one zoom and narrower at another — "OpenAPI
+breaking check" was 140.6px on a Mac and 164.9px on CI, and a composed view fitted at a
+different zoom from the as-is measured its unchanged boxes differently again. The render
+check and the picture export now launch Chromium with font hinting off, which makes the
+metrics linear and the same on every platform to within a pixel. The build's static rule
+keeps its wider advances as a margin: it should refuse before the browser has to.
 
 ## Rules for placement
 
@@ -128,3 +155,7 @@ than the line's endpoints.
   everything, and says nothing the box does not.
 - A zone stretched to the container's bottom with its boxes at the top: a line through
   its empty half looks like a line through the zone's contents.
+- A box stretched across the canvas so that every caller's line can be vertical: it reads
+  as a bus, and the router picks a line's sides from box centres, so the outermost lines
+  hook round its ends anyway. A box is as wide as its label; a fan of callers is what the
+  placement budget is for.

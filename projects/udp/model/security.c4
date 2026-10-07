@@ -1,0 +1,640 @@
+// UDP architecture — Security and operations.
+//
+// The controls that bound every box on the other tabs, in five columns: who may call,
+// what is encrypted and with which key, what watches, what wakes someone, and what can be
+// restored. Nothing here is on the request path; each column reads top to bottom from the
+// outermost control inward.
+
+model {
+
+  security_access = boundary '1 · Access' {
+    metadata {
+      type 'Controls'
+      tech 'IAM · API Gateway'
+      role 'Three gates a consumer request passes, and two things that look like gates and are not.'
+      sourceId 'access'
+      order '0'
+      x '40'
+      y '30'
+      w '310'
+      h '654'
+      boundary 'soft'
+    }
+
+    security_policy = platform 'API resource policy' {
+      #off-request-path
+      description 'aws:sourceVpce allow list'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/api-gateway-construct.ts 'api-gateway-construct.ts'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/stacks/main-stack.ts 'main-stack.ts'
+      metadata {
+        type 'API Gateway resource policy'
+        tech 'Deny not-in-list, then Allow in-list'
+        role 'The endpoint ids come from the consumer config in SSM at synth. A new consumer is a deploy, not a runtime change.'
+        sourceId 'policy'
+        order '1'
+        x '64'
+        y '80'
+        w '262'
+        h '62'
+        ownership 'udp'
+        awsIcon 'apigateway'
+      }
+    }
+
+    security_iamauth = platform 'AWS_IAM on every method' {
+      #off-request-path
+      description 'SigV4 · no authorizer Lambda'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/lambda-construct.ts 'lambda-construct.ts'
+      link https://github.com/govuk-once/user-data-platform/blob/main/docs/openapi.yml 'openapi.yml'
+      metadata {
+        type 'Method authorisation'
+        tech 'authorizationType IAM'
+        role 'The signature must belong to a principal allowed <code>execute-api:Invoke</code> on that method — a consumer role, or the test CodeBuild role.'
+        facts [
+          'The published OpenAPI still declares a Cognito bearer scheme on every route. It documents nothing that runs.'
+        ]
+        sourceId 'iamauth'
+        order '2'
+        x '64'
+        y '210'
+        w '262'
+        h '62'
+        ownership 'udp'
+        awsIcon 'iam'
+      }
+    }
+
+    security_consumerrole = platform 'Consumer roles' {
+      #off-request-path
+      description 'read · write · delete → methods'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/iam-consumer-construct.ts 'iam-consumer-construct.ts'
+      metadata {
+        type 'AWS::IAM::Role · one per consumer'
+        tech 'trusts the consumer account, optional external id'
+        role 'Permission is by HTTP method over every path: a consumer with <code>read</code> can read any resource path any other consumer wrote.'
+        sourceId 'consumerrole'
+        order '3'
+        x '64'
+        y '340'
+        w '262'
+        h '62'
+        ownership 'udp'
+        resources [ 'iam-roles' ]
+        awsIcon 'iam'
+      }
+    }
+
+    security_apikey = platform 'API keys · not required' {
+      #off-request-path
+      description 'usage plans apply to nothing'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/consumer-usage-plan-construct.ts 'consumer-usage-plan-construct.ts'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/lambda-construct.ts 'lambda-construct.ts'
+      metadata {
+        type 'AWS::ApiGateway::ApiKey'
+        tech 'sent by every client · checked by no method'
+        role 'A key per consumer is minted, read back by a custom resource and put in the consumer secret. Without <code>apiKeyRequired</code> the usage plan throttles are idle.'
+        sourceId 'apikey'
+        order '4'
+        x '64'
+        y '470'
+        w '262'
+        h '62'
+        ownership 'udp'
+        awsIcon 'apigateway'
+      }
+    }
+
+    security_purgekey = platform 'DVLA purge key' {
+      #off-request-path
+      description '/identity/dvla/pilot/purge-key'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/stacks/dvla-pilot-stack.ts 'dvla-pilot-stack.ts'
+      link https://github.com/govuk-once/user-data-platform/blob/main/src/dvlaPilotPurgeLambda/handler.ts 'dvlaPilotPurgeLambda/handler.ts'
+      metadata {
+        type 'Secrets Manager secret · created outside the repository'
+        tech 'string compared in the function'
+        role 'The one shared secret: whoever invokes the purge function must pass its value in the event. Invoking the function at all is an IAM permission in the account.'
+        sourceId 'purgekey'
+        order '5'
+        x '64'
+        y '600'
+        w '262'
+        h '62'
+        ownership 'udp'
+        awsIcon 'secretsmanager'
+      }
+    }
+  }
+
+  security_encryption = boundary '2 · Encryption' {
+    metadata {
+      type 'Controls'
+      tech 'KMS · node:crypto'
+      role 'Customer-managed keys everywhere at rest, and a second layer in code for the fields that matter most.'
+      sourceId 'encryption'
+      order '0'
+      x '362'
+      y '30'
+      w '310'
+      h '654'
+      boundary 'soft'
+    }
+
+    security_dbkey = platform 'DB key' {
+      #off-request-path
+      description 'tables · field encryption'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/kms-construct.ts 'kms-construct.ts'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/stacks/main-stack.ts 'main-stack.ts'
+      metadata {
+        type 'AWS::KMS::Key'
+        tech 'rotation every 90 days'
+        role 'Encrypts both tables and is <code>KMS_KEY_ID</code> in every function, so it also wraps each item\'s data key.'
+        facts [
+          'Its policy admits the account, the Lambda service, CloudWatch Logs, CloudWatch alarms and SNS.'
+        ]
+        sourceId 'dbkey'
+        order '1'
+        x '386'
+        y '80'
+        w '262'
+        h '62'
+        ownership 'udp'
+        resources [ 'kms-keys' ]
+        awsIcon 'kms'
+      }
+    }
+
+    security_envelope = internal 'Envelope encryption in code' {
+      #off-request-path
+      description 'GenerateDataKey · AES-256-GCM'
+      link https://github.com/govuk-once/user-data-platform/blob/main/libs/data-access/services/EncryptionService.ts 'EncryptionService.ts'
+      link https://github.com/govuk-once/user-data-platform/blob/main/libs/data-access/factory/ServiceFactory.ts 'ServiceFactory.ts'
+      metadata {
+        type 'Code'
+        tech 'one data key per item · __dataKey stored beside it'
+        role 'The <code>data</code> field, the three token fields on an identity, and a SAR\'s <code>presignedURL</code>. Everything else in an item — the keys, the service name — is plain.'
+        facts [
+          'A function without <code>KMS_KEY_ID</code> gets no encryption service and stores plain text; the construct sets it on every route function.'
+        ]
+        sourceId 'envelope'
+        order '2'
+        x '386'
+        y '210'
+        w '262'
+        h '62'
+        ownership 'udp'
+      }
+    }
+
+    security_mainkey = platform 'Main key' {
+      #off-request-path
+      description 'queues · bucket · logs'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/kms-construct.ts 'kms-construct.ts'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/stacks/sar-stack.ts 'sar-stack.ts'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/bin/app.ts 'cdk/bin/app.ts'
+      metadata {
+        type 'AWS::KMS::Key'
+        tech 'rotation every 90 days'
+        role 'The log groups, and outside production the SAR and DSAR queues, their dead-letter queues and the SAR bucket.'
+        facts [
+          'Marked for Macie: an aspect adds Macie\'s service-linked role to its policy with decrypt, so Macie can read the SAR bucket wherever there is one.'
+        ]
+        sourceId 'mainkey'
+        order '3'
+        x '386'
+        y '340'
+        w '262'
+        h '62'
+        ownership 'udp'
+        awsIcon 'kms'
+      }
+    }
+
+    security_consumerkey = platform 'Consumer config key' {
+      #off-request-path
+      description 'one key, every consumer account'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/consumer-config-construct.ts 'consumer-config-construct.ts'
+      metadata {
+        type 'AWS::KMS::Key'
+        tech 'Decrypt granted to each consumer account'
+        role 'Encrypts the per-consumer secrets. Its policy names every consumer account, so any of them can decrypt any of the secrets the key protects; the secret\'s own policy is what scopes each to its consumer.'
+        sourceId 'consumerkey'
+        order '4'
+        x '386'
+        y '470'
+        w '262'
+        h '62'
+        ownership 'udp'
+        awsIcon 'kms'
+      }
+    }
+
+    security_transit = platform 'In transit' {
+      #off-request-path
+      description 'TLS only, everywhere'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/s3-construct.ts 's3-construct.ts'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/api-gateway-construct.ts 'api-gateway-construct.ts'
+      metadata {
+        type 'Policy'
+        tech 'enforceSSL · PrivateLink · endpoints'
+        role 'The bucket refuses plain HTTP; the API is only reachable over PrivateLink; every AWS call from a function goes to an endpoint on 443. No mutual TLS anywhere.'
+        sourceId 'transit'
+        order '5'
+        x '386'
+        y '600'
+        w '262'
+        h '62'
+        ownership 'udp'
+      }
+    }
+  }
+
+  security_detection = boundary '3 · Detection' {
+    metadata {
+      type 'Controls'
+      tech 'WAF · Macie · logs · X-Ray'
+      role 'What records and inspects, whether or not anyone is looking.'
+      sourceId 'detection'
+      order '0'
+      x '684'
+      y '30'
+      w '310'
+      h '654'
+      boundary 'soft'
+    }
+
+    security_waf = platform 'Web ACL' {
+      #off-request-path
+      description 'REGIONAL · on the API stage'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/waf-construct.ts 'waf-construct.ts'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/stacks/main-stack.ts 'main-stack.ts'
+      metadata {
+        type 'AWS::WAFv2::WebACL'
+        tech 'rate 300,000 per IP · 3 managed rule sets'
+        role 'SQLi, Common and KnownBadInputs rule sets, and a rate rule set so high on a private API it can only ever count. Logged to <code>aws-waf-logs-…</code>.'
+        sourceId 'waf'
+        order '1'
+        x '708'
+        y '80'
+        w '262'
+        h '62'
+        ownership 'udp'
+        awsIcon 'waf'
+      }
+    }
+
+    security_macie = platform 'Macie' {
+      #off-request-path
+      description 'enabled · findings every 15 min'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/macie/macie-stack.ts 'macie-stack.ts'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/macie/macie-access.ts 'macie-access.ts'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/bin/app.ts 'cdk/bin/app.ts'
+      metadata {
+        type 'Custom resource · macie2:UpdateMacieSession'
+        tech 'results bucket macie-results-{account}-{region}'
+        role 'Turned on for the account by a custom resource, with a results bucket and key. An aspect grants Macie\'s service-linked role decrypt on every key marked for it, so it can read the SAR bucket outside production; production has none.'
+        facts [
+          'No classification job is defined in the repository: what Macie scans, and when, is set outside it.'
+        ]
+        sourceId 'macie'
+        order '2'
+        x '708'
+        y '210'
+        w '262'
+        h '62'
+        ownership 'udp'
+        resources [ 'macie-stacks' ]
+        awsIcon 'macie'
+      }
+    }
+
+    security_logs = platform 'Log groups' {
+      #off-request-path
+      description '1 year · 1 month in development'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/constants/environment.ts 'environment.ts'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/lambda-construct.ts 'lambda-construct.ts'
+      metadata {
+        type 'AWS::Logs::LogGroup'
+        tech 'one per function · KMS-encrypted'
+        role 'Each function gets its own group at creation, the WAF and the VPC flow log theirs. Retention is a year in staging and production, a month in development.'
+        sourceId 'logs'
+        order '3'
+        x '708'
+        y '340'
+        w '262'
+        h '62'
+        ownership 'udp'
+        resources [ 'log-groups' ]
+        awsIcon 'cloudwatch'
+      }
+    }
+
+    security_xray = platform 'X-Ray tracing' {
+      #off-request-path
+      description 'ACTIVE on every function'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/lambda-construct.ts 'lambda-construct.ts'
+      link https://github.com/govuk-once/user-data-platform/blob/main/src/getDataLambda/handler.ts 'getDataLambda/handler.ts'
+      metadata {
+        type 'Lambda tracing'
+        tech 'Powertools tracer · captureResponse off'
+        role 'Every invocation is a trace segment annotated with the stack; response bodies are not captured.'
+        sourceId 'xray'
+        order '4'
+        x '708'
+        y '470'
+        w '262'
+        h '62'
+        ownership 'udp'
+      }
+    }
+
+    security_flowlog = platform 'VPC flow log' {
+      #off-request-path
+      description 'ALL traffic'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/vpc-construct.ts 'vpc-construct.ts'
+      metadata {
+        type 'AWS::EC2::FlowLog'
+        tech 'to CloudWatch Logs'
+        role 'Accepted and rejected flows for the whole VPC.'
+        sourceId 'flowlog'
+        order '5'
+        x '708'
+        y '600'
+        w '262'
+        h '62'
+        ownership 'udp'
+        awsIcon 'cloudwatch'
+      }
+    }
+  }
+
+  security_alerting = boundary '4 · Alerting' {
+    link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/stacks/monitoring-stack.ts 'monitoring-stack.ts'
+    link https://github.com/govuk-once/user-data-platform/blob/main/cdk/bin/app.ts 'cdk/bin/app.ts'
+    metadata {
+      type 'Controls'
+      tech 'monitoring stack · {env}-monitoring'
+      role 'Fifty-seven alarms in development and staging, thirty-six in production, and where they go. Every one is against the same NFR constants the performance tests use.'
+      sourceId 'alerting'
+      order '0'
+      x '1006'
+      y '30'
+      w '310'
+      h '654'
+      boundary 'soft'
+    }
+
+    security_fnalarms = platform 'Per-function alarms · 3 each' {
+      #off-request-path
+      description 'errors · p95 duration · throttles'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/stacks/monitoring-stack.ts 'monitoring-stack.ts'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/constants/nfr.ts 'nfr.ts'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/bin/app.ts 'cdk/bin/app.ts'
+      metadata {
+        type 'AWS::CloudWatch::Alarm ×51 · ×30 in production'
+        tech '1-minute periods'
+        role 'Errors ≥ 2 in two periods; p95 duration over 150 ms in three; any throttle in three. All critical.'
+        facts [
+          'Seventeen functions are covered outside production: the thirteen routes and the four in the sar stack. Ten in production, which has neither the three rights routes nor the sar stack. The DVLA purge function has none.'
+        ]
+        sourceId 'fnalarms'
+        order '1'
+        x '1030'
+        y '80'
+        w '262'
+        h '62'
+        ownership 'udp'
+        resources [ 'alarms', 'alarms-fn-errors', 'alarms-fn-duration', 'alarms-fn-throttles' ]
+        awsIcon 'cloudwatch'
+      }
+    }
+
+    security_apialarms = platform 'API alarms · 3' {
+      #off-request-path
+      description '5xx · 4xx · p95 latency'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/stacks/monitoring-stack.ts 'monitoring-stack.ts'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/constants/nfr.ts 'nfr.ts'
+      metadata {
+        type 'AWS::CloudWatch::Alarm ×3'
+        tech '5xx over 0.1% · 4xx ≥ 50 · p95 over 200 ms'
+        role '5xx and latency are critical; the 4xx count is a warning, which is the only alarm that goes to the warning topic.'
+        sourceId 'apialarms'
+        order '2'
+        x '1030'
+        y '340'
+        w '262'
+        h '62'
+        ownership 'udp'
+        resources [ 'alarms-api' ]
+        awsIcon 'cloudwatch'
+      }
+    }
+
+    security_dbalarms = platform 'DynamoDB alarms · 3' {
+      #off-request-path
+      description 'throttled reads, writes · errors'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/stacks/monitoring-stack.ts 'monitoring-stack.ts'
+      metadata {
+        type 'AWS::CloudWatch::Alarm ×3'
+        tech 'threshold 1 over two periods'
+        role 'On-demand tables can still throttle; any event is critical.'
+        sourceId 'dbalarms'
+        order '3'
+        x '1030'
+        y '470'
+        w '262'
+        h '62'
+        ownership 'udp'
+        resources [ 'alarms-dynamo' ]
+        awsIcon 'cloudwatch'
+      }
+    }
+
+    security_topics = platform 'Critical and warning topics' {
+      #off-request-path
+      description 'only critical reaches Slack'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/stacks/monitoring-stack.ts 'monitoring-stack.ts'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/stacks/perf-stack.ts 'perf-stack.ts'
+      metadata {
+        type 'AWS::SNS::Topic ×2 · AWS::Chatbot::SlackChannelConfiguration'
+        tech 'workspace and channel from SSM …/udp/monitoring'
+        role 'The critical topic is subscribed by a Chatbot Slack channel when the SSM parameter names one. Nothing in the repository subscribes the warning topic — 4xx bursts and failed performance builds land there.'
+        sourceId 'topics'
+        order '4'
+        x '1030'
+        y '210'
+        w '262'
+        h '62'
+        ownership 'udp'
+        resources [ 'sns-topics' ]
+        awsIcon 'sns'
+      }
+    }
+
+    security_dashboards = platform 'Dashboards · 2' {
+      #off-request-path
+      description '{env}-dashboard · {env}-performance'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/stacks/monitoring-stack.ts 'monitoring-stack.ts'
+      metadata {
+        type 'AWS::CloudWatch::Dashboard ×2'
+        tech 'per-function invocations, errors, throttles, duration'
+        role 'One operational, one for the performance test metrics under <code>UDP/PerformanceTests</code>.'
+        sourceId 'dashboards'
+        order '5'
+        x '1030'
+        y '600'
+        w '262'
+        h '62'
+        ownership 'udp'
+        resources [ 'dashboards' ]
+        awsIcon 'cloudwatch'
+      }
+    }
+  }
+
+  security_backup = boundary '5 · Backup · stag and prod' {
+    metadata {
+      type 'Controls'
+      tech 'backup stack · {env}-backup'
+      role 'AWS Backup for the tables; point-in-time recovery everywhere; a manual restore workflow.'
+      sourceId 'backup'
+      order '0'
+      x '1328'
+      y '30'
+      w '310'
+      h '654'
+      boundary 'soft'
+    }
+
+    security_pitr = platform 'Point-in-time recovery' {
+      #off-request-path
+      description 'both tables · every environment'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/dynamodb-construct.ts 'dynamodb-construct.ts'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/constants/environment.ts 'environment.ts'
+      metadata {
+        type 'DynamoDB setting'
+        tech 'RETAIN and deletion protection outside development'
+        role 'The one recovery path development has. A deleted record is recoverable for as long as the PITR window, whatever a DSAR promised.'
+        sourceId 'pitr'
+        order '1'
+        x '1352'
+        y '80'
+        w '262'
+        h '62'
+        ownership 'udp'
+        awsIcon 'dynamodb'
+      }
+    }
+
+    security_vault = platform 'Backup vault' {
+      #off-request-path
+      description '{env}-backup-vault · own key'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/stacks/backup-stack.ts 'backup-stack.ts'
+      metadata {
+        type 'AWS::Backup::BackupVault'
+        tech 'failure events to an SNS topic'
+        role 'Failed backup and copy jobs publish to a topic with no subscriber, because no address is passed to the stack.'
+        facts [
+          'The vault lock is set on the KMS key\'s CloudFormation child, not the vault\'s, so no lock is rendered; the docs say 30-day minimum retention is locked.'
+        ]
+        sourceId 'vault'
+        order '2'
+        x '1352'
+        y '210'
+        w '262'
+        h '62'
+        ownership 'udp'
+        resources [ 'backup-vaults' ]
+      }
+    }
+
+    security_plans = platform 'Backup plans · 3' {
+      #off-request-path
+      description '35 d · 1 y · 5 y retention'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/stacks/backup-stack.ts 'backup-stack.ts'
+      metadata {
+        type 'AWS::Backup::BackupPlan ×3'
+        tech 'cold storage after 30 and 90 days'
+        role 'Short, medium and long. The medium plan selects every DynamoDB table and RDS instance by ARN; the others select by a <code>backup-plan</code> tag nothing in the repository sets.'
+        facts [
+          'The SAR bucket is in no selection, though the docs say S3 is backed up under the medium plan.'
+        ]
+        sourceId 'plans'
+        order '3'
+        x '1352'
+        y '340'
+        w '262'
+        h '62'
+        ownership 'udp'
+        resources [ 'backup-plans', 'backup-selections' ]
+      }
+    }
+
+    security_restore = platform 'Restore workflow' {
+      #off-request-path
+      description 'restore.yaml · manual'
+      link https://github.com/govuk-once/user-data-platform/blob/main/.github/workflows/restore.yaml 'restore.yaml'
+      link https://github.com/govuk-once/user-data-platform/blob/main/scripts/dynamo-restore.ts 'dynamo-restore.ts'
+      link https://github.com/govuk-once/user-data-platform/blob/main/scripts/s3-restore.ts 's3-restore.ts'
+      metadata {
+        type 'GitHub Actions workflow_dispatch'
+        tech 'PITR or a recovery point, to {table}-restored'
+        role 'Restores a table beside the live one under the environment\'s deployment role; the swap is a manual step the script prints.'
+        facts [
+          'As committed the DynamoDB steps call <code>scripts/dynamodb-restore.ts</code>, which does not exist — the file is <code>dynamo-restore.ts</code> — and the S3 steps have shell errors. Neither can run as written.'
+        ]
+        sourceId 'restore'
+        order '4'
+        x '1352'
+        y '470'
+        w '262'
+        h '62'
+        ownership 'udp'
+      }
+    }
+
+    security_removal = platform 'Removal policies' {
+      #off-request-path
+      description 'RETAIN outside development'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/constants/environment.ts 'environment.ts'
+      metadata {
+        type 'CDK removal policy'
+        tech 'tables · bucket'
+        role 'A stack deletion in staging or production leaves the data behind; in development, and in a pull-request stack, it goes with the stack.'
+        sourceId 'removal'
+        order '5'
+        x '1352'
+        y '600'
+        w '262'
+        h '62'
+        ownership 'udp'
+      }
+    }
+  }
+
+  security_policy -> security_iamauth 'then' {
+    metadata { protocol 'in order at the gateway' auth '—' carries 'A request the endpoint check passed' order '1' }
+  }
+  security_iamauth -> security_consumerrole 'resolves to' {
+    metadata { protocol '—' auth '—' carries 'The signing principal' order '2' }
+  }
+  security_dbkey -> security_envelope 'GenerateDataKey' {
+    metadata { protocol 'KMS over the interface endpoint' auth 'Function role; key policy' carries 'A wrapped and a plain data key' order '3' }
+  }
+  security_fnalarms -> security_topics 'critical' {
+    metadata { protocol 'SNS' auth 'Alarm action' carries 'Every state change' order '4' }
+  }
+  security_vault -> security_plans 'holds' {
+    metadata { protocol '—' auth 'The backup role' carries 'Every recovery point the plans create' order '5' }
+  }
+}
+
+views {
+  view security {
+    title 'Security'
+    include security_access, security_access.**
+    include security_encryption, security_encryption.**
+    include security_detection, security_detection.**
+    include security_alerting, security_alerting.**
+    include security_backup, security_backup.**
+  }
+}

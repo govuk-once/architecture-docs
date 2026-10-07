@@ -1,0 +1,227 @@
+// GOV.UK Chat architecture — Delivery.
+//
+// How a change reaches an environment. The short answer is that a person deploys it from
+// their own machine: continuous integration in this repository checks and synthesises,
+// and never deploys. No workflow here holds an AWS credential.
+//
+// Everything on this tab is read from the workflows and the scripts they run.
+
+model {
+
+  delivery_dev = actor 'A developer' {
+    #request-path
+    description 'the only way to deploy'
+    link https://github.com/govuk-once/govuk-chat-v2/blob/main/scripts/dev-prepare.zsh 'dev-prepare.zsh'
+    metadata {
+      type 'Person'
+      tech 'a laptop, the GDS CLI and the GitHub CLI'
+      role 'Runs the checks, then runs the deploy. There is no pipeline between a merge and an environment anywhere in this repository.'
+      facts [
+        'Setting up is a sourced script rather than a run one, because it has to export variables into the current shell: it takes a GitHub token from <code>gh auth token</code> when one is not already set.',
+        'The same token that lets a developer build an agent locally is the one CI holds as a secret.'
+      ]
+      sourceId 'dev'
+      order '1'
+      x '64'
+      y '30'
+      w '262'
+      h '62'
+      ownership 'person'
+    }
+  }
+
+  delivery_checks = platform 'dev-checks.sh' {
+    #request-path
+    description 'lint, format, types, tests'
+    link https://github.com/govuk-once/govuk-chat-v2/blob/main/cdk/scripts/dev-checks.sh 'cdk/scripts/dev-checks.sh'
+    metadata {
+      type 'Shell script · one per package'
+      tech 'the same checks CI runs'
+      role 'What a developer runs before pushing. Each package has its own copy, so the checks are the same locally and in CI.'
+      facts [
+        'The CDK package adds a synth step to its copy, which is the one check that needs the private token.',
+        'Every other script in a package is symlinked from a shared directory; this is the one expected to differ per package.'
+      ]
+      sourceId 'checks'
+      order '2'
+      x '64'
+      y '160'
+      w '262'
+      h '62'
+      ownership 'chat'
+    }
+  }
+
+  delivery_ci = external 'GitHub Actions' {
+    #request-path
+    description 'five jobs, no AWS access'
+    link https://github.com/govuk-once/govuk-chat-v2/blob/main/.github/workflows/cdk-ci.yaml 'cdk-ci.yaml'
+    metadata {
+      type 'Continuous integration'
+      tech 'eight workflows, one per package'
+      role 'Runs tests, lint, format, type checks and a synth on every pull request and on every push to main. It does not deploy.'
+      facts [
+        'Each workflow is filtered by path, so a change to one package does not run the others.',
+        'Every action is pinned to a full commit hash rather than a tag.',
+        'The only secret any workflow uses is the private repository token. Nothing in <code>.github</code> configures AWS credentials, assumes a role, or requests an OIDC identity token.'
+      ]
+      sourceId 'ci'
+      order '3'
+      x '350'
+      y '160'
+      w '262'
+      h '62'
+      ownership 'third'
+    }
+  }
+
+  delivery_synth = platform 'cdk synth' {
+    #request-path
+    description 'the only CDK step in CI'
+    link https://github.com/govuk-once/govuk-chat-v2/blob/main/cdk/scripts/cdk-synth.sh 'cdk-synth.sh'
+    metadata {
+      type 'Shell script'
+      tech 'needs the private token, not AWS'
+      role 'Proves the four stacks still build. This is as far as continuous integration goes.'
+      facts [
+        'It is the only job given the private repository token, because synthesising bundles each agent in Docker and that is when the prompts package is fetched.',
+        'Because the bundling is a Docker build against a private dependency, this step is also the reason the app cannot be synthesised outside this repository\'s own CI.'
+      ]
+      sourceId 'synth'
+      order '4'
+      x '636'
+      y '160'
+      w '262'
+      h '62'
+      ownership 'chat'
+    }
+  }
+
+  delivery_deploy = platform 'dev-cdk-deploy.sh' {
+    #request-path
+    description 'one stack at a time'
+    link https://github.com/govuk-once/govuk-chat-v2/blob/main/scripts/dev-cdk-deploy.sh 'dev-cdk-deploy.sh'
+    link https://github.com/govuk-once/govuk-chat-v2/blob/main/services/chat-api-fastapi/scripts/cdk-deploy.sh 'chat-api-fastapi/cdk-deploy.sh'
+    metadata {
+      type 'Shell script'
+      tech 'cdk deploy, from a laptop'
+      role 'The only thing in this repository that deploys. Each of the four services wraps it with its own stack name, so a developer deploys one stack rather than the app.'
+      facts [
+        'It checks credentials first, then clears orphaned assets, then runs <code>cdk deploy</code> and writes the stack outputs to a file per stack.',
+        'CloudFormation validation is turned off with a comment explaining that it makes deploys slow once assets build up.',
+        'Nothing here names a staging or production deployment. How those environments are deployed is not visible in this repository.'
+      ]
+      sourceId 'deploy'
+      order '5'
+      x '64'
+      y '290'
+      w '262'
+      h '62'
+      ownership 'chat'
+    }
+  }
+
+  delivery_creds = platform 'AWS credential guard' {
+    #request-path
+    description 'gds aws · one named role'
+    link https://github.com/govuk-once/govuk-chat-v2/blob/main/scripts/check-dev-aws-credentials.sh 'check-dev-aws-credentials.sh'
+    metadata {
+      type 'Shell script'
+      tech 'refuses rather than prompts'
+      role 'Runs before every deploy. It checks that the credentials in the shell are present, valid, and for the role it expects, and stops with instructions if not.'
+      facts [
+        'The role it expects by default is <code>once-chat-development-admin</code>, overridable by an environment variable. That is the only AWS role named anywhere in the repository.',
+        'It compares the account number and role name from the GDS CLI against the caller identity AWS reports, so credentials for a different role are refused rather than used by accident.'
+      ]
+      sourceId 'creds'
+      order '6'
+      x '350'
+      y '290'
+      w '262'
+      h '62'
+      ownership 'chat'
+      awsIcon 'iam'
+    }
+  }
+
+  delivery_env = platform 'An environment' {
+    #request-path
+    description 'four stacks, one prefix'
+    link https://github.com/govuk-once/govuk-chat-v2/blob/main/cdk/src/constants/environment.ts 'environment.ts'
+    link https://github.com/govuk-once/govuk-chat-v2/blob/main/cdk/bin/app.ts 'cdk/bin/app.ts'
+    metadata {
+      type 'One copy of all four stacks'
+      tech 'named by ENVIRONMENT, or by $USER'
+      role 'What a deploy lands in. An environment is just a name: it prefixes every resource, and there are as many of them as there are names people use.'
+      facts [
+        'The name falls back to the developer\'s own <code>$USER</code> when <code>ENVIRONMENT</code> is unset, so an unconfigured deploy creates an environment named after the person doing it.',
+        'Everything except <code>stag</code> and <code>prod</code> is treated as ephemeral, which is what decides whether tables are destroyed with the stack and whether SnapStart is on.',
+        'The prefix is truncated to forty characters, and the region defaults to <code>eu-west-1</code>.'
+      ]
+      sourceId 'env'
+      order '7'
+      x '64'
+      y '420'
+      w '262'
+      h '62'
+      ownership 'chat'
+    }
+  }
+
+  delivery_dev -> delivery_checks 'runs before pushing' {
+    metadata {
+      protocol 'A shell script in the package being changed'
+      auth '—'
+      carries 'Lint, format, type check, test, and a synth for the CDK package'
+      order '1'
+    }
+  }
+  delivery_checks -> delivery_ci 'the same checks again' {
+    metadata {
+      protocol 'GitHub Actions, on pull request and on push to main'
+      auth 'The repository\'s own token, plus one secret for private dependencies'
+      carries 'Tests, lint, format, type checks'
+      order '2'
+    }
+  }
+  delivery_ci -> delivery_synth 'and a synth' {
+    metadata {
+      protocol 'cdk synth --quiet'
+      auth 'The private repository token, so the agents can be bundled'
+      carries 'Proof that the four stacks still build'
+      order '3'
+    }
+  }
+  delivery_checks -> delivery_deploy 'then a person deploys' {
+    metadata {
+      protocol 'A shell script run by hand'
+      auth 'Whatever AWS credentials the shell holds'
+      carries 'One named stack'
+      order '4'
+    }
+  }
+  delivery_deploy -> delivery_creds 'checks credentials first' {
+    metadata {
+      protocol 'gds aws, then aws sts get-caller-identity'
+      auth 'The expected role must match the account and role in the shell'
+      carries 'A refusal and instructions, or nothing at all'
+      order '5'
+    }
+  }
+  delivery_deploy -> delivery_env 'creates or updates' {
+    metadata {
+      protocol 'cdk deploy, with outputs written per stack'
+      auth 'The developer\'s assumed role'
+      carries 'One stack, into an environment named by a variable or by the user'
+      order '6'
+    }
+  }
+}
+
+views {
+  view delivery {
+    title 'Delivery'
+    include delivery_dev, delivery_checks, delivery_ci, delivery_synth
+    include delivery_deploy, delivery_creds, delivery_env
+  }
+}

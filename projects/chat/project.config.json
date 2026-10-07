@@ -1,0 +1,55 @@
+{
+  "name": "GOV.UK Chat",
+  "title": "GOV.UK Chat Architecture Explorer",
+  "tagline": "GOV.UK Chat V2",
+  "blurb": "An API product giving government guidance an AI assistant: agent runtimes on Bedrock AgentCore behind two chat APIs, successor to GOV.UK Chat V1. Read from source — its CDK app bundles every Lambda in Docker against private dependencies, so this pipeline cannot synthesise it.",
+  "repo": "https://github.com/govuk-once/govuk-chat-v2/blob/main/",
+  "inventoryView": "resources",
+  "inventoryLabel": "AWS resources",
+  "iconLabel": "AWS icons",
+  "filterHint": "Filter — try agent, Bedrock, API, queue",
+  "kinds": [
+    {
+      "id": "person",
+      "label": "Person",
+      "colour": "purple"
+    },
+    {
+      "id": "chat",
+      "label": "GOV.UK Chat",
+      "colour": "blue"
+    },
+    {
+      "id": "govuk",
+      "label": "GOV.UK Once",
+      "colour": "teal"
+    },
+    {
+      "id": "third",
+      "label": "Outside GOV.UK Once",
+      "colour": "amber"
+    }
+  ],
+  "stages": [
+    {
+      "id": "dev",
+      "label": "Development",
+      "facts": "development"
+    },
+    {
+      "id": "stg",
+      "label": "Staging",
+      "facts": "staging"
+    },
+    {
+      "id": "prod",
+      "label": "Production",
+      "facts": "production"
+    }
+  ],
+  "source": {
+    "repo": "https://github.com/govuk-once/govuk-chat-v2.git",
+    "ref": "main",
+    "root": ".sources/chat"
+  }
+}

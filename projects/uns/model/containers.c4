@@ -1,0 +1,692 @@
+// UNS architecture — Containers.
+//
+// Every separately deployable part the CDK app creates per environment, grouped by the
+// construct tree that owns it. One stack holds everything; a second holds the alarms.
+// The VPC is on Network; the controls are on Security. C4 level 2.
+
+model {
+
+  containers_pso = boundary 'PSO · the department-facing half' {
+    metadata {
+      type 'Construct tree · UNSPSOResources'
+      tech 'in uns-{env}-stack'
+      role 'The public API, its five routes and one authorizer, and the queue pipeline behind them.'
+      facts [
+        'Every function: nodejs22, 512 MB, 30 s, X-Ray, a KMS-encrypted log group, no reserved concurrency. Only the pipeline functions sit in the VPC.',
+        'This stack cannot be synthesised for production as it stands. The tag loop over the queues reads <code>.dlq</code> on every one of them, and the group-processing queue is not created when the groups flag is off — which it is in production. Synthesising with <code>env=prod</code> throws <code>Cannot read properties of undefined</code>.'
+      ]
+      sourceId 'pso'
+      order '0'
+      x '40'
+      y '30'
+      w '860'
+      h '784'
+      boundary 'hard'
+    }
+
+    containers_api = platform 'PSO API · apigw-pso' {
+      #request-path
+      description 'pso.{zone} · mTLS · 500 rps'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/constructs/UNSPSOResources.ts 'UNSPSOResources.ts'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/constructs/bases/UNSApiGatewayConstruct.ts 'UNSApiGatewayConstruct.ts'
+      metadata {
+        type 'AWS::ApiGateway::RestApi · REGIONAL'
+        tech 'stage api · TLS 1.2 · execute-api endpoint disabled'
+        role 'A custom domain with the truststore attached, a WAF, an access log kept a year, and one usage plan per consumer organisation with a 20,000-a-day quota.'
+        facts [
+          'The comment says quotas are per month; the code sets <code>Period.DAY</code>.'
+        ]
+        sourceId 'api'
+        order '1'
+        x '64'
+        y '80'
+        w '262'
+        h '62'
+        ownership 'uns'
+        resources [ 'rest-apis', 'web-acls', 'usage-plans', 'domains' ]
+        awsIcon 'apigateway'
+      }
+    }
+
+    containers_authorizer = platform 'Revocation authorizer' {
+      #request-path
+      description 'REQUEST · no cache'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/constructs/UNSPSOResources.ts 'UNSPSOResources.ts'
+      metadata {
+        type 'AWS::Lambda::Function'
+        tech 'identity source: the client certificate'
+        role 'Runs on every PSO method; reads the certificates and organisations tables.'
+        sourceId 'authorizer'
+        order '2'
+        x '350'
+        y '80'
+        w '262'
+        h '62'
+        ownership 'uns'
+        awsIcon 'lambda'
+      }
+    }
+
+    containers_export = platform 'analyticsExport · hourly' {
+      #off-request-path
+      description 'EventBridge cron 30 * * * *'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/constructs/UNSPSOResources.ts 'UNSPSOResources.ts'
+      metadata {
+        type 'AWS::Lambda::Function · AWS::Events::Rule'
+        tech 'logs:CreateExportTask'
+        role 'Exports the analytics log group to the <code>analytics-export</code> bucket, which a BigQuery IAM user reads.'
+        sourceId 'export'
+        order '3'
+        x '636'
+        y '80'
+        w '262'
+        h '62'
+        ownership 'uns'
+        resources [ 'schedules' ]
+        awsIcon 'lambda'
+      }
+    }
+
+    containers_routes = platform 'HTTP routes · 5 Lambdas' {
+      #request-path
+      description 'status ×3 · send · send-to-group'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/constructs/UNSPSOResources.ts 'UNSPSOResources.ts'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/docs/pso/openapi.yml 'pso/openapi.yml'
+      metadata {
+        type 'AWS::Lambda::Function ×5 · 4 in production'
+        tech 'send-to-group only with the groups flag'
+        role '<code>GET /status</code>, <code>GET /status/{notificationID}</code>, <code>GET /status/campaign/{campaignID}</code>, <code>POST /send</code>, <code>POST /v1/send-to-group</code>.'
+        sourceId 'routes'
+        order '4'
+        x '64'
+        y '210'
+        w '262'
+        h '62'
+        ownership 'uns'
+        resources [ 'fn-pso', 'routes' ]
+        awsIcon 'lambda'
+      }
+    }
+
+    containers_gqueue = platform 'Group-processing queue' {
+      #request-path
+      description 'not in production'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/constructs/UNSPSOResources.ts 'UNSPSOResources.ts'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/constructs/bases/UNSQueueConstruct.ts 'UNSQueueConstruct.ts'
+      metadata {
+        type 'AWS::SQS::Queue + DLQ'
+        tech 'KMS · 10 s delay · 2 KB · 30 s visibility'
+        role 'One message per worker, re-queued by the worker while ids remain.'
+        facts [
+          'Every UNS queue shares these settings: a ten-second delivery delay on each hop, a 2,048-byte message cap, and a visibility timeout equal to the function timeout.'
+        ]
+        sourceId 'gqueue'
+        order '5'
+        x '350'
+        y '210'
+        w '262'
+        h '62'
+        ownership 'uns'
+      }
+    }
+
+    containers_analytics = platform 'Analytics queue · sqs.analytics' {
+      #request-path
+      description 'every function publishes here'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/constructs/UNSCommon.ts 'UNSCommon.ts'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/constructs/UNSPSOResources.ts 'UNSPSOResources.ts'
+      metadata {
+        type 'AWS::SQS::Queue + DLQ · AWS::Lambda::Function'
+        tech 'in the VPC · writes both tables and the export log group'
+        role 'The queue is created in the common tree and consumed here. Edges are omitted: every route and pipeline function sends to it.'
+        sourceId 'analytics'
+        order '6'
+        x '636'
+        y '210'
+        w '262'
+        h '62'
+        ownership 'uns'
+      }
+    }
+
+    containers_procq = platform 'Processing queue' {
+      #request-path
+      description 'KMS · DLQ after 3'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/constructs/UNSPSOResources.ts 'UNSPSOResources.ts'
+      metadata {
+        type 'AWS::SQS::Queue + DLQ'
+        tech 'retention 7 days'
+        role 'What <code>POST /send</code> writes to.'
+        sourceId 'procq'
+        order '7'
+        x '64'
+        y '340'
+        w '262'
+        h '62'
+        ownership 'uns'
+        resources [ 'queues' ]
+      }
+    }
+
+    containers_validation = platform 'Incoming queue · sqs.validation' {
+      #off-request-path
+      description 'no producer in the repository'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/constructs/UNSPSOResources.ts 'UNSPSOResources.ts'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/lambdas/pso/sqs.validation/handler.ts 'sqs.validation/handler.ts'
+      metadata {
+        type 'AWS::SQS::Queue + DLQ · AWS::Lambda::Function'
+        tech 'validates, records, forwards to processing'
+        role 'A second way in, for messages "pushed from a portal" per the handler comment. No function is granted send on the queue and no SSM parameter carries its URL.'
+        sourceId 'validation'
+        order '8'
+        x '636'
+        y '340'
+        w '262'
+        h '62'
+        ownership 'uns'
+      }
+    }
+
+    containers_processing = platform 'sqs.processing' {
+      #request-path
+      description 'VPC · asks UDP'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/constructs/UNSPSOResources.ts 'UNSPSOResources.ts'
+      metadata {
+        type 'AWS::Lambda::Function'
+        tech 'granted UDP\'s secret, key and role when SSM names them'
+        role 'Resolves the user, writes the record, forwards to dispatch.'
+        sourceId 'processing'
+        order '9'
+        x '64'
+        y '470'
+        w '262'
+        h '62'
+        ownership 'uns'
+        awsIcon 'lambda'
+      }
+    }
+
+    containers_dispq = platform 'Dispatch queue' {
+      #request-path
+      description 'KMS · DLQ after 3'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/constructs/UNSPSOResources.ts 'UNSPSOResources.ts'
+      metadata {
+        type 'AWS::SQS::Queue + DLQ'
+        tech 'retention 7 days'
+        role 'Fed by processing and by the group worker.'
+        sourceId 'dispq'
+        order '10'
+        x '64'
+        y '600'
+        w '262'
+        h '62'
+        ownership 'uns'
+      }
+    }
+
+    containers_gworker = platform 'sqs.groupProcessingWorker' {
+      #request-path
+      description 'VPC · not in production'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/constructs/UNSPSOResources.ts 'UNSPSOResources.ts'
+      metadata {
+        type 'AWS::Lambda::Function'
+        tech 'sends to dispatch, analytics and its own queue'
+        role 'Fans a group out to one processed message per device.'
+        sourceId 'gworker'
+        order '11'
+        x '350'
+        y '600'
+        w '262'
+        h '62'
+        ownership 'uns'
+        awsIcon 'lambda'
+      }
+    }
+
+    containers_dispatch = platform 'sqs.dispatch' {
+      #request-path
+      description 'VPC · reads the OneSignal key'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/constructs/UNSPSOResources.ts 'UNSPSOResources.ts'
+      metadata {
+        type 'AWS::Lambda::Function'
+        tech 'secret config/dispatch/onesignal/apiKey'
+        role 'The one function that talks to the push provider.'
+        sourceId 'dispatch'
+        order '12'
+        x '64'
+        y '730'
+        w '262'
+        h '62'
+        ownership 'uns'
+        awsIcon 'lambda'
+      }
+    }
+  }
+
+  containers_flexzone = boundary 'FLEX · the GOV.UK Once-facing half' {
+    metadata {
+      type 'Construct tree · UNSFlexResources'
+      tech 'in uns-{env}-stack'
+      role 'A private API for FLEX, a public copy in development for the tests, six route functions outside the VPC.'
+      sourceId 'flexzone'
+      order '0'
+      x '920'
+      y '30'
+      w '600'
+      h '264'
+      boundary 'hard'
+    }
+
+    containers_flexapi = platform 'FLEX private API' {
+      #request-path
+      description 'apigw-flex-private · IAM · 100 rps'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/constructs/UNSFlexResources.ts 'UNSFlexResources.ts'
+      metadata {
+        type 'AWS::ApiGateway::RestApi · PRIVATE'
+        tech 'resource policy on aws:SourceVpce · usage plan flex'
+        role 'Reached only through the VPC endpoints SSM lists for FLEX, with an invoker role its account may assume.'
+        sourceId 'flexapi'
+        order '1'
+        x '944'
+        y '80'
+        w '262'
+        h '62'
+        ownership 'uns'
+        awsIcon 'apigateway'
+      }
+    }
+
+    containers_flexpublic = platform 'FLEX public API · dev' {
+      #off-request-path
+      description 'apigw-flex · flex.{zone}'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/constructs/UNSFlexResources.ts 'UNSFlexResources.ts'
+      metadata {
+        type 'AWS::ApiGateway::RestApi · REGIONAL'
+        tech 'API key only · usage plan e2e'
+        role 'The same routes without mTLS or IAM, for the end-to-end tests. Development and sandboxes only.'
+        sourceId 'flexpublic'
+        order '2'
+        x '1230'
+        y '80'
+        w '262'
+        h '62'
+        ownership 'uns'
+        awsIcon 'apigateway'
+      }
+    }
+
+    containers_flexroutes = platform 'FLEX routes · 6 Lambdas' {
+      #request-path
+      description 'notifications ×4 · groups ×2'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/constructs/UNSFlexResources.ts 'UNSFlexResources.ts'
+      metadata {
+        type 'AWS::Lambda::Function ×6 · 4 in production'
+        tech 'registered on both gateways where both exist'
+        role 'Read-only on the messages and organisations tables; read-write on the group store; send on the analytics queue for a status change.'
+        sourceId 'flexroutes'
+        order '3'
+        x '944'
+        y '210'
+        w '262'
+        h '62'
+        ownership 'uns'
+        resources [ 'fn-flex' ]
+        awsIcon 'lambda'
+      }
+    }
+  }
+
+  containers_common = boundary 'Common · shared by both halves' {
+    metadata {
+      type 'Construct tree · UNSCommon and UNSOrganisations'
+      tech 'in uns-{env}-stack'
+      role 'The tables, the cache, the main key, the alert and release topics, the code-signing profile and the analytics queue.'
+      sourceId 'common'
+      order '0'
+      x '920'
+      y '330'
+      w '600'
+      h '394'
+      boundary 'hard'
+    }
+
+    containers_messages = platform 'Messages table' {
+      #request-path
+      description 'uns-{env}-messages'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/constructs/UNSCommon.ts 'UNSCommon.ts'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/constructs/bases/UNSDynamoDBConstruct.ts 'UNSDynamoDBConstruct.ts'
+      metadata {
+        type 'AWS::DynamoDB::Table'
+        tech 'on demand · main key · PITR 30 d · TTL 30 d'
+        role 'One item per notification. Two indexes: <code>ExternalUserIDIndex</code> for FLEX\'s reads, <code>DepartmentIDIndex</code> keys-only.'
+        facts [
+          'Tagged <code>PII=unknown</code>; every other table <code>PII=false</code>.'
+        ]
+        sourceId 'messages'
+        order '1'
+        x '944'
+        y '380'
+        w '262'
+        h '62'
+        ownership 'uns'
+        resources [ 'tables' ]
+        awsIcon 'dynamodb'
+      }
+    }
+
+    containers_groupstore = platform 'Group store table' {
+      #request-path
+      description 'uns-{env}-groupstore · flagged'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/constructs/UNSCommon.ts 'UNSCommon.ts'
+      metadata {
+        type 'AWS::DynamoDB::Table'
+        tech 'pk GroupID · sk PushID · two indexes'
+        role 'Subscriptions. Not created in production.'
+        sourceId 'groupstore'
+        order '2'
+        x '1230'
+        y '380'
+        w '262'
+        h '62'
+        ownership 'uns'
+        awsIcon 'dynamodb'
+      }
+    }
+
+    containers_campaigns = platform 'Campaigns table' {
+      #request-path
+      description 'uns-{env}-campaigns'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/constructs/UNSCommon.ts 'UNSCommon.ts'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/common/repositories/interfaces/ICampaignRecord.ts 'ICampaignRecord.ts'
+      metadata {
+        type 'AWS::DynamoDB::Table'
+        tech 'pk CompositeID = org/department/campaign'
+        role 'One counter per state per campaign, incremented atomically by the analytics function.'
+        sourceId 'campaigns'
+        order '3'
+        x '944'
+        y '510'
+        w '262'
+        h '62'
+        ownership 'uns'
+        awsIcon 'dynamodb'
+      }
+    }
+
+    containers_orgs = platform 'Organisations table' {
+      #request-path
+      description 'uns-{env}-organisations · seeded'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/constructs/UNSOrganisations.ts 'UNSOrganisations.ts'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/consumers/consumersMetadata.ts 'consumersMetadata.ts'
+      metadata {
+        type 'AWS::DynamoDB::Table'
+        tech 'pk OrganisationID · written by a custom resource'
+        role 'Display name, channel controls, retention and deeplink allow-list per organisation; the same three rows in every environment.'
+        sourceId 'orgs'
+        order '4'
+        x '1230'
+        y '510'
+        w '262'
+        h '62'
+        ownership 'uns'
+        awsIcon 'dynamodb'
+      }
+    }
+
+    containers_cache = platform 'ElastiCache · Valkey' {
+      #request-path
+      description 'uns-{env}-elca-main · serverless'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/constructs/bases/UNSElasticacheConstruct.ts 'UNSElasticacheConstruct.ts'
+      metadata {
+        type 'AWS::ElastiCache::ServerlessCache'
+        tech 'engine 8 · 10 GB · 5,000 ECPU · IAM user · daily snapshot'
+        role 'Breaker state, rate counters, latest statuses, group chunks. In the private subnets.'
+        sourceId 'cache'
+        order '5'
+        x '944'
+        y '640'
+        w '262'
+        h '62'
+        ownership 'uns'
+        resources [ 'cache' ]
+      }
+    }
+
+    containers_kms = platform 'Main key · alert topic' {
+      #off-request-path
+      description 'kms-main · alert and release topics'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/constructs/UNSCommon.ts 'UNSCommon.ts'
+      metadata {
+        type 'AWS::KMS::Key · AWS::SNS::Topic'
+        tech 'rotation on · Chatbot when SSM names a channel'
+        role 'The key behind every table, queue, log group, cache and function environment; the topic every alarm publishes to, and a second for release announcements.'
+        sourceId 'kms'
+        order '6'
+        x '1230'
+        y '640'
+        w '262'
+        h '62'
+        ownership 'uns'
+        resources [ 'kms-keys', 'sns' ]
+        awsIcon 'kms'
+      }
+    }
+  }
+
+  containers_mtls = boundary 'mTLS · UNSMTLSCommon' {
+    metadata {
+      type 'Construct tree'
+      tech 'in uns-{env}-stack · CA in dev, staging and production'
+      role 'A private CA, a client certificate per consumer, a truststore object the gateway trusts, and the table the authorizer checks.'
+      sourceId 'mtls'
+      order '0'
+      x '40'
+      y '860'
+      w '860'
+      h '264'
+      boundary 'hard'
+    }
+
+    containers_ca = platform 'Private CA · ACM PCA' {
+      #off-request-path
+      description 'ROOT · RSA 4096 · valid to 2036'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/constructs/bases/UNSCertificateAuthorityConstruct.ts 'UNSCertificateAuthorityConstruct.ts'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/constructs/UNSMTLS.ts 'UNSMTLS.ts'
+      metadata {
+        type 'AWS::ACMPCA::CertificateAuthority'
+        tech 'self-signed root · CN = the hosted zone'
+        role 'Signs every consumer certificate. Sandboxes borrow dev\'s CA through <code>/shared/mtls/truststore</code> and issue week-long certificates.'
+        sourceId 'ca'
+        order '1'
+        x '64'
+        y '910'
+        w '262'
+        h '62'
+        ownership 'uns'
+        resources [ 'ca' ]
+        awsIcon 'acm'
+      }
+    }
+
+    containers_certs = platform 'Client certificates · per consumer' {
+      #off-request-path
+      description 'key and cert in Secrets Manager'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/constructs/bases/UNSClientCertificateConstruct.ts 'UNSClientCertificateConstruct.ts'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/customResourceFns/unsClientCertificateCSRGenerator.ts 'unsClientCertificateCSRGenerator.ts'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/consumers/devConsumers.ts 'devConsumers.ts'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/consumers/stagingConsumers.ts 'stagingConsumers.ts'
+      metadata {
+        type 'AWS::ACMPCA::Certificate · 2 secrets each'
+        tech 'keypair made in a custom resource; the private key never reaches CloudFormation'
+        role 'Two in production; three in development and four in staging, plus rolling three-month ones: three in development, two in staging, where Foreign Travel Advice and pentest have none. A consumer whose account SSM names may read its own two secrets.'
+        facts [
+          'The OU field is filled from the organisation, not the organisational unit.'
+        ]
+        sourceId 'certs'
+        order '2'
+        x '350'
+        y '910'
+        w '282'
+        h '62'
+        ownership 'uns'
+        resources [ 'secrets', 'client-certs' ]
+        awsIcon 'secretsmanager'
+      }
+    }
+
+    containers_certtable = platform 'Certificates table' {
+      #request-path
+      description 'uns-{env}-certificates'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/constructs/UNSMTLS.ts 'UNSMTLS.ts'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/customResourceFns/unsDynamoDBWriter.ts 'unsDynamoDBWriter.ts'
+      metadata {
+        type 'AWS::DynamoDB::Table'
+        tech 'pk Id = sha256 of the certificate'
+        role 'One row per certificate with its organisation and <code>Revoked</code>. Written by a custom resource that marks rows deleted rather than deleting them.'
+        sourceId 'certtable'
+        order '3'
+        x '656'
+        y '910'
+        w '242'
+        h '62'
+        ownership 'uns'
+        resources [ 'fn-cr' ]
+        awsIcon 'dynamodb'
+      }
+    }
+
+    containers_truststore = platform 'Truststore bucket' {
+      #request-path
+      description 'uns-{env}-mtls-certificates'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/constructs/UNSMTLS.ts 'UNSMTLS.ts'
+      metadata {
+        type 'AWS::S3::Bucket'
+        tech 'SSE-S3 · versioned · a new object key every synth'
+        role 'The CA certificate as <code>truststore.{uuid}.pem</code>, uploaded by a custom resource; the gateway waits on it.'
+        sourceId 'truststore'
+        order '4'
+        x '64'
+        y '1040'
+        w '262'
+        h '62'
+        ownership 'uns'
+        resources [ 'buckets' ]
+        awsIcon 's3'
+      }
+    }
+  }
+
+  containers_alarms = boundary 'uns-{env}-alarms-stack' {
+    metadata {
+      type 'CloudFormation stack'
+      tech 'depends on the main stack'
+      role 'Every alarm, built from the names the main stack exports.'
+      sourceId 'alarms'
+      order '0'
+      x '920'
+      y '860'
+      w '600'
+      h '134'
+      boundary 'hard'
+    }
+
+    containers_alarmset = platform 'Alarms · about 57' {
+      #off-request-path
+      description 'P1 · P2 · P3 → the alert topic'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/constructs/UNSAlarmsStack.ts 'UNSAlarmsStack.ts'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/constructs/alarmsConstructs/UNSAlarmConstructs.ts 'UNSAlarmConstructs.ts'
+      metadata {
+        type 'AWS::CloudWatch::Alarm'
+        tech 'counted by reading the loops, not synthesised'
+        role 'API error rates, mTLS denials, WAF anomalies, queue depth, failure rates, durations, cold starts, provider outages, the circuit breaker. Detail on Security.'
+        sourceId 'alarmset'
+        order '1'
+        x '944'
+        y '910'
+        w '262'
+        h '62'
+        ownership 'uns'
+        resources [ 'alarms' ]
+        awsIcon 'cloudwatch'
+      }
+    }
+
+    containers_dashboards = platform 'Dashboards · 4' {
+      #off-request-path
+      description '2 here · 2 from the private package'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/constructs/dashboards/UNSPSOFlow.ts 'UNSPSOFlow.ts'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/constructs/dashboards/UNSPSOUtilization.ts 'UNSPSOUtilization.ts'
+      metadata {
+        type 'AWS::CloudWatch::Dashboard'
+        tech 'in the main stack'
+        role 'Utilisation and flow for PSO; a service dashboard each for PSO and FLEX from <code>once-platform-constructs</code>, whose contents are not in this repository.'
+        facts [
+          'The flow dashboard\'s "Processing Queue" widget plots the incoming queue.'
+        ]
+        sourceId 'dashboards'
+        order '2'
+        x '1230'
+        y '910'
+        w '262'
+        h '62'
+        ownership 'uns'
+        resources [ 'dashboards' ]
+        awsIcon 'cloudwatch'
+      }
+    }
+  }
+
+  containers_api -> containers_authorizer 'authorizer' {
+    metadata { protocol 'Lambda authorizer' auth 'The client certificate PEM' carries 'The organisation back' order '1' }
+  }
+  containers_api -> containers_routes 'AWS_PROXY' {
+    metadata { protocol 'Lambda proxy' auth 'mTLS, the authorizer, an API key' carries 'Five routes' order '2' }
+  }
+  containers_routes -> containers_gqueue 'send-to-group' {
+    metadata { protocol 'SQS' auth 'Function role' carries 'One message per worker' order '3' }
+  }
+  containers_routes -> containers_procq 'send' {
+    metadata { protocol 'SQS · batches of 10' auth 'Function role' carries 'Validated messages' order '4' }
+  }
+  containers_procq -> containers_processing 'event source' {
+    metadata { protocol 'SQS · batch 10 · partial failures' auth 'Function role' carries 'Messages to resolve' order '5' }
+  }
+  containers_processing -> containers_dispq 'SendMessage' {
+    metadata { protocol 'SQS' auth 'Function role' carries 'Processed messages' order '6' }
+  }
+  containers_gqueue -> containers_gworker 'event source' {
+    metadata { protocol 'SQS' auth 'Function role' carries 'A worker\'s message' order '7' }
+  }
+  containers_gworker -> containers_dispq 'SendMessageBatch' {
+    metadata { protocol 'SQS' auth 'Function role' carries 'One message per device' order '8' }
+  }
+  containers_dispq -> containers_dispatch 'event source' {
+    metadata { protocol 'SQS · batch 10 · partial failures' auth 'Function role' carries 'Messages to send' order '9' }
+  }
+  containers_flexapi -> containers_flexroutes 'AWS_PROXY' {
+    metadata { protocol 'Lambda proxy' auth 'IAM and an API key' carries 'Six routes' order '10' }
+  }
+  containers_flexroutes -> containers_messages 'Query · GetItem' {
+    metadata { protocol 'DynamoDB' auth 'Function role: read' carries 'A person\'s notifications' order '11' }
+  }
+  containers_ca -> containers_certs 'signs' {
+    metadata { protocol 'ACM PCA' auth 'The CA\'s own permissions' carries 'A CSR in, a certificate out' order '12' }
+  }
+  containers_certs -> containers_certtable 'records' {
+    metadata { protocol 'Custom resource' auth 'The writer\'s role' carries 'sha256, organisation, Revoked: false' order '13' }
+  }
+  containers_ca -> containers_truststore 'PEM' {
+    metadata { protocol 'Custom resource PutObject' auth 'The writer\'s role' carries 'The CA certificate' order '14' }
+  }
+}
+
+views {
+  view containers {
+    title 'Containers'
+    include containers_pso, containers_pso.**
+    include containers_flexzone, containers_flexzone.**
+    include containers_common, containers_common.**
+    include containers_mtls, containers_mtls.**
+    include containers_alarms, containers_alarms.**
+  }
+}

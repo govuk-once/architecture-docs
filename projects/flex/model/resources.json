@@ -720,15 +720,25 @@
           "d": {
             "type": "AWS::Lambda::Function",
             "tech": "Code.fromInline · 10s",
-            "role": "Republish a us-east-1 SNS message onto the eu-west-2 alarm topic — <b>currently non-functional</b>.",
+            "role": "Republish a us-east-1 SNS message onto the eu-west-2 alarm topic.",
             "facts": [
-              "The inline handler interpolates <code>TopicArn: ${targetTopicArn},</code> without quotes, so the deployed source is a JavaScript syntax error and the function fails at module load on every invocation. Cross-region alarms do not reach Slack today.",
               "One per severity, because CloudWatch cannot target a cross-region topic.",
-              "Passes through message and message attributes; truncates the subject to 100 characters.",
-              "No explicit log group and no alarms — these are plain Function constructs, not Flex ones."
+              "The handler is <code>relay-handler.ts</code> and reads the target topic from <code>TARGET_TOPIC_ARN</code>; until FLEX-404 the ARN was interpolated unquoted into the inline source, a syntax error that failed every invocation.",
+              "Forwards the subject, truncated to 100 characters, and the message; message attributes are not forwarded.",
+              "Granted <code>sns:Publish</code> on the target topic and <code>kms:GenerateDataKey*</code>/<code>kms:Decrypt</code> on the eu-west-2 alerts key — the old relay had only the first.",
+              "After Lambda's two retries the event goes to a per-severity SQS failure queue, and three alarms per relay watch errors, queue depth and undelivered destinations.",
+              "No explicit log group and not Flex's Lambda alarm set — these are plain Function constructs, watched only by the three relay alarms."
             ],
             "code": [
-              ["stacks/global.ts", "platform/infra/flex/src/stacks/global.ts"]
+              ["stacks/global.ts", "platform/infra/flex/src/stacks/global.ts"],
+              [
+                "alarms/alarm-relay.ts",
+                "platform/infra/flex/src/constructs/alarms/alarm-relay.ts"
+              ],
+              [
+                "alarms/relay-handler.ts",
+                "platform/infra/flex/src/constructs/alarms/relay-handler.ts"
+              ]
             ]
           }
         },
@@ -742,7 +752,7 @@
             "tech": "CDK-generated",
             "role": "Backing functions for custom resources. Deploy machinery, not request path.",
             "facts": [
-              "An <code>AwsCustomResource</code> singleton per stack, used for cross-region SSM reads and the two API deployments. The Macie stack adds four more on persistent stages: the session, the automated-discovery opt-out, the results export and the scheduled scan job.",
+              "An <code>AwsCustomResource</code> singleton per stack, used for cross-region SSM reads and the two API deployments. The Macie stack added four more on persistent stages — the session, the automated-discovery opt-out, the results export and the scheduled scan job — and contributes none while it is disabled.",
               "<code>CfnPause</code> adds an inline timeout function plus a Provider framework function.",
               "<code>BucketDeployment</code> adds an asset-copying handler that also invalidates CloudFront."
             ],
@@ -904,10 +914,10 @@
           "id": "api-authorizer",
           "name": "Lambda token authorizers",
           "n": {
-            "dev": 6,
-            "stg": 5,
+            "dev": 7,
+            "stg": 6,
             "prod": 3,
-            "eph": 6
+            "eph": 7
           },
           "from": "counts.domainsWithAuthorizer",
           "meta": ["eu-west-2", "FlexDomainStack"],
@@ -929,10 +939,10 @@
           "id": "api-routes-public",
           "name": "Public route methods",
           "n": {
-            "dev": 32,
-            "stg": 21,
+            "dev": 34,
+            "stg": 23,
             "prod": 17,
-            "eph": 32
+            "eph": 34
           },
           "from": "counts.publicRoutes",
           "meta": ["eu-west-2", "FlexDomainStack"],
@@ -1221,10 +1231,10 @@
           "id": "iam-boundary",
           "name": "Permissions boundary policies",
           "n": {
-            "dev": 8,
-            "stg": 7,
-            "prod": 4,
-            "eph": 8
+            "dev": 10,
+            "stg": 9,
+            "prod": 5,
+            "eph": 9
           },
           "from": "counts.boundaryPolicies",
           "meta": ["eu-west-2", "platform + domain stacks"],
@@ -1251,10 +1261,10 @@
           "id": "iam-roles",
           "name": "IAM roles",
           "n": {
-            "dev": 58,
-            "stg": 43,
-            "prod": 36,
-            "eph": 53
+            "dev": 62,
+            "stg": 47,
+            "prod": 38,
+            "eph": 56
           },
           "from": "counts.iamRoles",
           "meta": ["both regions", "several stacks", "varies"],
@@ -1263,7 +1273,7 @@
             "tech": "Generated and hand-written",
             "role": "Execution identities.",
             "facts": [
-              "One generated execution role per Flex Lambda construct, each under the permissions boundary — 24 of 36 roles in production. The 12 outside it are roles CDK generates for its own providers (custom resources, the deploy gap, the bucket deployment handler), the API Gateway CloudWatch role, the Slack channel configuration role, the two alarm relay functions, the hand-written smoke-test role, and the Macie custom-resource role added with the stack in FLEX-491.",
+              "One generated execution role per Flex Lambda construct, each under the permissions boundary — 24 of 35 roles in production. The 11 outside it are roles CDK generates for its own providers (custom resources, the deploy gap, the bucket deployment handler), the API Gateway CloudWatch role, the Slack channel configuration role, the two alarm relay functions, and the hand-written smoke-test role. It was 12 until FLEX-491 (#522) disabled the Macie stack and took its custom-resource role with it.",
               "Hand-written roles: the API Gateway CloudWatch role (auto-named — 'ApiGatewayCloudWatchRole' is only a construct id) and the smoke-test role, the only one with an explicit physical name <code>{env}-flex-smoke-test-role</code>.",
               "Also created by CDK: the Chatbot role, custom-resource roles and the BucketDeployment handler role.",
               "Per-route inline policies come from grantRouteResources and grantRoutePermissions."
@@ -1365,11 +1375,74 @@
             "role": "Encrypts the us-east-1 relay topics.",
             "facts": [
               "Per stage, so every ephemeral and personal stage creates its own.",
-              "One key shared by both relay topics — <code>#buildRelay</code> is called twice and handed the same key.",
+              "One key shared by both relay topics — <code>createAlarmRelay</code> is called twice and handed the same <code>relayTopicKey</code>. The failure queues and the health topic use a second key, <code>alias/{stage}-flex-alerts-relay-health-key</code>.",
               "The Chatbot role is granted decrypt on the eu-west-2 key, not this one."
             ],
             "code": [
-              ["stacks/global.ts", "platform/infra/flex/src/stacks/global.ts"]
+              ["stacks/global.ts", "platform/infra/flex/src/stacks/global.ts"],
+              [
+                "alarms/alarm-relay.ts",
+                "platform/infra/flex/src/constructs/alarms/alarm-relay.ts"
+              ]
+            ]
+          }
+        },
+        {
+          "id": "kms-relay-health",
+          "name": "KMS key · relay health",
+          "n": 1,
+          "from": "counts.kmsRelayHealth",
+          "meta": ["us-east-1", "FlexGlobalStack"],
+          "d": {
+            "type": "AWS::KMS::Key + Alias",
+            "tech": "alias/{stage}-flex-alerts-relay-health-key",
+            "role": "Encrypts the relay health topic and both relay failure queues.",
+            "facts": [
+              "Per stage, rotation enabled; CloudWatch is granted encrypt and decrypt so the relay alarms can publish to the topic it protects."
+            ],
+            "code": [
+              [
+                "alarms/relay-health.ts",
+                "platform/infra/flex/src/constructs/alarms/relay-health.ts"
+              ]
+            ]
+          }
+        },
+        {
+          "id": "kms-log-group",
+          "name": "KMS key · CloudWatch log groups",
+          "n": {
+            "dev": 3,
+            "stg": 3,
+            "prod": 3,
+            "eph": 1
+          },
+          "from": "counts.kmsLogGroup",
+          "meta": [
+            "eu-west-2 + us-east-1",
+            "FlexCoreStack · FlexGlobalStack",
+            "not used yet"
+          ],
+          "d": {
+            "type": "AWS::KMS::Key + Alias",
+            "tech": "alias/flex-log-group-key · alias/{stage}-flex-global-log-group-key · rotation on",
+            "role": "Created for CloudWatch log-group encryption, one in each region's stack. No log group uses either yet.",
+            "facts": [
+              "<code>createLogGroupKey</code> is called twice: in FlexCoreStack as <code>alias/flex-log-group-key</code>, and in FlexGlobalStack as <code>alias/{stage}-flex-global-log-group-key</code>. Core is persistent stages only, so an ephemeral or personal stage has just the global one.",
+              "Its resource policy grants <code>logs.{region}.amazonaws.com</code> Encrypt*, Decrypt*, ReEncrypt*, GenerateDataKey* and Describe*, conditioned on the encryption context naming a log group in the same account and region.",
+              "Core writes the eu-west-2 key's ARN to <code>/{env}/flex/kms/log-group-key-arn</code>. <code>resolveLogGroupEncryptionKey</code> returns the key from its own stack or reads that ARN with <code>valueForStringParameter</code> — which, once something calls it, is a second import that bypasses the export graph and fails at deploy rather than synth. Nothing calls it yet; the commit that added it says usage follows."
+            ],
+            "code": [
+              [
+                "constructs/kms/log-group-key.ts",
+                "platform/infra/flex/src/constructs/kms/log-group-key.ts"
+              ],
+              [
+                "stacks/core/stack.ts",
+                "platform/infra/flex/src/stacks/core/stack.ts"
+              ],
+              ["stacks/global.ts", "platform/infra/flex/src/stacks/global.ts"],
+              ["utils/logs.ts", "platform/infra/flex/src/utils/logs.ts"]
             ]
           }
         },
@@ -1381,7 +1454,7 @@
           "d": {
             "type": "AWS::KMS::Key (imported)",
             "tech": "environmentEncryption on every Flex* construct",
-            "role": "The fourth key in the system, and the only one FLEX does not create: it protects every Lambda's environment variables.",
+            "role": "The only key in the system FLEX does not create: it protects every Lambda's environment variables.",
             "facts": [
               "All three Flex Lambda constructs set <code>environmentEncryption</code> to it and call <code>grantDecrypt</code> on the function, so every route, gateway, authorizer and canary function depends on it.",
               "Its ARN is read from <code>/{env}/flex-param/secret/encryption-key</code> with <code>StringParameter.valueForStringParameter</code>, which bypasses <code>BaseStack.import()</code> and the SsmApp export graph — so unlike every other imported key, a missing or wrong value fails at deploy rather than at synth.",
@@ -1401,15 +1474,15 @@
             "prod": 1,
             "eph": 0
           },
-          "meta": ["us-east-1", "FlexMacieStack", "persistent stages"],
+          "meta": ["us-east-1", "FlexMacieStack", "written, not deployed"],
           "d": {
-            "type": "Custom::AWS x4, plus an IAM role, a Lambda, a KMS key and an S3 bucket",
+            "type": "Custom::AWS x4, plus an IAM role, a Lambda, a KMS key and an S3 bucket — none of them synthesised today",
             "tech": "AwsCustomResource — neither a Macie session nor a classification job has a CloudFormation resource",
-            "role": "Scheduled sensitive-data discovery over the CloudFront access-log bucket.",
+            "role": "Scheduled sensitive-data discovery over the CloudFront access-log bucket. Written, but not deployed to any stage.",
             "facts": [
-              "Deployed since <b>FLEX-491</b>, which re-enabled the stack with an explicit custom-resource role. It was previously commented out in <code>app.ts</code>; these docs said so, and said it for three commits after it stopped being true.",
-              "<code>if (persistent)</code> in <code>app.ts</code> gates it, so it reaches development, staging and production and never an ephemeral PR stage.",
-              "Its <code>MacieCustomResourceRole</code> carries no permissions boundary, and is one of the 12 roles outside the boundary in production.",
+              "Not deployed. <b>FLEX-491</b> re-enabled the stack with an explicit custom-resource role (#519), then restored the dynamic-role pattern and disabled it in <code>app.ts</code> (#522) while a deployment issue is investigated with the Platform team. Everything below describes the stack as written, not as running.",
+              "<code>if (persistent)</code> in <code>app.ts</code> gated it to development, staging and production, never an ephemeral PR stage — the call it guarded is the one #522 disabled.",
+              "Its <code>MacieCustomResourceRole</code> carries no permissions boundary. With the stack disabled, production has 11 roles outside the boundary rather than 12.",
               "The session is enabled through a <code>macie2:enableMacie</code> call with FIFTEEN_MINUTES finding publication; automated discovery explicitly disabled to avoid rolling scans of public specs and log buckets.",
               "A weekly SCHEDULED job every Monday at 100% sampling with RECOMMENDED managed identifiers.",
               "Results export to a KMS-encrypted RETAIN bucket under <code>macie-results/</code>.",
@@ -1608,10 +1681,54 @@
             "role": "Cross-region alarm forwarding.",
             "facts": [
               "Encrypted with <code>alias/{stage}-flex-alerts-relay-key</code>.",
-              "The topics and subscriptions are correct; the subscribed Lambdas are not — see the relay functions above."
+              "A third topic, <code>{stage}-flex-alerts-relay-health</code>, receives the relay's own alarms and has no subscription — see the relay health row."
             ],
             "code": [
               ["stacks/global.ts", "platform/infra/flex/src/stacks/global.ts"]
+            ]
+          }
+        },
+        {
+          "id": "sns-relay-health",
+          "name": "Relay health topic",
+          "n": 1,
+          "from": "counts.snsRelayHealth",
+          "meta": ["us-east-1", "FlexGlobalStack"],
+          "d": {
+            "type": "AWS::SNS::Topic",
+            "tech": "{stage}-flex-alerts-relay-health",
+            "role": "Where the six alarms that watch the relay publish. Nothing subscribes to it.",
+            "facts": [
+              "Encrypted with <code>alias/{stage}-flex-alerts-relay-health-key</code>; CloudWatch is granted publish.",
+              "No subscription and no Chatbot configuration lists it, in any stage — a relay failure is recorded here and reaches nobody."
+            ],
+            "code": [
+              [
+                "alarms/relay-health.ts",
+                "platform/infra/flex/src/constructs/alarms/relay-health.ts"
+              ]
+            ]
+          }
+        },
+        {
+          "id": "sqs-relay-failures",
+          "name": "Relay failure queues",
+          "n": 2,
+          "from": "counts.sqsRelayFailures",
+          "meta": ["us-east-1", "FlexGlobalStack"],
+          "d": {
+            "type": "AWS::SQS::Queue",
+            "tech": "{stage}-flex-alarm-relay-{severity}-failures · 14 days",
+            "role": "On-failure destination for each relay function.",
+            "facts": [
+              "KMS-encrypted with the relay health key, SSL enforced, 14-day retention.",
+              "A message here is a notification the relay gave up on after Lambda's two retries; nothing replays it, and the queue-depth alarm that would say so publishes to the unsubscribed health topic."
+            ],
+            "code": [
+              [
+                "alarms/alarm-relay.ts",
+                "platform/infra/flex/src/constructs/alarms/alarm-relay.ts"
+              ]
             ]
           }
         },
@@ -1886,10 +2003,10 @@
           "id": "loggroups",
           "name": "Log groups",
           "n": {
-            "dev": 56,
-            "stg": 42,
-            "prod": 37,
-            "eph": 54
+            "dev": 59,
+            "stg": 45,
+            "prod": 36,
+            "eph": 56
           },
           "from": "counts.logGroups",
           "meta": ["both regions", "several stacks"],
@@ -1898,7 +2015,7 @@
             "tech": "365 days on Flex constructs · 731 on CDK-managed",
             "role": "Every log group the stacks create: one per Lambda construct, one per API stage for access and execution logs, and the groups CDK manages for its own functions.",
             "facts": [
-              "Flex constructs set <code>RetentionDays.ONE_YEAR</code> explicitly (29 groups in production). The 8 groups CDK creates for its own functions — the deploy gap, the alarm relays, the bucket deployment handler, the Macie custom-resource function — take CDK's two-year default instead.",
+              "Flex constructs set <code>RetentionDays.ONE_YEAR</code> explicitly (29 groups in production). The 7 groups CDK creates for its own functions — the deploy gap, the alarm relays, the bucket deployment handler — take CDK's two-year default instead. The Macie custom-resource function was an eighth until FLEX-491 (#522) disabled that stack.",
               "Content is redacted at source by the <code>@flex/logging</code> sanitizer before it is ever written.",
               "<code>FlexLogger.setLogLevel</code> returns without doing anything when <code>FLEX_ENVIRONMENT</code> is production, so verbose logging cannot be turned on there at runtime."
             ],
@@ -1948,9 +2065,9 @@
           "id": "ssm-written",
           "name": "Parameters written by FLEX",
           "n": {
-            "dev": 23,
-            "stg": 22,
-            "prod": 22,
+            "dev": 24,
+            "stg": 23,
+            "prod": 23,
             "eph": 8
           },
           "meta": ["eu-west-2", "core + platform"],
@@ -1959,7 +2076,7 @@
             "tech": "StringParameter via BaseStack.export()",
             "role": "Replaces CloudFormation exports for all cross-stack wiring.",
             "facts": [
-              "Core writes 14: nine VPC parameters plus two security groups, two alarm topics and the API Gateway endpoint. Development adds the release topic (15).",
+              "Core writes 15: nine VPC parameters plus two security groups, two alarm topics, the API Gateway endpoint and the log-group key ARN. Development adds the release topic (16).",
               "<code>exportVpc</code> is the reason the VPC contributes nine: id, CIDR, AZs, and subnet-id plus route-table-id lists for each of the three tiers.",
               "Platform writes 8: three public API keys, four private API keys and the origin-verify secret ARN.",
               "An ephemeral or personal stage writes only the platform 8 — it imports the rest from development.",

@@ -1,0 +1,281 @@
+// GOV.UK Chat architecture — Request path.
+//
+// Every hop one question takes, numbered in reading order, with the TypeScript API as the
+// worked example: it has exactly one route, so the whole path is provable end to end.
+// The Python API's routes are in the reference table on this tab.
+//
+// The answer streams back along the same path as server-sent events. There is no return
+// line drawn here, because the return is the same hops in reverse and a line for it would
+// say nothing the boxes do not.
+
+model {
+
+  request_caller = internal 'A caller' {
+    #request-path
+    description 'a Cognito access token'
+    link https://github.com/govuk-once/govuk-chat-v2/blob/main/README.md 'README.md'
+    metadata {
+      type 'GOV.UK Once system'
+      tech 'client credentials, not a person'
+      role 'Whatever holds a client credential for this pool. The app backend proxies a person\'s question here, and is documented on the GOV.UK App page.'
+      facts [
+        'Which system this is cannot be proved from this repository: the app backend forwards to whatever an SSM parameter names, and any client granted the scope may call.',
+        'There is no person in the pool. Self sign-up is disabled and the only flow is client credentials, so the caller is always a machine.'
+      ]
+      sourceId 'caller'
+      order '1'
+      x '64'
+      y '30'
+      w '262'
+      h '62'
+      ownership 'govuk'
+    }
+  }
+
+  request_chat = boundary 'GOV.UK Chat' {
+    metadata {
+      type 'Ownership boundary'
+      tech 'one AWS account per environment'
+      role 'Everything this repository deploys on the path of a single question.'
+      sourceId 'chat'
+      order '0'
+      x '40'
+      y '110'
+      w '596'
+      h '390'
+      boundary 'hard'
+    }
+
+    request_route = platform 'POST /v1/threads/invoke' {
+      #request-path
+      description 'the only route here'
+      link https://github.com/govuk-once/govuk-chat-v2/blob/main/cdk/src/stacks/chat-api-ts-stack.ts 'chat-api-ts-stack.ts'
+      metadata {
+        type 'AWS::ApiGateway::Method'
+        tech 'streaming integration'
+        role 'The single method on the TypeScript API. Everything else about this API is the machinery that guards this one route.'
+        facts [
+          'Authorisation and the scope are set as defaults on the API rather than on the method, so any route added later inherits the same guard.'
+        ]
+        sourceId 'route'
+        order '2'
+        x '64'
+        y '160'
+        w '262'
+        h '62'
+        ownership 'chat'
+        resources [ 'rest-apis' ]
+        awsIcon 'apigateway'
+      }
+    }
+
+    request_authorizer = platform 'Cognito authorizer' {
+      #request-path
+      description 'scope chat-api/invoke'
+      link https://github.com/govuk-once/govuk-chat-v2/blob/main/cdk/src/stacks/chat-api-ts-stack.ts 'chat-api-ts-stack.ts'
+      metadata {
+        type 'AWS::ApiGateway::Authorizer'
+        tech 'checked before the function runs'
+        role 'The first gate. The token must come from this pool and carry the one scope the resource server declares.'
+        facts [
+          'The resource server is <code>chat-api</code> and its only scope is <code>invoke</code>, so there is nothing finer to grant.',
+          'A token lasts an hour in staging and production, and a day in an ephemeral environment.'
+        ]
+        sourceId 'authorizer'
+        order '3'
+        x '350'
+        y '160'
+        w '262'
+        h '62'
+        ownership 'chat'
+        resources [ 'user-pool' ]
+        awsIcon 'cognito'
+      }
+    }
+
+    request_handler = platform 'threads/invoke handler' {
+      #request-path
+      description 'validates, then claims'
+      link https://github.com/govuk-once/govuk-chat-v2/blob/main/services/chat-api-ts/src/handlers/threads/invoke.ts 'threads/invoke.ts'
+      link https://github.com/govuk-once/govuk-chat-v2/blob/main/services/chat-api-ts/src/http/zod-validator.ts 'zod-validator.ts'
+      metadata {
+        type 'AWS::Lambda::Function'
+        tech 'middy · zod · streamed response'
+        role 'Checks the headers and the body, turns the caller\'s thread id into a system one, claims the thread, then invokes the agent and relays its events.'
+        facts [
+          'The second gate is the schema: headers and body are each validated against a zod schema before the handler body runs, and both failures answer with the same message so nothing about the shape leaks.',
+          'The third gate is the claim. A thread already running, a run id used before, or a message id used before is refused with <code>409</code> and a reason.',
+          'Every failure after the claim releases it again, so a thread is not left locked by an error.'
+        ]
+        sourceId 'handler'
+        order '4'
+        x '64'
+        y '290'
+        w '262'
+        h '62'
+        ownership 'chat'
+        resources [ 'lambdas' ]
+        awsIcon 'lambda'
+      }
+    }
+
+    request_table = platform 'Thread and run table' {
+      #request-path
+      description 'one run per thread'
+      link https://github.com/govuk-once/govuk-chat-v2/blob/main/services/chat-api-ts/src/persistence/runs.ts 'persistence/runs.ts'
+      link https://github.com/govuk-once/govuk-chat-v2/blob/main/services/chat-api-ts/src/persistence/threads.ts 'persistence/threads.ts'
+      metadata {
+        type 'AWS::DynamoDB::Table'
+        tech 'the lock and the transcript in one table'
+        role 'Holds the thread, the lock a run takes on it, and the messages written once the run finishes.'
+        facts [
+          'The lock is leased for thirty seconds, the same as the function\'s timeout, so a function killed at its limit cannot hold a thread beyond it.',
+          'The user\'s message and the assistant\'s are written together when the run finishes, so a failed run leaves neither.'
+        ]
+        sourceId 'table'
+        order '5'
+        x '350'
+        y '290'
+        w '262'
+        h '62'
+        ownership 'chat'
+        resources [ 'tables' ]
+        awsIcon 'dynamodb'
+      }
+    }
+
+    request_runtime = platform 'AG-UI agent runtime' {
+      #request-path
+      description 'session id is the thread'
+      link https://github.com/govuk-once/govuk-chat-v2/blob/main/services/agui-agent/src/agui_agent/main.py 'agui_agent/main.py'
+      link https://github.com/govuk-once/govuk-chat-v2/blob/main/cdk/src/stacks/agui-agent-stack.ts 'agui-agent-stack.ts'
+      metadata {
+        type 'AWS::BedrockAgentCore::Runtime'
+        tech 'invoked with qualifier DEFAULT'
+        role 'Runs the Strands agent. The system thread id is passed as the runtime session id, which is what ties a question to the conversation before it.'
+        facts [
+          'The handler asks for <code>text/event-stream</code>, so the agent\'s answer arrives as events rather than one body.',
+          'The end user id is passed as a forwarded property, not in the message, and becomes the actor the memory is keyed by.'
+        ]
+        sourceId 'runtime'
+        order '6'
+        x '64'
+        y '420'
+        w '262'
+        h '62'
+        ownership 'chat'
+        resources [ 'agent-runtimes' ]
+      }
+    }
+
+    request_memory = platform 'AG-UI agent memory' {
+      #request-path
+      description 'keyed by thread and person'
+      link https://github.com/govuk-once/govuk-chat-v2/blob/main/services/agui-agent/src/agui_agent/main.py 'agui_agent/main.py'
+      metadata {
+        type 'AWS::BedrockAgentCore::Memory'
+        tech 'read by the agent, not the API'
+        role 'Gives the agent the turns that came before, so the answer follows the conversation rather than the last message alone.'
+        facts [
+          'Read and written by the agent runtime itself. Neither API touches it, so a conversation deleted through an API leaves its memory behind.'
+        ]
+        sourceId 'memory'
+        order '7'
+        x '350'
+        y '420'
+        w '262'
+        h '62'
+        ownership 'chat'
+        resources [ 'agent-memory' ]
+      }
+    }
+  }
+
+  request_bedrock = external 'Amazon Bedrock' {
+    #request-path
+    description 'Claude Sonnet 5'
+    link https://github.com/govuk-once/govuk-chat-v2/blob/main/services/agui-agent/src/agui_agent/main.py 'agui_agent/main.py'
+    metadata {
+      type 'AWS service · outside GOV.UK Once'
+      tech 'through an inference profile'
+      role 'Answers. The model is named in the agent, capped at 4,000 tokens, and reached with the runtime\'s own role rather than the caller\'s.'
+      facts [
+        'The system prompt comes from the private prompts package and cannot be read in this repository.',
+        'Nothing on this path searches or retrieves GOV.UK content: there is no index, no vector store and no content API client anywhere in the repository.'
+      ]
+      sourceId 'bedrock'
+      order '8'
+      x '64'
+      y '550'
+      w '262'
+      h '62'
+      ownership 'third'
+    }
+  }
+
+  request_caller -> request_route 'the question' {
+    metadata {
+      protocol 'HTTPS to the API Gateway stage'
+      auth 'A Cognito access token with the scope chat-api/invoke'
+      carries 'A thread id, a run id, and the messages so far'
+      order '1'
+    }
+  }
+  request_route -> request_authorizer 'checks the token' {
+    metadata {
+      protocol 'API Gateway Cognito authorizer'
+      auth 'The token is verified against the pool before the method runs'
+      carries 'The token, and the scope it must hold'
+      order '2'
+    }
+  }
+  request_route -> request_handler 'proxies, streaming' {
+    metadata {
+      protocol 'Lambda proxy integration, ResponseTransferMode.STREAM'
+      auth 'The gateway\'s invoke permission'
+      carries 'The whole request; server-sent events back'
+      order '3'
+    }
+  }
+  request_handler -> request_table 'claims the thread' {
+    metadata {
+      protocol 'DynamoDB'
+      auth 'Function role: read and write the table'
+      carries 'The thread lookup, the run lock, and the two messages at the end'
+      order '4'
+    }
+  }
+  request_handler -> request_runtime 'invokes the agent' {
+    metadata {
+      protocol 'bedrock-agentcore:InvokeAgentRuntime, accept text/event-stream'
+      auth 'Function role, on the runtime ARN and everything beneath it'
+      carries 'The messages, the state and tools, and the end user id'
+      order '5'
+    }
+  }
+  request_runtime -> request_memory 'the turns so far' {
+    metadata {
+      protocol 'bedrock-agentcore CreateEvent, GetEvent and ListEvents'
+      auth 'The runtime\'s own role, scoped to this memory'
+      carries 'The conversation, under the session and actor'
+      order '6'
+    }
+  }
+  request_runtime -> request_bedrock 'asks the model' {
+    metadata {
+      protocol 'Bedrock InvokeModelWithResponseStream'
+      auth 'The runtime\'s own role, on inference profiles and foundation models'
+      carries 'The prompt and the conversation; generated text back'
+      order '7'
+    }
+  }
+}
+
+views {
+  view request {
+    title 'Request path'
+    include request_caller
+    include request_chat, request_chat.**
+    include request_bedrock
+  }
+}

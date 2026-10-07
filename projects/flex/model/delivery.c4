@@ -539,7 +539,7 @@ model {
         facts [
           'Every import() records an edge and willCreateCycle rejects a cycle at synth; synth() then converts each edge into an addDependency call.',
           'That ordering is what makes cdk deploy --all --concurrency 4 safe.',
-          'Stacks per stage: FlexCore and FlexSmokeTest (persistent stages only), FlexPlatform, FlexGlobal in us-east-1, one stack per deployable domain, FlexMacie in us-east-1 on persistent stages, and FlexApiDeployment last.'
+          'Stacks per stage: FlexCore and FlexSmokeTest (persistent stages only), FlexPlatform, FlexGlobal in us-east-1, one stack per deployable domain, and FlexApiDeployment last. FlexMacie in us-east-1 was in this list on persistent stages until FLEX-491 (#522) disabled it.'
         ]
         sourceId 'ssmapp'
         order '17'
@@ -943,7 +943,7 @@ model {
         tech 'CloudWatch'
         role 'Lambda, API Gateway, CloudFront, edge functions, WAF, Shield and the canary.'
         facts [
-          'Every alarm routes to exactly one of two SNS topics, critical or warning — except the canary\'s {stage}-smoke-test-no-success alarm, which currently has no alarm action wired.',
+          'Every alarm routes to one of three SNS topics: critical, warning, or — for the six that watch the relay itself — relay health, which nothing subscribes to. The exception is the canary\'s {stage}-smoke-test-no-success alarm, which has no alarm action wired.',
           'Descriptions start with Critical: or Warning: and state the breached condition, so the Slack message alone usually picks the runbook.',
           'The four families created in us-east-1 can only reach Slack through the relay.'
         ]
@@ -970,17 +970,22 @@ model {
     delivery_relay = platform 'Alarm relay' {
       #off-request-path
       description '2 topics + 2 inline fns'
-      technology 'SNS → Lambda → SNS, one shared KMS key'
+      technology 'SNS → Lambda → SNS · failure queue · health topic'
       link https://github.com/govuk-once/flex/blob/main/platform/infra/flex/src/stacks/global.ts 'stacks/global.ts'
+      link https://github.com/govuk-once/flex/blob/main/platform/infra/flex/src/constructs/alarms/alarm-relay.ts 'alarms/alarm-relay.ts'
+      link https://github.com/govuk-once/flex/blob/main/platform/infra/flex/src/constructs/alarms/relay-handler.ts 'alarms/relay-handler.ts'
+      link https://github.com/govuk-once/flex/blob/main/platform/infra/flex/src/constructs/alarms/relay-health.ts 'alarms/relay-health.ts'
+      link https://github.com/govuk-once/flex/blob/main/platform/infra/flex/src/constructs/alarms/above-zero-alarm.ts 'alarms/above-zero-alarm.ts'
       metadata {
         type 'Container'
-        tech 'SNS → Lambda → SNS, one shared KMS key'
-        role 'Republishes us-east-1 alarms onto the eu-west-2 topics — currently non-functional.'
+        tech 'SNS → Lambda → SNS · failure queue · health topic'
+        role 'Republishes us-east-1 alarms onto the eu-west-2 topics, and alarms on itself to a health topic nothing reads.'
         facts [
           'Lives in us-east-1: CloudWatch cannot target an SNS topic in another region, so edge alarms need this hop to reach the eu-west-2 topics.',
-          'TopicArn: ${targetTopicArn} is interpolated unquoted into Code.fromInline, so the handler is a JavaScript syntax error and fails on every invocation. Every CloudFront, edge-function, CLOUDFRONT-scope WAF and Shield alarm therefore reaches nobody. The REGIONAL WAF alarms publish straight to the eu-west-2 topics and are unaffected.',
-          'Passes through message and message attributes; truncates the subject to 100 characters.',
-          '#buildRelay is called twice, once per severity, so there are two topics and two functions sharing one relay key.'
+          'The handler is relay-handler.ts and reads the target topic from TARGET_TOPIC_ARN; until FLEX-404 the ARN was interpolated unquoted into the inline source, a syntax error that failed every invocation.',
+          'Forwards the subject, truncated to 100 characters, and the message; message attributes are not forwarded.',
+          'createAlarmRelay is called twice, once per severity: two topics and two functions share one relay key, and each function\'s on-failure destination is its own SQS queue, kept 14 days.',
+          'Six alarms watch the relay — per severity, function errors, failure-queue depth and undelivered destinations, each above 0 over one 5-minute period — and publish to {stage}-flex-alerts-relay-health, which has no subscription in any stage.'
         ]
         sourceId 'relay'
         order '33'
@@ -993,7 +998,10 @@ model {
         resources [
           'sns-relay',
           'lambda-relay',
-          'kms-relay'
+          'kms-relay',
+          'kms-relay-health',
+          'sns-relay-health',
+          'sqs-relay-failures'
         ]
       }
     }

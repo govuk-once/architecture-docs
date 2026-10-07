@@ -1,0 +1,135 @@
+{
+  "groups": [
+    {
+      "name": "Agents · Bedrock AgentCore",
+      "note": "Two agents, one per API. Both stacks are the same shape; they differ only in name, model and bundled package.",
+      "table": null,
+      "items": [
+        {
+          "id": "agent-runtimes",
+          "name": "Agent runtimes",
+          "n": { "dev": 2, "stg": 2, "prod": 2 },
+          "meta": ["AguiAgentStack", "ExampleAgentStack", "Python 3.13"],
+          "d": {
+            "type": "AWS::BedrockAgentCore::Runtime",
+            "role": "Each hosts one Strands agent, invoked by its API and streaming events back.",
+            "facts": [
+              "The runtime name may not contain dashes, so the construct replaces them with underscores."
+            ],
+            "code": [
+              ["agui-agent-stack.ts", "cdk/src/stacks/agui-agent-stack.ts"],
+              [
+                "example-agent-stack.ts",
+                "cdk/src/stacks/example-agent-stack.ts"
+              ]
+            ]
+          }
+        },
+        {
+          "id": "agent-memory",
+          "name": "Agent memory",
+          "n": { "dev": 2, "stg": 2, "prod": 2 },
+          "meta": ["90-day expiry", "keyed by session and actor"],
+          "d": {
+            "type": "AWS::BedrockAgentCore::Memory",
+            "role": "Holds the turns of a conversation so the next question has context. One per agent.",
+            "facts": [
+              "Events expire after 90 days. Nothing in the repository deletes memory when a conversation is deleted through an API."
+            ],
+            "code": [
+              ["agui-agent-stack.ts", "cdk/src/stacks/agui-agent-stack.ts"]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "APIs · API Gateway, Cognito and Lambda",
+      "note": null,
+      "table": null,
+      "items": [
+        {
+          "id": "rest-apis",
+          "name": "REST APIs",
+          "n": { "dev": 2, "stg": 2, "prod": 2 },
+          "meta": ["one Cognito, one IAM", "both stream"],
+          "d": {
+            "type": "AWS::ApiGateway::RestApi",
+            "role": "The TypeScript API exposes one route; the Python one is a catch-all proxy. Both use streaming response transfer.",
+            "code": [
+              ["chat-api-ts-stack.ts", "cdk/src/stacks/chat-api-ts-stack.ts"],
+              [
+                "chat-api-fastapi-stack.ts",
+                "cdk/src/stacks/chat-api-fastapi-stack.ts"
+              ]
+            ]
+          }
+        },
+        {
+          "id": "lambdas",
+          "name": "Lambda functions",
+          "n": { "dev": 2, "stg": 2, "prod": 2 },
+          "meta": ["Node 24 · arm64 · 30 s", "Python 3.13 · arm64 · 15 min"],
+          "d": {
+            "type": "AWS::Lambda::Function",
+            "role": "One per API. The Python one runs uvicorn behind the Lambda Web Adapter layer, so its handler is a shell script.",
+            "facts": [
+              "Neither sets a memory size, so both take the CDK default.",
+              "SnapStart is enabled on the Python function outside ephemeral environments."
+            ],
+            "code": [
+              ["chat-api-ts-stack.ts", "cdk/src/stacks/chat-api-ts-stack.ts"],
+              [
+                "lambda-run.sh",
+                "services/chat-api-fastapi/scripts/lambda-run.sh"
+              ]
+            ]
+          }
+        },
+        {
+          "id": "user-pool",
+          "name": "Cognito user pools",
+          "n": { "dev": 1, "stg": 1, "prod": 1 },
+          "meta": ["client credentials only", "self sign-up disabled"],
+          "d": {
+            "type": "AWS::Cognito::UserPool",
+            "role": "Machine-to-machine access to the TypeScript API: a resource server <code>chat-api</code> with one scope, <code>invoke</code>.",
+            "facts": [
+              "Access tokens last an hour in staging and production, and a day in ephemeral environments."
+            ],
+            "code": [
+              ["chat-api-ts-stack.ts", "cdk/src/stacks/chat-api-ts-stack.ts"]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Data · DynamoDB",
+      "note": null,
+      "table": null,
+      "items": [
+        {
+          "id": "tables",
+          "name": "Tables",
+          "n": { "dev": 2, "stg": 2, "prod": 2 },
+          "meta": ["one per API", "single-table designs"],
+          "d": {
+            "type": "AWS::DynamoDB::Table",
+            "role": "The TypeScript API keeps threads, runs, locks and messages in one table with a one-year TTL; the Python API keeps conversations, branches, messages and streams in another with a GSI.",
+            "facts": [
+              "Only the TypeScript table sets a TTL attribute. The Python table has none, so nothing there expires."
+            ],
+            "code": [
+              ["service.ts", "services/chat-api-ts/src/persistence/service.ts"],
+              [
+                "chat-api-fastapi-stack.ts",
+                "cdk/src/stacks/chat-api-fastapi-stack.ts"
+              ]
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

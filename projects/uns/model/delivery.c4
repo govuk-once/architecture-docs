@@ -1,0 +1,435 @@
+// UNS architecture — Delivery.
+//
+// Three zones: what a pull request gets, what a merge to main ships and where it stops,
+// and the things outside the repository every run depends on. Every step is a GitHub
+// Actions job; read each zone top to bottom.
+
+model {
+
+  delivery_pr = boundary 'Pull request · into main' {
+    metadata {
+      type 'GitHub Actions'
+      tech 'pr.yml · pr.title-validation.yml'
+      role 'One job runs everything a pull request gets. There is no ephemeral deployment: the CDK app is synthesised with blank credentials and scanned, never deployed.'
+      sourceId 'pr'
+      order '0'
+      x '40'
+      y '30'
+      w '310'
+      h '784'
+      boundary 'soft'
+    }
+
+    delivery_push = internal '1. Commit · husky' {
+      #off-request-path
+      description 'tsc · tests · lint in parallel'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/scripts/pre-commit.ts 'pre-commit.ts'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/commitlint.config.ts 'commitlint.config.ts'
+      metadata {
+        type 'Local'
+        tech 'husky pre-commit and commit-msg'
+        role 'Before a commit, three tasks at once and any failure blocks it; the message must be angular-style with an upper-case Jira scope.'
+        facts [
+          'commitlint accepts a one-letter scope and the <code>BREAKING</code> types; the PR title check accepts neither, so a title the docs call valid can fail the workflow.'
+        ]
+        sourceId 'push'
+        order '1'
+        x '64'
+        y '80'
+        w '262'
+        h '62'
+        ownership 'uns'
+      }
+    }
+
+    delivery_title = internal '2. PR title check' {
+      #off-request-path
+      description 'type(ABC-123): …'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/.github/workflows/pr.title-validation.yml 'pr.title-validation.yml'
+      metadata {
+        type 'GitHub Actions workflow'
+        tech 'one regex · Dependabot exempt'
+        role 'A conventional type, a mandatory Jira scope of two to six upper-case letters, an optional <code>!</code>.'
+        sourceId 'title'
+        order '2'
+        x '64'
+        y '210'
+        w '262'
+        h '62'
+        ownership 'uns'
+      }
+    }
+
+    delivery_prjob = internal '3. pr · build and test' {
+      #off-request-path
+      description 'tsc · build · lint · unit tests'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/.github/workflows/pr.yml 'pr.yml'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/vitest.config.ts 'vitest.config.ts'
+      metadata {
+        type 'GitHub Actions job · 60 min'
+        tech 'OIDC to a CodeArtifact role · pnpm ci'
+        role 'Type check, the esbuild bundles, eslint and prettier, then the unit project. Each of those fails the job.'
+        facts [
+          'A second run with coverage follows, and its 80% thresholds cannot fail anything: the command ends in <code>|| echo</code>. The summary is posted as a PR comment instead.'
+        ]
+        sourceId 'prjob'
+        order '3'
+        x '64'
+        y '340'
+        w '262'
+        h '62'
+        ownership 'uns'
+      }
+    }
+
+    delivery_synth = internal '4. cdk synth · Checkov' {
+      #off-request-path
+      description 'env=cicd · no credentials'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/.github/workflows/pr.yml 'pr.yml'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/.checkov.yaml '.checkov.yaml'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/utils/applyCheckovSkip.ts 'applyCheckovSkip.ts'
+      metadata {
+        type 'Two steps of the same job'
+        tech 'AWS keys blanked · soft_fail · SARIF upload'
+        role 'The synth must succeed; Checkov over its output may not, and its findings go to code scanning. Suppressions are written into the templates as resource metadata.'
+        facts [
+          'This is the synth the docs pipeline cannot repeat: the app imports a package that only a CodeArtifact login can fetch.'
+        ]
+        sourceId 'synth'
+        order '4'
+        x '64'
+        y '470'
+        w '262'
+        h '62'
+        ownership 'uns'
+      }
+    }
+
+    delivery_sonar = internal '5. Sonar scan and gate' {
+      #off-request-path
+      description 'scan may fail · gate may not'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/.github/workflows/pr.yml 'pr.yml'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/sonar-project.properties 'sonar-project.properties'
+      metadata {
+        type 'Two steps of the same job'
+        tech 'sources src and infrastructure/cdk · cdk excluded from coverage'
+        role 'The scan step is <code>continue-on-error</code>; the quality-gate step is not, and waits up to ten minutes for the verdict.'
+        sourceId 'sonar'
+        order '5'
+        x '64'
+        y '600'
+        w '262'
+        h '62'
+        ownership 'uns'
+      }
+    }
+
+    delivery_dependabot = internal 'Dependabot' {
+      #off-request-path
+      description 'weekly · 7-day cooldown'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/.github/dependabot.yml 'dependabot.yml'
+      metadata {
+        type 'GitHub configuration'
+        tech 'npm and actions · patch and minor grouped'
+        role 'Opens <code>fix(…)</code> pull requests through the same CodeArtifact registry, exempt from the title check.'
+        sourceId 'dependabot'
+        order '6'
+        x '64'
+        y '730'
+        w '262'
+        h '62'
+        ownership 'uns'
+      }
+    }
+  }
+
+  delivery_release = boundary 'Release · push to main' {
+    metadata {
+      type 'GitHub Actions'
+      tech 'main.release.yml → _deploy.yml'
+      role 'One workflow from a merge to production: a version, then dev, then staging and production together. No approval step is in the YAML; a GitHub environment rule, if any, is configured outside the repository.'
+      sourceId 'release'
+      order '0'
+      x '390'
+      y '30'
+      w '620'
+      h '654'
+      boundary 'soft'
+    }
+
+    delivery_merge = internal '1. Merge to main' {
+      #off-request-path
+      description 'three workflows start'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/.github/workflows/main.release.yml 'main.release.yml'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/.github/workflows/main.sonar.yml 'main.sonar.yml'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/.github/workflows/main.pages.yml 'main.pages.yml'
+      metadata {
+        type 'Trigger'
+        tech 'no concurrency group on the release'
+        role 'The release, a Sonar scan of main, and a Pages deploy of the whole <code>docs/</code> directory — the two Swagger pages and every markdown guide and runbook with them.'
+        sourceId 'merge'
+        order '1'
+        x '414'
+        y '80'
+        w '262'
+        h '62'
+        ownership 'uns'
+      }
+    }
+
+    delivery_version = internal '2. semantic-release' {
+      #off-request-path
+      description 'tag v{x.y.z} · GitHub release'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/.releaserc '.releaserc'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/.github/workflows/main.release.yml 'main.release.yml'
+      metadata {
+        type 'GitHub Actions job'
+        tech 'angular commits · every type is at least a patch'
+        role '<code>feat</code> is a minor, <code>BREAKING</code> a major, anything else a patch; the version becomes the job output the deploys carry as <code>{version}@{sha}</code>.'
+        facts [
+          'Nothing is committed back: no changelog plugin, no git plugin, and <code>package.json</code> stays at 0.0.0 while the tag is v1.154.2.',
+          'The releases doc says three plugins and no GitHub release; the file configures five, including the one that creates GitHub releases.'
+        ]
+        sourceId 'version'
+        order '2'
+        x '414'
+        y '210'
+        w '262'
+        h '62'
+        ownership 'uns'
+      }
+    }
+
+    delivery_manual = internal 'manual.deploy.yml' {
+      #off-request-path
+      description 'any environment, any order'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/.github/workflows/manual.deploy.yml 'manual.deploy.yml'
+      metadata {
+        type 'workflow_dispatch'
+        tech 'three booleans · version = branch@sha'
+        role 'Deploys whichever of dev, staging and production is ticked, with no dependency between them. The fix-forward runbook calls it non-production only; the YAML has a production input.'
+        sourceId 'manual'
+        order '3'
+        x '724'
+        y '210'
+        w '262'
+        h '62'
+        ownership 'uns'
+      }
+    }
+
+    delivery_dev = internal '3. Deploy to dev' {
+      #off-request-path
+      description 'environment dev · cdk deploy --all'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/.github/workflows/_deploy.yml '_deploy.yml'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/cdk.predeploy.ssm.ts 'cdk.predeploy.ssm.ts'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/cdk.postdeploy.ssm.ts 'cdk.postdeploy.ssm.ts'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/scripts/release-announcement.ts 'release-announcement.ts'
+      metadata {
+        type 'Reusable workflow · GitHub environment'
+        tech 'OIDC to AWS_DEPLOY_ROLE_ARN · pnpm ci · pnpm build'
+        role 'Before the deploy, a script creates every SSM parameter the stacks read, with defaults, overwriting those the environment lists. After it, another writes the FLEX consumer secret: the private API URL, its key, the role.'
+        facts [
+          '<code>--import-existing-resources</code> and <code>--require-approval never</code> on both stacks.',
+          'Then, before any test runs, a script publishes the version to the releases SNS topic. That step is <code>continue-on-error</code>.'
+        ]
+        sourceId 'dev'
+        order '4'
+        x '414'
+        y '340'
+        w '262'
+        h '62'
+        ownership 'uns'
+      }
+    }
+
+    delivery_devtests = internal '4. Tests against dev' {
+      #off-request-path
+      description 'unit and e2e · after the deploy'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/.github/workflows/_deploy.yml '_deploy.yml'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/test/e2e/utils/setup.e2e.vitest.ts 'setup.e2e.vitest.ts'
+      metadata {
+        type 'Step of the deploy job'
+        tech 'vitest · both projects'
+        role 'The end-to-end suite calls the deployed PSO and FLEX hosts from the runner, with the UNS client certificate from Secrets Manager and API keys read live from the gateway. It runs after the deploy, so it is the gate to the next environments, not to this one.'
+        facts [
+          'The mTLS client sets <code>rejectUnauthorized: false</code>: the tests do not verify the server certificate.'
+        ]
+        sourceId 'devtests'
+        order '5'
+        x '414'
+        y '470'
+        w '262'
+        h '62'
+        ownership 'uns'
+      }
+    }
+
+    delivery_prod = internal '5b. Deploy to production' {
+      #off-request-path
+      description 'in parallel with staging'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/.github/workflows/main.release.yml 'main.release.yml'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/.github/workflows/_deploy.yml '_deploy.yml'
+      metadata {
+        type 'Reusable workflow · GitHub environment'
+        tech 'needs release and dev — not staging'
+        role 'Resources without an environment prefix. Only the unit project runs afterwards, to keep test data out of analytics; nothing exercises production end to end.'
+        sourceId 'prod'
+        order '6'
+        x '724'
+        y '470'
+        w '262'
+        h '62'
+        ownership 'uns'
+      }
+    }
+
+    delivery_staging = internal '5a. Deploy to staging' {
+      #off-request-path
+      description 'full suite afterwards'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/.github/workflows/main.release.yml 'main.release.yml'
+      metadata {
+        type 'Reusable workflow · GitHub environment'
+        tech 'needs release and dev'
+        role 'The same job as dev with the staging role and variables. Production does not wait for it.'
+        sourceId 'staging'
+        order '7'
+        x '414'
+        y '600'
+        w '262'
+        h '62'
+        ownership 'uns'
+      }
+    }
+  }
+
+  delivery_outside = boundary 'Outside the repository' {
+    metadata {
+      type 'Dependencies of every run'
+      tech 'secrets and variables per GitHub environment'
+      role 'What a run reaches that the repository does not define.'
+      sourceId 'outside'
+      order '0'
+      x '1050'
+      y '30'
+      w '310'
+      h '524'
+      boundary 'hard'
+    }
+
+    delivery_codeartifact = external 'CodeArtifact registry' {
+      #off-request-path
+      description 'registry-prod-repo · eu-west-2'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/.npmrc '.npmrc'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/package.json 'package.json'
+      metadata {
+        type 'AWS CodeArtifact · another account'
+        tech 'every install · one private package'
+        role '<code>.npmrc</code> points every install at it. The one package not on the public registry is <code>once-platform-constructs</code>, used for two dashboards.'
+        sourceId 'codeartifact'
+        order '1'
+        x '1074'
+        y '80'
+        w '262'
+        h '62'
+        ownership 'govuk'
+      }
+    }
+
+    delivery_oidc = external 'AWS accounts · OIDC' {
+      #off-request-path
+      description 'a role per environment'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/.github/workflows/_deploy.yml '_deploy.yml'
+      metadata {
+        type 'IAM roles trusting GitHub'
+        tech 'AWS_DEPLOY_ROLE_ARN · AWS_CODEARTIFACT_ROLE_ARN'
+        role 'No static keys anywhere. Which account each role lands in is not in the repository; the sandbox script only checks the development account id ends in 7518.'
+        sourceId 'oidc'
+        order '2'
+        x '1074'
+        y '210'
+        w '262'
+        h '62'
+        ownership 'govuk'
+      }
+    }
+
+    delivery_ssm = external 'SSM and Secrets Manager' {
+      #off-request-path
+      description '/{prefix}/… · uns-{env}/tls/UNS'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/cdk.predeploy.ssm.ts 'cdk.predeploy.ssm.ts'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/config.ts 'config.ts'
+      metadata {
+        type 'Parameters and secrets in the target account'
+        tech 'read at synth · written before and after deploy'
+        role 'The stacks read hosted zone, certificate, FLEX account and endpoints, UDP config, Slack ids and consumer certificates from SSM at synth time; the tests read the UNS client certificate from Secrets Manager.'
+        sourceId 'ssm'
+        order '3'
+        x '1074'
+        y '470'
+        w '262'
+        h '62'
+        ownership 'uns'
+        awsIcon 'ssm'
+      }
+    }
+
+    delivery_sandbox = internal 'Developer sandboxes' {
+      #off-request-path
+      description '{firstname}-{hash} in dev'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/scripts/developer-sandbox-setup.ts 'developer-sandbox-setup.ts'
+      metadata {
+        type 'Local script'
+        tech 'shares dev\'s VPC and mTLS truststore'
+        role 'A full copy of both stacks per developer, named from the git email, importing the shared VPC, truststore and revocation table dev exports to SSM.'
+        sourceId 'sandbox'
+        order '4'
+        x '1074'
+        y '340'
+        w '262'
+        h '62'
+        ownership 'uns'
+      }
+    }
+  }
+
+  delivery_push -> delivery_title 'opens a PR' {
+    metadata { protocol 'GitHub' auth '—' carries 'The branch' order '1' }
+  }
+  delivery_title -> delivery_prjob 'in parallel' {
+    metadata { protocol 'Two workflows on the same event' auth '—' carries 'Nothing: neither waits for the other' edgeStyle 'dash' order '2' }
+  }
+  delivery_prjob -> delivery_synth 'then' {
+    metadata { protocol 'Step order in one job' auth 'The CodeArtifact role only' carries 'The checkout, installed and built' order '3' }
+  }
+  delivery_synth -> delivery_sonar 'then' {
+    metadata { protocol 'Step order in one job' auth 'SONAR_TOKEN_UNS' carries 'Sources and the coverage report' order '4' }
+  }
+  delivery_merge -> delivery_version 'triggers' {
+    metadata { protocol 'push to main' auth 'GITHUB_TOKEN, contents: write' carries 'The commits since the last tag' order '5' }
+  }
+  delivery_version -> delivery_dev 'needs' {
+    metadata { protocol 'GitHub Actions job dependency' auth '—' carries 'semVer' order '6' }
+  }
+  delivery_dev -> delivery_devtests 'then' {
+    metadata { protocol 'Step order in one job' auth 'The dev deploy role' carries 'The deployed hosts' order '7' }
+  }
+  delivery_devtests -> delivery_staging 'needs' {
+    metadata { protocol 'GitHub Actions job dependency' auth '—' carries 'A pass of the whole dev job' order '8' }
+  }
+  delivery_devtests -> delivery_prod 'needs' {
+    metadata { protocol 'GitHub Actions job dependency' auth '—' carries 'A pass of the whole dev job' order '9' }
+  }
+  delivery_prod -> delivery_ssm 'writes' {
+    metadata { protocol 'AWS SDK from the runner' auth 'The production deploy role' carries 'Parameters before the deploy; the FLEX consumer secret after' edgeStyle 'dash' order '10' }
+  }
+}
+
+views {
+  view delivery {
+    title 'Delivery'
+    include delivery_pr, delivery_pr.**
+    include delivery_release, delivery_release.**
+    include delivery_outside, delivery_outside.**
+  }
+}

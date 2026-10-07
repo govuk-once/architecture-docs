@@ -8,8 +8,10 @@
   "inventoryLabel": "AWS resources",
   "iconLabel": "AWS icons",
   "filterHint": "Filter — try isolated, KMS, 365 days, alarm",
-  "softBudget": 6,
+  "softBudget": 8,
   "placementBudget": 65,
+  "stateSoftBudget": 18,
+  "statePlacementBudget": 20,
   "kinds": [
     {
       "id": "person",
@@ -98,6 +100,7 @@
           "^ShieldAlarms$": "Shield",
           "Waf": "WAF",
           "FlexSmokeTest$": "Smoke test",
+          "FlexGlobal$": "Alarm relay",
           "Alarm$": "Lambda"
         },
         "capture": [
@@ -183,6 +186,22 @@
       "kmsRelay": {
         "type": "AWS::KMS::Key",
         "logicalId": "^AlarmTopicRelayKey"
+      },
+      "kmsRelayHealth": {
+        "type": "AWS::KMS::Key",
+        "logicalId": "^AlarmRelayHealthKey"
+      },
+      "snsRelayHealth": {
+        "type": "AWS::SNS::Topic",
+        "logicalId": "^AlarmRelayHealthTopic"
+      },
+      "sqsRelayFailures": {
+        "type": "AWS::SQS::Queue",
+        "logicalId": "RelayFailureQueue"
+      },
+      "kmsLogGroup": {
+        "type": "AWS::KMS::Key",
+        "logicalId": "^LogGroupKey"
       },
       "boundaryPolicies": {
         "type": "AWS::IAM::ManagedPolicy"
