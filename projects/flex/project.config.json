@@ -101,6 +101,10 @@
           "Waf": "WAF",
           "FlexSmokeTest$": "Smoke test",
           "FlexGlobal$": "Alarm relay",
+          "FlexCore$": "Core alerts",
+          "^CertificateAlarms$": "Certificate",
+          "^CredentialMonitorAlarms$": "Credential monitor",
+          "^DvlaSecretRotationAlarms$": "DVLA secret rotation",
           "Alarm$": "Lambda"
         },
         "capture": [

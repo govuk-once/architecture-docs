@@ -1004,7 +1004,7 @@
       },
       {
         "name": "Every alarm, its threshold, and which topic it reaches",
-        "note": "25 alarm kinds: 24 from seven constructs in <code>constructs/alarms/</code>, plus the smoke-test alarm in <code>stacks/smoke-test.ts</code>, which sets no action and so reaches nobody. All but the canary set <code>treatMissingData: NOT_BREACHING</code>, so silence never fires an alarm; the canary treats missing data as breaching. Critical and Warning are two separate SNS topics, wired in <code>constructs/alarms/actions.ts</code>; the six Alarm relay rows publish to a third, <code>{stage}-flex-alerts-relay-health</code>, which has no subscription in any stage. The CloudFront, CloudFront Function, Shield and Alarm relay rows are measured in us-east-1, because that is the only region those metrics are emitted to — the first three reach the eu-west-2 topics through the cross-region relay.",
+        "note": "44 alarm kinds. 24 watch traffic and the relay, from seven constructs in <code>constructs/alarms/</code>. The IAM, Lambda, CloudFormation and secret-rotation alerts are EventBridge rules that publish to the critical topic; each adds a <code>Lost</code> and an <code>Undelivered</code> alarm for an alert that could not be delivered there. Certificate expiry, the hourly credential monitor and DVLA's secret rotation add seven more, and the smoke-test alarm in <code>stacks/smoke-test.ts</code> sets no action and so reaches nobody. The canary treats missing data as breaching; <code>DaysToExpiry</code> and the credential monitor's three state alarms ignore it; every other alarm treats it as not breaching, so silence never fires it. Critical and Warning are two separate SNS topics, wired in <code>constructs/alarms/actions.ts</code>; the credential monitor reaches them through their SSM parameters. The six relay-health rows publish to a third, <code>{stage}-flex-alerts-relay-health</code>, which has no subscription in any stage. The CloudFront, CloudFront Function, Shield, Certificate, us-east-1 change-alert and relay rows are measured in us-east-1, because that is where those metrics and IAM's events are emitted; all but the relay-health rows reach the eu-west-2 topics through the cross-region relay. The change alerts, credential monitor and DVLA rotation are not deployed to ephemeral stages.",
         "code": [
           [
             "api-gateway.ts",
@@ -1037,6 +1037,38 @@
           [
             "relay-health.ts",
             "platform/infra/flex/src/constructs/alarms/relay-health.ts"
+          ],
+          [
+            "certificate.ts",
+            "platform/infra/flex/src/constructs/alarms/certificate.ts"
+          ],
+          [
+            "credential-monitor.ts",
+            "platform/infra/flex/src/constructs/alarms/credential-monitor.ts"
+          ],
+          [
+            "event-alert.ts",
+            "platform/infra/flex/src/constructs/alarms/event-alert.ts"
+          ],
+          [
+            "iam-change-alerts.ts",
+            "platform/infra/flex/src/constructs/alarms/iam-change-alerts.ts"
+          ],
+          [
+            "secret-rotation.ts",
+            "platform/infra/flex/src/constructs/alarms/secret-rotation.ts"
+          ],
+          [
+            "secret-rotation-alerts.ts",
+            "platform/infra/flex/src/stacks/core/secret-rotation-alerts.ts"
+          ],
+          [
+            "stacks/credential-monitor.ts",
+            "platform/infra/flex/src/stacks/credential-monitor.ts"
+          ],
+          [
+            "dvla-secret-rotation.ts",
+            "platform/infra/flex/src/stacks/core/dvla-secret-rotation.ts"
           ]
         ],
         "derived": {
@@ -1245,6 +1277,158 @@
             "below 1",
             "1 × 15 min",
             "— no action wired"
+          ],
+          [
+            "Change alerts · us-east-1",
+            "<code>IamChangeAlertLost</code>",
+            "<code>InvocationsFailedToBeSentToDlq</code> sum, on the rule",
+            "above 0",
+            "1 × 5 min",
+            "Warning"
+          ],
+          [
+            "Change alerts · us-east-1",
+            "<code>IamChangeAlertUndelivered</code>",
+            "<code>ApproximateNumberOfMessagesVisible</code> max, on the dead-letter queue",
+            "above 0",
+            "1 × 5 min",
+            "Warning"
+          ],
+          [
+            "Change alerts · us-east-1",
+            "<code>LambdaChangeAlertLost</code>",
+            "<code>InvocationsFailedToBeSentToDlq</code> sum, on the rule",
+            "above 0",
+            "1 × 5 min",
+            "Warning"
+          ],
+          [
+            "Change alerts · us-east-1",
+            "<code>LambdaChangeAlertUndelivered</code>",
+            "<code>ApproximateNumberOfMessagesVisible</code> max, on the dead-letter queue",
+            "above 0",
+            "1 × 5 min",
+            "Warning"
+          ],
+          [
+            "Change alerts · us-east-1",
+            "<code>CloudFormationChangeAlertLost</code>",
+            "<code>InvocationsFailedToBeSentToDlq</code> sum, on the rule",
+            "above 0",
+            "1 × 5 min",
+            "Warning"
+          ],
+          [
+            "Change alerts · us-east-1",
+            "<code>CloudFormationChangeAlertUndelivered</code>",
+            "<code>ApproximateNumberOfMessagesVisible</code> max, on the dead-letter queue",
+            "above 0",
+            "1 × 5 min",
+            "Warning"
+          ],
+          [
+            "Change alerts · eu-west-2",
+            "<code>LambdaChangeAlertLost</code>",
+            "<code>InvocationsFailedToBeSentToDlq</code> sum, on the rule",
+            "above 0",
+            "1 × 5 min",
+            "Warning"
+          ],
+          [
+            "Change alerts · eu-west-2",
+            "<code>LambdaChangeAlertUndelivered</code>",
+            "<code>ApproximateNumberOfMessagesVisible</code> max, on the dead-letter queue",
+            "above 0",
+            "1 × 5 min",
+            "Warning"
+          ],
+          [
+            "Change alerts · eu-west-2",
+            "<code>CloudFormationChangeAlertLost</code>",
+            "<code>InvocationsFailedToBeSentToDlq</code> sum, on the rule",
+            "above 0",
+            "1 × 5 min",
+            "Warning"
+          ],
+          [
+            "Change alerts · eu-west-2",
+            "<code>CloudFormationChangeAlertUndelivered</code>",
+            "<code>ApproximateNumberOfMessagesVisible</code> max, on the dead-letter queue",
+            "above 0",
+            "1 × 5 min",
+            "Warning"
+          ],
+          [
+            "Change alerts · eu-west-2",
+            "<code>SecretRotationAlertLost</code>",
+            "<code>InvocationsFailedToBeSentToDlq</code> sum, on the rule",
+            "above 0",
+            "1 × 5 min",
+            "Warning"
+          ],
+          [
+            "Change alerts · eu-west-2",
+            "<code>SecretRotationAlertUndelivered</code>",
+            "<code>ApproximateNumberOfMessagesVisible</code> max, on the dead-letter queue",
+            "above 0",
+            "1 × 5 min",
+            "Warning"
+          ],
+          [
+            "Certificate",
+            "<code>DaysToExpiry</code>",
+            "<code>DaysToExpiry</code> min",
+            "below 30 days",
+            "1 × 1 day",
+            "Critical"
+          ],
+          [
+            "Credential monitor",
+            "<code>CognitoConfigDrift</code>",
+            "<code>CognitoConfigDrift</code> max",
+            "above 0",
+            "1 × 1 h",
+            "Critical"
+          ],
+          [
+            "Credential monitor",
+            "<code>SecretRotationOverdue</code>",
+            "<code>SecretRotationOverdue</code> max: a credential 7+ days past rotation",
+            "above 0",
+            "1 × 1 h",
+            "Warning"
+          ],
+          [
+            "Credential monitor",
+            "<code>SecretRotationUnverifiable</code>",
+            "<code>SecretRotationUnverifiable</code> max",
+            "above 0",
+            "1 × 1 h",
+            "Warning"
+          ],
+          [
+            "Credential monitor",
+            "<code>NotReporting</code>",
+            "<code>CredentialMonitorSuccess</code> sum, missing as 0",
+            "below 1",
+            "4 × 1 h, 3 must breach",
+            "Warning"
+          ],
+          [
+            "Credential monitor",
+            "<code>Failing</code>",
+            "the monitor's <code>Errors</code> sum, missing as 0",
+            "above 0",
+            "3 × 1 h, all 3 must breach",
+            "Warning"
+          ],
+          [
+            "DVLA secret rotation",
+            "<code>Failed</code>",
+            "the rotation Lambda's <code>Errors</code> sum",
+            "above 0",
+            "1 × 5 min",
+            "Critical"
           ]
         ]
       }
