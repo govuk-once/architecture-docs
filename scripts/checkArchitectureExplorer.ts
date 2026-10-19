@@ -496,7 +496,7 @@ async function main() {
                view reached from another state measures a different soft count from the
                same view reached from today's, so the path has to be the same every time. */
             await page.click("#changes");
-            await page.click('#states button:has-text("As-is")');
+            await page.click('#states button:has-text("Current")');
             await page.waitForTimeout(150);
           }
         }

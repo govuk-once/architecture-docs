@@ -494,8 +494,10 @@ function compose(b) {
  * Nothing is disabled. Today's view is the context a reviewer compares against, and a tab
  * that cannot be opened cannot say whether it is unchanged or merely unwritten.
  */
-/* The badge is the state's number alone: S2 is drawn as 2, and the legend says which is which. */
-const badgeNum = (st) => st.name.replace(/^S/, "");
+/* The badge is the state's number alone: S2 is drawn as 2, and the legend says which is which.
+   A state named in words rather than numbered — Evo — is drawn as its initial. */
+const badgeNum = (st) =>
+  /^S\d+$/.test(st.name) ? st.name.slice(1) : st.name.charAt(0);
 function markTabs() {
   tabButtons().forEach((b) => {
     const v = VIEWS.find((x) => "tab-" + x.id === b.id);
@@ -1955,7 +1957,7 @@ function pickChanges(on) {
   showChanges = on;
   changesBtn.setAttribute("aria-pressed", String(on));
 }
-mkState("asis", "As-is");
+mkState("asis", "Current");
 STATES.forEach((st) => mkState(st.id, st.name));
 changesBtn.onclick = () => {
   pickChanges(!showChanges);
@@ -2058,7 +2060,7 @@ function introHtml() {
       ? [
           [
             "State",
-            "As-is is what the code does today. The others are planned architectures, each including every step before it — pick one to see the system as it would stand by then.",
+            "Current is what the code does today. The others are planned architectures, each including every step before it — pick one to see the system as it would stand by then.",
           ],
           [
             "Changes",
