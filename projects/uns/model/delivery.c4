@@ -24,13 +24,13 @@ model {
       #off-request-path
       description 'tsc · tests · lint in parallel'
       link https://github.com/govuk-once/gds-unified-notification-service/blob/main/scripts/pre-commit.ts 'pre-commit.ts'
-      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/commitlint.config.ts 'commitlint.config.ts'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/scripts/validate-commit-msg.ts 'validate-commit-msg.ts'
       metadata {
         type 'Local'
         tech 'husky pre-commit and commit-msg'
         role 'Before a commit, three tasks at once and any failure blocks it; the message must be angular-style with an upper-case Jira scope.'
         facts [
-          'commitlint accepts a one-letter scope and the <code>BREAKING</code> types; the PR title check accepts neither, so a title the docs call valid can fail the workflow.'
+          'The commit-msg hook runs <code>validate-commit-msg.ts</code>, one regex that replaced commitlint in NOT-328 (#384). It accepts a one-letter scope and the <code>BREAKING</code> types, which the PR title check does not; the title check accepts a <code>!</code> breaking marker, which it does not. So a message the hook passes can fail as a PR title, and the other way round.'
         ]
         sourceId 'push'
         order '1'
