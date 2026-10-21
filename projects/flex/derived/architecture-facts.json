@@ -40,18 +40,18 @@
         "ephemeral": 2
       },
       "udp": {
-        "development": 8,
-        "staging": 8,
-        "production": 8,
-        "ephemeral": 8
+        "development": 9,
+        "staging": 9,
+        "production": 9,
+        "ephemeral": 9
       },
       "uns": { "development": 4, "staging": 4, "production": 4, "ephemeral": 4 }
     },
     "publicRoutes": {
-      "development": 34,
-      "staging": 23,
-      "production": 21,
-      "ephemeral": 34
+      "development": 35,
+      "staging": 24,
+      "production": 22,
+      "ephemeral": 35
     },
     "privateRoutes": {
       "development": 7,
@@ -738,22 +738,22 @@
       "ephemeral": 1
     },
     "iamRoles": {
-      "development": 63,
-      "staging": 48,
-      "production": 43,
-      "ephemeral": 56
+      "development": 64,
+      "staging": 49,
+      "production": 44,
+      "ephemeral": 57
     },
     "iamRolesBounded": {
-      "development": 53,
-      "staging": 38,
-      "production": 33,
-      "ephemeral": 48
+      "development": 54,
+      "staging": 39,
+      "production": 34,
+      "ephemeral": 49
     },
     "logGroups": {
-      "development": 60,
-      "staging": 46,
-      "production": 41,
-      "ephemeral": 56
+      "development": 61,
+      "staging": 47,
+      "production": 42,
+      "ephemeral": 57
     },
     "authorizers": {
       "development": 7,

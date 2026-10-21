@@ -392,19 +392,20 @@
           "id": "lambda-domain-udp",
           "name": "udp domain route functions",
           "n": {
-            "dev": 8,
-            "stg": 8,
-            "prod": 8,
-            "eph": 8
+            "dev": 9,
+            "stg": 9,
+            "prod": 9,
+            "eph": 9
           },
           "from": "counts.domainFunctions.udp",
           "meta": ["isolated tier", "FlexDomainStack"],
           "d": {
             "type": "AWS::Lambda::Function",
             "tech": "NODEJS_24_X · 20s default (one route at 25s) · isolated access",
-            "role": "6 public routes and 2 private routes.",
+            "role": "7 public routes and 2 private routes.",
             "facts": [
-              "Owns the private <code>GET /v1/users/push-id</code> route that uns, groups and example all depend on."
+              "Owns the private <code>GET /v1/users/push-id</code> route that uns, groups and example all depend on.",
+              "The seventh public route is <code>GET /v2/identity</code>, added by GOVUKAPP-4111 (#582, 21 October 2026) to return the TTL data alongside the identities."
             ],
             "code": [
               ["domains/udp/domain.config.ts", "domains/udp/domain.config.ts"]
@@ -939,10 +940,10 @@
           "id": "api-routes-public",
           "name": "Public route methods",
           "n": {
-            "dev": 34,
-            "stg": 23,
-            "prod": 21,
-            "eph": 34
+            "dev": 35,
+            "stg": 24,
+            "prod": 22,
+            "eph": 35
           },
           "from": "counts.publicRoutes",
           "meta": ["eu-west-2", "FlexDomainStack"],
@@ -951,7 +952,7 @@
             "tech": "AWS_PROXY LambdaIntegration",
             "role": "Everything under <code>/app/{domain}/{version}/…</code>",
             "facts": [
-              "dvla 7 · udp 6 · uns 4 · groups 2 · example 11 · local-council 0.",
+              "dvla 7 · udp 7 · uns 4 · groups 2 · example 11 · local-council 0.",
               "Counted as one method per route; the intermediate path Resources are shared and not counted here.",
               "<code>:param</code> segments become <code>{param}</code>."
             ],
@@ -1261,10 +1262,10 @@
           "id": "iam-roles",
           "name": "IAM roles",
           "n": {
-            "dev": 63,
-            "stg": 48,
-            "prod": 43,
-            "eph": 56
+            "dev": 64,
+            "stg": 49,
+            "prod": 44,
+            "eph": 57
           },
           "from": "counts.iamRoles",
           "meta": ["both regions", "several stacks", "varies"],
@@ -1273,7 +1274,7 @@
             "tech": "Generated and hand-written",
             "role": "Execution identities.",
             "facts": [
-              "One generated execution role per Flex Lambda construct, each under the permissions boundary — 33 of 43 roles in production, including the API Gateway CloudWatch role and the Slack channel configuration role. The 10 outside it are the roles CDK generates for its own providers (two custom-resource providers, the deploy gap and its provider, the bucket deployment handler), the two alarm relay functions, Macie's explicit custom-resource role, the hand-written smoke-test role, and the credential monitor's function role, added by FLEX-404 (#551).",
+              "One generated execution role per Flex Lambda construct, each under the permissions boundary — 34 of 44 roles in production, including the API Gateway CloudWatch role and the Slack channel configuration role. The 10 outside it are the roles CDK generates for its own providers (two custom-resource providers, the deploy gap and its provider, the bucket deployment handler), the two alarm relay functions, Macie's explicit custom-resource role, the hand-written smoke-test role, and the credential monitor's function role, added by FLEX-404 (#551).",
               "Hand-written roles: the API Gateway CloudWatch role (auto-named — 'ApiGatewayCloudWatchRole' is only a construct id) and the smoke-test role, the only one with an explicit physical name <code>{env}-flex-smoke-test-role</code>.",
               "Also created by CDK: the Chatbot role, custom-resource roles and the BucketDeployment handler role.",
               "Per-route inline policies come from grantRouteResources and grantRoutePermissions."
@@ -2007,10 +2008,10 @@
           "id": "loggroups",
           "name": "Log groups",
           "n": {
-            "dev": 60,
-            "stg": 46,
-            "prod": 41,
-            "eph": 56
+            "dev": 61,
+            "stg": 47,
+            "prod": 42,
+            "eph": 57
           },
           "from": "counts.logGroups",
           "meta": ["both regions", "several stacks"],
@@ -2019,7 +2020,7 @@
             "tech": "365 days on Flex constructs · 731 on CDK-managed",
             "role": "Every log group the stacks create: one per Lambda construct, one per API stage for access and execution logs, and the groups CDK manages for its own functions.",
             "facts": [
-              "Flex constructs set <code>RetentionDays.ONE_YEAR</code> explicitly (33 groups in production, the credential monitor's and DVLA secret rotation's among them). The 8 groups CDK creates for its own functions — three custom-resource providers, the deploy gap and its provider, the two alarm relays and the bucket deployment handler — take CDK's two-year default instead.",
+              "Flex constructs set <code>RetentionDays.ONE_YEAR</code> explicitly (34 groups in production, the credential monitor's and DVLA secret rotation's among them). The 8 groups CDK creates for its own functions — three custom-resource providers, the deploy gap and its provider, the two alarm relays and the bucket deployment handler — take CDK's two-year default instead.",
               "Content is redacted at source by the <code>@flex/logging</code> sanitizer before it is ever written.",
               "<code>FlexLogger.setLogLevel</code> returns without doing anything when <code>FLEX_ENVIRONMENT</code> is production, so verbose logging cannot be turned on there at runtime."
             ],
