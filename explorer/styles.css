@@ -2344,3 +2344,75 @@ a.cite:hover {
   color: var(--muted);
   font-style: italic;
 }
+
+/* ---------- lifecycle in a reference table ----------
+   The same vocabulary as the canvas, in a table's terms: dashed for a row that is not there
+   yet, a solid bar for one that changes, struck and faded for one that goes. */
+.tbl-wrap tr.lc-new td:first-child {
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+.tbl-wrap tr.lc-new td {
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+}
+.tbl-wrap tr.lc-changed td:first-child {
+  box-shadow: inset 4px 0 0 var(--accent);
+}
+.tbl-wrap tr.lc-retired td:not(.lc-col),
+.tbl-wrap tr.lc-was td:not(.lc-col) {
+  opacity: 0.5;
+  text-decoration: line-through;
+}
+.tbl-wrap tr.lc-was td {
+  border-bottom: none;
+  padding-bottom: 2px;
+}
+.tbl-wrap tr.lc-was + tr.lc-changed td {
+  padding-top: 2px;
+}
+.lc-tag.lc-was {
+  opacity: 0.6;
+}
+.tbl-wrap .lc-col {
+  white-space: nowrap;
+}
+.grp.lc-retired .tbl-wrap,
+.grp.lc-retired .gnote {
+  opacity: 0.5;
+}
+.lc-tag {
+  display: inline-block;
+  font:
+    600 10.5px/1 "IBM Plex Mono",
+    monospace;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 3px 6px;
+  border-radius: 4px;
+  border: 1.5px solid var(--ink-2);
+  color: var(--ink-2);
+  vertical-align: middle;
+}
+.lc-tag.lc-new {
+  border-style: dashed;
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.lc-tag.lc-changed {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.lc-tag.lc-retired {
+  opacity: 0.7;
+}
+.cite-tag {
+  display: inline-block;
+  margin-left: 6px;
+  font:
+    500 11px/1 "IBM Plex Mono",
+    monospace;
+  color: var(--ink-2);
+  vertical-align: middle;
+}
+a.cite-tag {
+  color: var(--accent);
+}

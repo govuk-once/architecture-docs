@@ -353,7 +353,7 @@ export interface Edge {
   d: Detail;
 }
 
-interface Table {
+export interface Table {
   name: string;
   cols: string[];
   rows: string[][];
@@ -365,6 +365,14 @@ interface Table {
    * code fails the build instead of quietly going stale.
    */
   derived?: { from: string; key: string; col: string };
+  /** Set by state composition only, in Changes mode: what this state does to the table. */
+  lifecycle?: Lifecycle;
+  why?: Why;
+  /**
+   * Set by state composition only, in Changes mode: one entry per row, null if unchanged.
+   * A changed row carries the cells it had today, so the page can show both.
+   */
+  marks?: ({ lifecycle: Lifecycle; why?: Why; was?: string[] } | null)[];
 }
 
 /** A count is either flat, or one number per stage. */

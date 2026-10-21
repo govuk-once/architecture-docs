@@ -22,6 +22,7 @@ import {
   chainProblems,
   composeChain,
   LEVELS,
+  rowKey,
   STATUSES,
 } from "./composeStates.js";
 import { DOCS_ROOT, STATES_ROOT } from "./paths.js";
@@ -120,6 +121,27 @@ export function planned(states: Pick<States, "list" | "overlays">) {
         add(`changes the line ${key.replace(" ", " to ")}`, e.why);
       for (const [key, why] of Object.entries(ov.retiredEdges ?? {}))
         add(`retires the line ${key.replace(" ", " to ")}`, why);
+      /* A row cites what it rests on, else its table's patch, else the file's or the
+         state's — the same nearest-wins order the composition records. */
+      for (const [name, why] of Object.entries(ov.retiredTables ?? {}))
+        add(`retires the table ${name}`, why);
+      for (const [name, t] of Object.entries(ov.tables ?? {})) {
+        if (t.note !== undefined) add(`rewrites the note of ${name}`, t.why);
+        for (const [k, why] of Object.entries(t.retiredRows ?? {}))
+          add(`retires the row ${k} of ${name}`, why.length ? why : t.why);
+        for (const [k, r] of Object.entries(t.changedRows ?? {}))
+          add(`changes the row ${k} of ${name}`, r.why ?? t.why);
+        for (const r of t.newRows ?? [])
+          add(
+            `adds the row ${rowKey(r.cells, t.key)} to ${name}`,
+            r.why ?? t.why,
+          );
+      }
+      for (const t of ov.newTables ?? []) {
+        add(`adds the table ${t.name}`, t.why);
+        for (const r of t.rows)
+          add(`adds the row ${rowKey(r.cells)} to ${t.name}`, r.why ?? t.why);
+      }
     }
   return out;
 }

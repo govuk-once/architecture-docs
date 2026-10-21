@@ -1265,7 +1265,7 @@ function renderTables() {
     <div class="tbl-body" id="tbl-body">${t
       .map(
         (x) =>
-          `<section class="grp"><h3>${esc(x.name)}</h3>${x.note ? `<p class="gnote">${rich(x.note)}</p>` : ""}${tableHtml(x)}${codes(x.code)}</section>`,
+          `<section class="grp${x.lifecycle ? ` lc-${x.lifecycle}` : ""}"><h3 data-name="${esc(x.name)}">${esc(x.name)}${x.lifecycle ? ` <span class="lc-tag lc-${x.lifecycle}">${LC_SHORT[x.lifecycle]}</span>${(x.why || []).map(citeTag).join("")}` : ""}</h3>${x.note ? `<p class="gnote">${rich(x.note)}</p>` : ""}${tableHtml(x)}${codes(x.code)}</section>`,
       )
       .join("")}</div>`;
   box
@@ -1469,10 +1469,42 @@ function buildDoc() {
     }),
   );
 }
+/* A decision's handle in a table cell: its record number when the title leads with one,
+   ADR-006 rather than the whole title, else its kind. The full title is the tooltip. */
+function citeTag(id) {
+  const d = DECISIONS[id];
+  if (!d) return `<span class="cite missing">${esc(id)}</span>`;
+  const m = /^([A-Z]+-\d+)\b/.exec(d.title);
+  const tag = esc(m ? m[1] : d.kind);
+  const url = d.links && d.links[0] && d.links[0].url;
+  return url
+    ? `<a class="cite-tag" href="${esc(url)}" target="_blank" rel="noreferrer" title="${esc(d.title)}">${tag}</a>`
+    : `<span class="cite-tag" title="${esc(d.title)}">${tag}</span>`;
+}
+const LC_SHORT = { new: "new", changed: "changed", retired: "retired" };
+/* Under Changes a composed table carries one mark per row. The marks get a column of their
+   own, named for the state, so a row reads across to what happens to it and why. */
 function tableHtml(t) {
+  const marked = Array.isArray(t.marks) && t.marks.some(Boolean);
+  const st = STATES.find((s) => s.id === state);
+  const mark = (m) =>
+    m
+      ? `<span class="lc-tag lc-${m.lifecycle}">${LC_SHORT[m.lifecycle]}</span>${(m.why || []).map(citeTag).join("")}`
+      : "";
   return `<div class="tbl-wrap"><table>
-    <thead><tr>${t.cols.map((c) => `<th>${rich(c)}</th>`).join("")}</tr></thead>
-    <tbody>${t.rows.map((r) => `<tr>${r.map((c) => `<td>${rich(c)}</td>`).join("")}</tr>`).join("")}</tbody>
+    <thead><tr>${t.cols.map((c) => `<th>${rich(c)}</th>`).join("")}${marked ? `<th class="lc-col">In ${esc(st ? st.name : "this state")}</th>` : ""}</tr></thead>
+    <tbody>${t.rows
+      .map((r, i) => {
+        const m = marked ? t.marks[i] : null;
+        /* A changed row is two rows: what it says today, struck through, then what it
+           becomes. A reader should not have to switch state to see what moved. */
+        const was =
+          m && m.was
+            ? `<tr class="lc-row lc-was">${m.was.map((c) => `<td>${rich(c)}</td>`).join("")}<td class="lc-col"><span class="lc-tag lc-was">today</span></td></tr>`
+            : "";
+        return `${was}<tr${m ? ` class="lc-row lc-${m.lifecycle}"` : ""}>${r.map((c) => `<td>${rich(c)}</td>`).join("")}${marked ? `<td class="lc-col">${mark(m)}</td>` : ""}</tr>`;
+      })
+      .join("")}</tbody>
   </table></div>`;
 }
 function renderItem(it, groupName, ctx) {

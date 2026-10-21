@@ -582,3 +582,227 @@ describe("an auto-sized zone and what is put in it by hand", () => {
     expect(t?.h).toBe(160);
   });
 });
+
+/**
+ * A state's tables obey the same two rules as its boxes: cumulative across steps, and a diff
+ * against today that is computed rather than declared. And a patch naming a table or a row
+ * that is not there fails, because a patch that patches nothing would leave today's row on
+ * show under a state that claims to have changed it.
+ */
+describe("reference tables", () => {
+  const tableBase = () =>
+    base({
+      tables: [
+        {
+          name: "Paths",
+          cols: ["From", "Path"],
+          rows: [
+            ["<code>a</code>", "one"],
+            ["b", "two"],
+            ["c", "three"],
+          ],
+          note: "today",
+        },
+      ],
+    });
+  const paths = (v: View) => (v.tables ?? []).find((t) => t.name === "Paths");
+
+  it("retires, changes and adds rows, and keeps the rest as they are", () => {
+    const o = ov({
+      tables: {
+        Paths: {
+          retiredRows: { a: ["adr-1"] },
+          changedRows: { b: { cells: ["b", "TWO"], why: ["adr-2"] } },
+          newRows: [{ cells: ["d", "four"], why: ["adr-3"] }],
+        },
+      },
+    });
+    const v = composeChain(tableBase(), chain([S1, o]), S1, "future");
+    expect(paths(v)?.rows).toEqual([
+      ["b", "TWO"],
+      ["c", "three"],
+      ["d", "four"],
+    ]);
+    expect(paths(v)?.marks).toBeUndefined();
+  });
+
+  it("marks the difference from today, keeping a retired row where it stood", () => {
+    const o = ov({
+      tables: {
+        Paths: {
+          retiredRows: { a: ["adr-1"] },
+          changedRows: { b: { cells: ["b", "TWO"], why: ["adr-2"] } },
+          newRows: [{ cells: ["d", "four"], why: ["adr-3"] }],
+        },
+      },
+    });
+    const t = paths(composeChain(tableBase(), chain([S1, o]), S1, "changes"));
+    expect(t?.lifecycle).toBe("changed");
+    expect(t?.rows.map((r) => r[0])).toEqual(["<code>a</code>", "b", "c", "d"]);
+    expect(t?.marks).toEqual([
+      { lifecycle: "retired", why: ["adr-1"] },
+      { lifecycle: "changed", why: ["adr-2"], was: ["b", "two"] },
+      null,
+      { lifecycle: "new", why: ["adr-3"] },
+    ]);
+  });
+
+  it("leaves a table no step touches unmarked, even under Changes", () => {
+    const t = paths(
+      composeChain(tableBase(), chain([S1, ov()]), S1, "changes"),
+    );
+    expect(t?.lifecycle).toBeUndefined();
+    expect(t?.marks).toBeUndefined();
+  });
+
+  it("is cumulative: a later step acts on the row an earlier one added", () => {
+    const one = ov({
+      tables: { Paths: { newRows: [{ cells: ["d", "four"] }] } },
+    });
+    const two = ov({
+      state: "s2",
+      tables: { Paths: { changedRows: { d: { cells: ["d", "FOUR"] } } } },
+    });
+    const v = composeChain(
+      tableBase(),
+      chain([S1, one], [S2, two]),
+      S2,
+      "future",
+    );
+    expect(paths(v)?.rows.at(-1)).toEqual(["d", "FOUR"]);
+    /* Against today the row is new, not changed: today never had it. */
+    const t = paths(
+      composeChain(tableBase(), chain([S1, one], [S2, two]), S2, "changes"),
+    );
+    expect(t?.marks?.at(-1)?.lifecycle).toBe("new");
+  });
+
+  it("adds and retires whole tables", () => {
+    const o = ov({
+      retiredTables: { Paths: ["adr-1"] },
+      newTables: [
+        { name: "Firewalls", cols: ["Rule"], rows: [{ cells: ["allow"] }] },
+      ],
+    });
+    const future = composeChain(tableBase(), chain([S1, o]), S1, "future");
+    expect((future.tables ?? []).map((t) => t.name)).toEqual(["Firewalls"]);
+    const changes = composeChain(tableBase(), chain([S1, o]), S1, "changes");
+    expect((changes.tables ?? []).map((t) => [t.name, t.lifecycle])).toEqual([
+      ["Firewalls", "new"],
+      ["Paths", "retired"],
+    ]);
+  });
+
+  it("refuses a table, a row or a width that is not there", () => {
+    const o = ov({
+      tables: {
+        Missing: { newRows: [{ cells: ["x", "y"] }] },
+        Paths: {
+          retiredRows: { zzz: [] },
+          newRows: [{ cells: ["b", "dup"] }, { cells: ["e"] }],
+        },
+      },
+    });
+    const problems = chainProblems(tableBase(), chain([S1, o]));
+    expect(problems).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('the table "Missing", which is not a table'),
+        expect.stringContaining('the row "zzz" of "Paths", which is not a row'),
+        expect.stringContaining(
+          'adds the row "b" to "Paths", which already has one',
+        ),
+        expect.stringContaining("has 1 cells, but the table has 2 columns"),
+      ]),
+    );
+  });
+
+  it("never marks a table no step touched, whatever its keys", () => {
+    /* The alarm table names a source per row and repeats it. Keyed on the first cell those
+       rows collide, and a diff that keyed them anyway marked an untouched table changed. */
+    const dup = base({
+      tables: [
+        {
+          name: "Alarms",
+          cols: ["Source", "Alarm"],
+          rows: [
+            ["Lambda", "Errors"],
+            ["Lambda", "Throttles"],
+          ],
+        },
+      ],
+    });
+    const t = (composeChain(dup, chain([S1, ov()]), S1, "changes").tables ??
+      [])[0];
+    expect(t?.lifecycle).toBeUndefined();
+    expect(t?.marks).toBeUndefined();
+    expect(t?.rows).toEqual([
+      ["Lambda", "Errors"],
+      ["Lambda", "Throttles"],
+    ]);
+  });
+
+  it("lines repeated keys up by position in a table a step did touch", () => {
+    const dup = base({
+      tables: [
+        {
+          name: "Alarms",
+          cols: ["Source", "Alarm"],
+          rows: [
+            ["Lambda", "Errors"],
+            ["Lambda", "Throttles"],
+          ],
+        },
+      ],
+    });
+    const o = ov({
+      tables: { Alarms: { newRows: [{ cells: ["WAF", "Blocks"] }] } },
+    });
+    const t = (composeChain(dup, chain([S1, o]), S1, "changes").tables ??
+      [])[0];
+    expect(t?.rows).toEqual([
+      ["Lambda", "Errors"],
+      ["Lambda", "Throttles"],
+      ["WAF", "Blocks"],
+    ]);
+    expect(t?.marks).toEqual([
+      null,
+      null,
+      { lifecycle: "new", why: ["s1-decision"] },
+    ]);
+  });
+
+  it("refuses a patch that names a key two rows share", () => {
+    const dup = base({
+      tables: [
+        {
+          name: "Alarms",
+          cols: ["Source", "Alarm"],
+          rows: [
+            ["Lambda", "Errors"],
+            ["Lambda", "Throttles"],
+          ],
+        },
+      ],
+    });
+    const o = ov({ tables: { Alarms: { retiredRows: { Lambda: [] } } } });
+    expect(chainProblems(dup, chain([S1, o]))).toEqual([
+      expect.stringContaining(
+        '"Alarms" has 2 rows named "Lambda" — set key to more cells',
+      ),
+    ]);
+    /* Two cells name the row, and the same patch is then unambiguous. */
+    const wider = ov({
+      tables: { Alarms: { key: 2, retiredRows: { "Lambda · Errors": [] } } },
+    });
+    expect(chainProblems(dup, chain([S1, wider]))).toEqual([]);
+  });
+
+  it("accepts a patch that names only what is there", () => {
+    const o = ov({
+      tables: {
+        Paths: { retiredRows: { a: [] }, newRows: [{ cells: ["d", "4"] }] },
+      },
+    });
+    expect(chainProblems(tableBase(), chain([S1, o]))).toEqual([]);
+  });
+});

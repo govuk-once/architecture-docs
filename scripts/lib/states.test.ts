@@ -15,9 +15,11 @@ import { describe, expect, it } from "vitest";
 import type { View } from "../buildArchitectureExplorer.js";
 import type { StateManifest, StateOverlay } from "./composeStates.js";
 import {
+  checkCitations,
   checkDeclarations,
   composeAll,
   foldComposed,
+  planned,
   statesDir,
 } from "./states.js";
 
@@ -209,5 +211,71 @@ describe("statesDir", () => {
     } finally {
       rmSync(dir, { recursive: true });
     }
+  });
+});
+
+/**
+ * A table row is a planned change like any box, so it has to reach the register: counted when
+ * it cites nothing, refused when it cites what the register does not hold.
+ */
+describe("planned changes to tables", () => {
+  const st: StateManifest = {
+    id: "s1",
+    name: "S1",
+    label: "S1",
+    order: 1,
+    blurb: "",
+  };
+  const overlay: StateOverlay = {
+    state: "s1",
+    view: "network",
+    tables: {
+      Paths: {
+        why: ["adr-table"],
+        retiredRows: { a: [] },
+        changedRows: { b: { cells: ["b", "x"], why: ["adr-row"] } },
+        newRows: [{ cells: ["c", "y"] }],
+      },
+    },
+    newTables: [
+      { name: "Firewalls", cols: ["Rule"], rows: [{ cells: ["allow"] }] },
+    ],
+    retiredTables: { Old: ["adr-gone"] },
+  };
+  const states = { list: [st], overlays: { s1: { network: overlay } } };
+
+  it("lists every row and table change, each with the nearest citation", () => {
+    expect(planned(states).map((c) => [c.what, c.why])).toEqual([
+      ["retires the table Old", ["adr-gone"]],
+      ["retires the row a of Paths", ["adr-table"]],
+      ["changes the row b of Paths", ["adr-row"]],
+      ["adds the row c to Paths", ["adr-table"]],
+      ["adds the table Firewalls", []],
+      ["adds the row allow to Firewalls", []],
+    ]);
+  });
+
+  it("refuses a row citing what the register does not hold, and counts one citing nothing", () => {
+    const r = checkCitations({
+      ...states,
+      decisions: {
+        "adr-table": {
+          title: "t",
+          kind: "ADR",
+          category: "c",
+          status: "accepted",
+        },
+        "adr-gone": {
+          title: "g",
+          kind: "ADR",
+          category: "c",
+          status: "accepted",
+        },
+      },
+    });
+    expect(r.problems).toEqual([
+      expect.stringContaining('changes the row b of Paths cites "adr-row"'),
+    ]);
+    expect(r.uncited).toBe(2);
   });
 });

@@ -21,6 +21,7 @@ import type {
   Detail,
   Edge,
   Plane,
+  Table,
   View,
   ViewNode,
   Zone,
@@ -106,6 +107,34 @@ export const STATUSES = [
 
 /** Ids into the register. Every change may cite as many as apply. */
 export type Why = string[];
+
+/**
+ * What a step does to a reference table it inherits, named by the table's own title.
+ *
+ * A row is named by its key: the text of its first `key` cells, markup stripped, joined with
+ * " · " — one cell unless a table's first column repeats. A changed row is restated whole,
+ * because a table row is read across, and a patch to one cell of it would leave a reviewer
+ * reconstructing the rest.
+ */
+export interface TablePatch {
+  /** Replaces the table's note, when what it says has changed too. */
+  note?: string;
+  /** How many leading cells name a row. One, unless the first column repeats. */
+  key?: number;
+  retiredRows?: Record<string, Why>;
+  changedRows?: Record<string, { cells: string[]; why?: Why }>;
+  newRows?: { cells: string[]; why?: Why }[];
+  why?: Why;
+}
+
+/** A reference table a step adds. Its rows may each cite their own decision. */
+export interface NewTable {
+  name: string;
+  cols: string[];
+  note?: string;
+  rows: { cells: string[]; why?: Why }[];
+  why?: Why;
+}
 
 export interface StateOverlay {
   state: string;
@@ -205,6 +234,14 @@ export interface StateOverlay {
   }[];
   /** What a dashed line means on this view, when this step draws one. */
   dashMeans?: string;
+  /**
+   * Reference tables, keyed by title. A table is as much a claim about the architecture as
+   * a box, and a state that redraws the boxes over today's tables contradicts itself one
+   * scroll down.
+   */
+  tables?: Record<string, TablePatch>;
+  newTables?: NewTable[];
+  retiredTables?: Record<string, Why>;
 }
 
 export interface StateManifest {
@@ -262,6 +299,29 @@ const substance = (n: ViewNode) =>
     { ...n.d, lifecycle: 0, why: 0 },
   ]);
 const edgeKey = (e: Edge) => `${e.from} ${e.to}`;
+
+/** What a row is called: the text of its first `n` cells, markup stripped. */
+export const rowKey = (row: string[], n = 1) =>
+  row
+    .slice(0, n)
+    .map((c) => c.replace(/<[^>]+>/g, "").trim())
+    .join(" · ");
+/* The keys of every row, with a repeat told apart by its place — the alarm table names a
+   source in its first column and repeats it per alarm. A step may not address a repeated key,
+   but the diff still has to line today's rows up with the state's by position. */
+const rowKeys = (rows: string[][], n: number) => {
+  const seen = new Map<string, number>();
+  return rows.map((r) => {
+    const k = rowKey(r, n);
+    const at = (seen.get(k) ?? 0) + 1;
+    seen.set(k, at);
+    return at === 1 ? k : `${k} #${String(at)}`;
+  });
+};
+/* Where a table's and a row's citations are recorded, beside the ids of boxes and the pairs
+   of lines — prefixed so that a table titled like a box can never take its citation. */
+const tableKey = (name: string) => `table:${name}`;
+const tableRowKey = (name: string, key: string) => `row:${name}:${key}`;
 
 /** Append, or replace in place if this id is already drawn. */
 const put = <T extends { id: string }>(list: T[], item: T): T[] => {
@@ -422,6 +482,10 @@ function accumulate(base: View, chain: Step[]) {
   let zones: Zone[] = [...(base.zones ?? [])];
   let nodes: ViewNode[] = [...(base.nodes ?? [])];
   let edges: Edge[] = [...(base.edges ?? [])];
+  let tables: Table[] = (base.tables ?? []).map((t) => ({ ...t }));
+  /* How many cells name a row, per table: one unless a step says otherwise. Kept for the
+     diff, which has to name today's rows the same way the steps named them. */
+  const keyCols = new Map<string, number>();
   const why = new Map<string, Why>();
   const problems: string[] = [];
   const slots = new Map<string, Slot>();
@@ -654,11 +718,221 @@ function accumulate(base: View, chain: Step[]) {
         },
       });
     }
+    tables = applyTables(tables, ov, where, keyCols, note, problems);
     for (const id of retired) slots.delete(id);
     layoutSlots(zones, nodes, slots, autoSized);
     growAround(zones, nodes, byHand, autoSized);
   }
-  return { zones, nodes, edges, why, lastTouch, problems };
+  return {
+    zones,
+    nodes,
+    edges,
+    tables,
+    keyCols,
+    why,
+    lastTouch,
+    problems,
+  };
+}
+
+/**
+ * One step's tables. Checked the way boxes are, against the tables as they stand when the
+ * step applies: a table renamed in the model, or a row whose key changed, would otherwise be
+ * a patch that patches nothing, and the page would show today's row under a state that
+ * claims to have changed it.
+ */
+function applyTables(
+  tables: Table[],
+  ov: StateOverlay,
+  where: string,
+  keyCols: Map<string, number>,
+  note: (id: string, cited?: Why) => void,
+  problems: string[],
+): Table[] {
+  const names = new Set(tables.map((t) => t.name));
+  for (const name of [
+    ...Object.keys(ov.retiredTables ?? {}),
+    ...Object.keys(ov.tables ?? {}),
+  ])
+    if (!names.has(name))
+      problems.push(
+        `${where}: changes the table "${name}", which is not a table in the view at that point`,
+      );
+  for (const [name, cited] of Object.entries(ov.retiredTables ?? {}))
+    note(tableKey(name), cited);
+  let out = tables.filter((t) => !(ov.retiredTables ?? {})[t.name]);
+
+  out = out.map((t) => {
+    const patch = (ov.tables ?? {})[t.name];
+    if (!patch) return t;
+    if (patch.key !== undefined) keyCols.set(t.name, patch.key);
+    const n = keyCols.get(t.name) ?? 1;
+    note(tableKey(t.name), patch.why);
+    const fallback = patch.why;
+    const keys = t.rows.map((r) => rowKey(r, n));
+    /* A key two rows share names neither of them. */
+    const named = [
+      ...Object.keys(patch.retiredRows ?? {}),
+      ...Object.keys(patch.changedRows ?? {}),
+    ];
+    for (const k of new Set(named)) {
+      const times = keys.filter((x) => x === k).length;
+      if (times > 1)
+        problems.push(
+          `${where}: "${t.name}" has ${String(times)} rows named "${k}" — set key to more cells`,
+        );
+    }
+    const width = (cells: string[], what: string) => {
+      if (cells.length !== t.cols.length)
+        problems.push(
+          `${where}: ${what} in "${t.name}" has ${String(cells.length)} cells, but the table has ${String(t.cols.length)} columns`,
+        );
+    };
+    for (const k of named)
+      if (!keys.includes(k))
+        problems.push(
+          `${where}: changes the row "${k}" of "${t.name}", which is not a row at that point`,
+        );
+    const rows: string[][] = [];
+    t.rows.forEach((r, i) => {
+      const k = keys[i] ?? "";
+      if ((patch.retiredRows ?? {})[k]) {
+        note(tableRowKey(t.name, k), patch.retiredRows?.[k] ?? fallback);
+        return;
+      }
+      const c = (patch.changedRows ?? {})[k];
+      if (!c) {
+        rows.push(r);
+        return;
+      }
+      width(c.cells, `the row "${k}"`);
+      /* A changed row may rename itself; its citation follows the name it now has. */
+      note(tableRowKey(t.name, rowKey(c.cells, n)), c.why ?? fallback);
+      rows.push(c.cells);
+    });
+    for (const r of patch.newRows ?? []) {
+      const k = rowKey(r.cells, n);
+      width(r.cells, `the new row "${k}"`);
+      if (rows.some((x) => rowKey(x, n) === k))
+        problems.push(
+          `${where}: adds the row "${k}" to "${t.name}", which already has one by that name`,
+        );
+      note(tableRowKey(t.name, k), r.why ?? fallback);
+      rows.push(r.cells);
+    }
+    return {
+      ...t,
+      rows,
+      ...(patch.note !== undefined ? { note: patch.note } : {}),
+    };
+  });
+
+  for (const nt of ov.newTables ?? []) {
+    if (out.some((t) => t.name === nt.name))
+      problems.push(
+        `${where}: adds the table "${nt.name}", which the view already has`,
+      );
+    note(tableKey(nt.name), nt.why);
+    for (const r of nt.rows) {
+      if (r.cells.length !== nt.cols.length)
+        problems.push(
+          `${where}: a row of the new table "${nt.name}" has ${String(r.cells.length)} cells, but it has ${String(nt.cols.length)} columns`,
+        );
+      note(tableRowKey(nt.name, rowKey(r.cells, 1)), r.why ?? nt.why);
+    }
+    out = [
+      ...out.filter((t) => t.name !== nt.name),
+      {
+        name: nt.name,
+        cols: nt.cols,
+        rows: nt.rows.map((r) => r.cells),
+        ...(nt.note !== undefined ? { note: nt.note } : {}),
+      },
+    ];
+  }
+  return out;
+}
+
+/**
+ * The tables as a state leaves them, and — under Changes — what that is against today.
+ *
+ * Computed, like every other difference: a row whose key today lacks is new, one whose key
+ * today has but whose cells differ is changed, and today's rows the state no longer has are
+ * kept in place, marked retired, so what goes can be argued with where it stood. A table
+ * today lacks is new throughout; a table the state drops is listed last, retired.
+ */
+function diffTables(
+  base: Table[],
+  now: Table[],
+  keyCols: Map<string, number>,
+  why: Map<string, Why>,
+): Table[] {
+  const was = new Map(base.map((t) => [t.name, t]));
+  const out: Table[] = now.map((t) => {
+    const before = was.get(t.name);
+    const n = keyCols.get(t.name) ?? 1;
+    const rowWhy = (k: string) => why.get(tableRowKey(t.name, k));
+    if (!before)
+      return {
+        ...t,
+        lifecycle: "new" as const,
+        why: why.get(tableKey(t.name)),
+        marks: t.rows.map((r) => ({
+          lifecycle: "new" as const,
+          why: rowWhy(rowKey(r, n)),
+        })),
+      };
+    const beforeKeys = rowKeys(before.rows, n);
+    const nowKeysList = rowKeys(t.rows, n);
+    const nowByKey = new Map(nowKeysList.map((k, i) => [k, t.rows[i] ?? []]));
+    const rows: string[][] = [];
+    const marks: Table["marks"] = [];
+    const same = (a: string[], b: string[]) =>
+      JSON.stringify(a) === JSON.stringify(b);
+    /* Today's order first, each row where it stood — kept, changed, or struck through —
+       then whatever the state adds, in the order it added it. */
+    before.rows.forEach((r, i) => {
+      const k = beforeKeys[i] ?? "";
+      const cur = nowByKey.get(k);
+      if (!cur) {
+        rows.push(r);
+        marks.push({ lifecycle: "retired", why: rowWhy(k) });
+        return;
+      }
+      rows.push(cur);
+      marks.push(
+        same(cur, r) ? null : { lifecycle: "changed", why: rowWhy(k), was: r },
+      );
+    });
+    const had = new Set(beforeKeys);
+    t.rows.forEach((r, i) => {
+      const k = nowKeysList[i] ?? "";
+      if (had.has(k)) return;
+      rows.push(r);
+      marks.push({ lifecycle: "new", why: rowWhy(k) });
+    });
+    const differs =
+      marks.some(Boolean) || (t.note ?? "") !== (before.note ?? "");
+    return differs
+      ? {
+          ...t,
+          rows,
+          marks,
+          lifecycle: "changed" as const,
+          why: why.get(tableKey(t.name)),
+        }
+      : t;
+  });
+  const kept = new Set(now.map((t) => t.name));
+  for (const t of base)
+    if (!kept.has(t.name))
+      out.push({
+        ...t,
+        lifecycle: "retired",
+        why: why.get(tableKey(t.name)),
+        marks: t.rows.map(() => ({ lifecycle: "retired" as const })),
+      });
+  return out;
 }
 
 /** What the chain names that is not there to be named, without composing a view. */
@@ -813,6 +1087,13 @@ export function composeChain(
       ),
     ),
     dashMeans,
+    ...(base.tables || acc.tables.length
+      ? {
+          tables: diff
+            ? diffTables(base.tables ?? [], acc.tables, acc.keyCols, acc.why)
+            : acc.tables,
+        }
+      : {}),
     stateNote: `${at.label} — ${note}`,
   };
 }
