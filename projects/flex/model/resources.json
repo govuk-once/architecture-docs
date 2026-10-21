@@ -440,7 +440,7 @@
           "n": {
             "dev": 2,
             "stg": 2,
-            "prod": 0,
+            "prod": 2,
             "eph": 2
           },
           "from": "counts.domainFunctions.groups",
@@ -450,7 +450,7 @@
             "tech": "NODEJS_24_X · 30s · isolated access",
             "role": "GET and POST <code>/v1/groups</code>.",
             "facts": [
-              "<code>environments</code> is development and staging only — so nothing reaches production, but every ephemeral PR and personal stage still gets both."
+              "<code>environments</code> is all three stages since NOT-562 (#580, 21 October 2026); until then it was development and staging only, and nothing reached production."
             ],
             "code": [
               [
@@ -520,7 +520,7 @@
           "n": {
             "dev": 2,
             "stg": 2,
-            "prod": 0,
+            "prod": 2,
             "eph": 2
           },
           "from": "counts.domainFunctions.travel",
@@ -530,7 +530,7 @@
             "tech": "NODEJS_24_X · 30s · isolated access",
             "role": "<code>GET /v1/countries</code> and <code>GET /v1/events</code>.",
             "facts": [
-              "<code>environments</code> is development and staging only, so nothing reaches production — but every ephemeral PR and personal stage still gets both.",
+              "<code>environments</code> is all three stages since NOT-562 (#580, 21 October 2026); until then it was development and staging only, and nothing reached production.",
               "Both routes reach the travel service gateway over the private API; the domain itself holds no credentials."
             ],
             "code": [
@@ -916,7 +916,7 @@
           "n": {
             "dev": 7,
             "stg": 6,
-            "prod": 3,
+            "prod": 5,
             "eph": 7
           },
           "from": "counts.domainsWithAuthorizer",
@@ -941,7 +941,7 @@
           "n": {
             "dev": 34,
             "stg": 23,
-            "prod": 17,
+            "prod": 21,
             "eph": 34
           },
           "from": "counts.publicRoutes",
@@ -1233,7 +1233,7 @@
           "n": {
             "dev": 10,
             "stg": 9,
-            "prod": 5,
+            "prod": 7,
             "eph": 9
           },
           "from": "counts.boundaryPolicies",
@@ -1263,7 +1263,7 @@
           "n": {
             "dev": 63,
             "stg": 48,
-            "prod": 39,
+            "prod": 43,
             "eph": 56
           },
           "from": "counts.iamRoles",
@@ -1273,7 +1273,7 @@
             "tech": "Generated and hand-written",
             "role": "Execution identities.",
             "facts": [
-              "One generated execution role per Flex Lambda construct, each under the permissions boundary — 29 of 39 roles in production, including the API Gateway CloudWatch role and the Slack channel configuration role. The 10 outside it are the roles CDK generates for its own providers (two custom-resource providers, the deploy gap and its provider, the bucket deployment handler), the two alarm relay functions, Macie's explicit custom-resource role, the hand-written smoke-test role, and the credential monitor's function role, added by FLEX-404 (#551).",
+              "One generated execution role per Flex Lambda construct, each under the permissions boundary — 33 of 43 roles in production, including the API Gateway CloudWatch role and the Slack channel configuration role. The 10 outside it are the roles CDK generates for its own providers (two custom-resource providers, the deploy gap and its provider, the bucket deployment handler), the two alarm relay functions, Macie's explicit custom-resource role, the hand-written smoke-test role, and the credential monitor's function role, added by FLEX-404 (#551).",
               "Hand-written roles: the API Gateway CloudWatch role (auto-named — 'ApiGatewayCloudWatchRole' is only a construct id) and the smoke-test role, the only one with an explicit physical name <code>{env}-flex-smoke-test-role</code>.",
               "Also created by CDK: the Chatbot role, custom-resource roles and the BucketDeployment handler role.",
               "Per-route inline policies come from grantRouteResources and grantRoutePermissions."
@@ -2009,7 +2009,7 @@
           "n": {
             "dev": 60,
             "stg": 46,
-            "prod": 37,
+            "prod": 41,
             "eph": 56
           },
           "from": "counts.logGroups",
@@ -2019,7 +2019,7 @@
             "tech": "365 days on Flex constructs · 731 on CDK-managed",
             "role": "Every log group the stacks create: one per Lambda construct, one per API stage for access and execution logs, and the groups CDK manages for its own functions.",
             "facts": [
-              "Flex constructs set <code>RetentionDays.ONE_YEAR</code> explicitly (29 groups in production, the credential monitor's and DVLA secret rotation's among them). The 8 groups CDK creates for its own functions — three custom-resource providers, the deploy gap and its provider, the two alarm relays and the bucket deployment handler — take CDK's two-year default instead.",
+              "Flex constructs set <code>RetentionDays.ONE_YEAR</code> explicitly (33 groups in production, the credential monitor's and DVLA secret rotation's among them). The 8 groups CDK creates for its own functions — three custom-resource providers, the deploy gap and its provider, the two alarm relays and the bucket deployment handler — take CDK's two-year default instead.",
               "Content is redacted at source by the <code>@flex/logging</code> sanitizer before it is ever written.",
               "<code>FlexLogger.setLogLevel</code> returns without doing anything when <code>FLEX_ENVIRONMENT</code> is production, so verbose logging cannot be turned on there at runtime."
             ],

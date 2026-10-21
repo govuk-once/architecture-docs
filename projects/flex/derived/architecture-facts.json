@@ -18,7 +18,7 @@
       "groups": {
         "development": 2,
         "staging": 2,
-        "production": 0,
+        "production": 2,
         "ephemeral": 2
       },
       "local-council": {
@@ -36,7 +36,7 @@
       "travel": {
         "development": 2,
         "staging": 2,
-        "production": 0,
+        "production": 2,
         "ephemeral": 2
       },
       "udp": {
@@ -50,7 +50,7 @@
     "publicRoutes": {
       "development": 34,
       "staging": 23,
-      "production": 17,
+      "production": 21,
       "ephemeral": 34
     },
     "privateRoutes": {
@@ -62,7 +62,7 @@
     "domainsWithAuthorizer": {
       "development": 7,
       "staging": 6,
-      "production": 3,
+      "production": 5,
       "ephemeral": 7
     },
     "alarms": [
@@ -740,25 +740,25 @@
     "iamRoles": {
       "development": 63,
       "staging": 48,
-      "production": 39,
+      "production": 43,
       "ephemeral": 56
     },
     "iamRolesBounded": {
       "development": 53,
       "staging": 38,
-      "production": 29,
+      "production": 33,
       "ephemeral": 48
     },
     "logGroups": {
       "development": 60,
       "staging": 46,
-      "production": 37,
+      "production": 41,
       "ephemeral": 56
     },
     "authorizers": {
       "development": 7,
       "staging": 6,
-      "production": 3,
+      "production": 5,
       "ephemeral": 7
     },
     "wafCloudFront": {
@@ -836,7 +836,7 @@
     "boundaryPolicies": {
       "development": 10,
       "staging": 9,
-      "production": 5,
+      "production": 7,
       "ephemeral": 9
     },
     "macieStacks": {

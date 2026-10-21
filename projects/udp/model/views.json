@@ -1457,7 +1457,7 @@
       {
         "name": "The end-to-end features, as Cucumber runs them",
         "code": [
-          ["e2e/project.json", "e2e/project.json"],
+          ["e2e/package.json", "e2e/package.json"],
           ["identity-api.feature", "e2e/src/features/identity-api.feature"],
           ["sar.feature-old", "e2e/src/features/sar.feature-old"],
           ["dsar.feature-old", "e2e/src/features/dsar.feature-old"],
@@ -1504,7 +1504,7 @@
       {
         "name": "The performance scenarios, as k6 runs them",
         "code": [
-          ["performance/project.json", "performance/project.json"],
+          ["performance/scripts/build.mjs", "performance/scripts/build.mjs"],
           ["config.ts", "performance/src/config.ts"],
           ["smoke-test.ts", "performance/src/smoke-test.ts"],
           ["baseline.ts", "performance/src/scenarios/baseline.ts"],
@@ -1557,8 +1557,8 @@
           [
             "cold-start-impact",
             "100 then 200 a second with a cool-down",
-            "thresholds keyed to a scenario name that does not match; the nx target points at a file the build does not produce",
-            "by hand — broken as committed"
+            "its threshold names <code>cold_start_latency</code> but the metric is declared <code>cold_start_latecncy</code>, so the threshold never fires",
+            "by hand"
           ]
         ]
       }

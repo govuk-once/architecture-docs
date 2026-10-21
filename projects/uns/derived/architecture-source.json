@@ -2,9 +2,9 @@
   "repo": "https://github.com/govuk-once/gds-unified-notification-service.git",
   "ref": "main",
   "derived": {
-    "sha": "b3b0e981141d45381accec88a8196ccb6dcf15a3",
-    "subject": "feat(NOT-562): Preparing for events aggregator release (#394)",
-    "committed": "2026-10-19T07:01:49+01:00",
+    "sha": "3f1531a26e7dd3b9c85cb915f8803f40f20ce0b9",
+    "subject": "fix(NOT-000): support local e2e testing (#396)",
+    "committed": "2026-10-21T09:35:13+01:00",
     "builtFrom": "nothing derived — this project's counts are prose",
     "derivation": "af35b68e0ec835a9",
     "facts": ""

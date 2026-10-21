@@ -2,9 +2,9 @@
   "repo": "https://github.com/govuk-once/govuk-chat-v2.git",
   "ref": "main",
   "derived": {
-    "sha": "adcdb6ebbc94ec3614335995288965d46629546e",
-    "subject": "Merge pull request #366 from govuk-once/dependabot/npm_and_yarn/eslint-plugin-unicorn-77.0.0",
-    "committed": "2026-10-19T09:30:41+01:00",
+    "sha": "ee760bb926f334b67eea7be526ec171648840b27",
+    "subject": "Merge pull request #367 from govuk-once/dependabot/npm_and_yarn/vitest-5.0.3",
+    "committed": "2026-10-20T13:47:32+01:00",
     "builtFrom": "nothing derived — this project's counts are prose",
     "derivation": "af35b68e0ec835a9",
     "facts": ""

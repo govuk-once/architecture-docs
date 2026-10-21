@@ -1,8 +1,8 @@
 // GOV.UK Chat architecture — Request path.
 //
-// Every hop one question takes, numbered in reading order, with the TypeScript API as the
+// Every hop one question takes, numbered in reading order, with the invoke route as the
 // worked example: it has exactly one route, so the whole path is provable end to end.
-// The Python API's routes are in the reference table on this tab.
+// The other route, which reads a conversation back, is in the reference table on this tab.
 //
 // The answer streams back along the same path as server-sent events. There is no return
 // line drawn here, because the return is the same hops in reverse and a line for it would
@@ -48,12 +48,12 @@ model {
 
     request_route = platform 'POST /v1/threads/invoke' {
       #request-path
-      description 'the only route here'
-      link https://github.com/govuk-once/govuk-chat-v2/blob/main/cdk/src/stacks/chat-api-ts-stack.ts 'chat-api-ts-stack.ts'
+      description 'the route that asks'
+      link https://github.com/govuk-once/govuk-chat-v2/blob/main/cdk/src/stacks/chat-api-stack.ts 'chat-api-stack.ts'
       metadata {
         type 'AWS::ApiGateway::Method'
         tech 'streaming integration'
-        role 'The single method on the TypeScript API. Everything else about this API is the machinery that guards this one route.'
+        role 'The method that asks the agent. The API\'s other method, <code>GET /v1/threads/{threadId}/messages</code>, reads a conversation back without invoking anything, and is in the reference table.'
         facts [
           'Authorisation and the scope are set as defaults on the API rather than on the method, so any route added later inherits the same guard.'
         ]
@@ -72,7 +72,7 @@ model {
     request_authorizer = platform 'Cognito authorizer' {
       #request-path
       description 'scope chat-api/invoke'
-      link https://github.com/govuk-once/govuk-chat-v2/blob/main/cdk/src/stacks/chat-api-ts-stack.ts 'chat-api-ts-stack.ts'
+      link https://github.com/govuk-once/govuk-chat-v2/blob/main/cdk/src/stacks/chat-api-stack.ts 'chat-api-stack.ts'
       metadata {
         type 'AWS::ApiGateway::Authorizer'
         tech 'checked before the function runs'
@@ -96,8 +96,8 @@ model {
     request_handler = platform 'threads/invoke handler' {
       #request-path
       description 'validates, then claims'
-      link https://github.com/govuk-once/govuk-chat-v2/blob/main/services/chat-api-ts/src/handlers/threads/invoke.ts 'threads/invoke.ts'
-      link https://github.com/govuk-once/govuk-chat-v2/blob/main/services/chat-api-ts/src/http/zod-validator.ts 'zod-validator.ts'
+      link https://github.com/govuk-once/govuk-chat-v2/blob/main/services/chat-api/src/handlers/threads/invoke.ts 'threads/invoke.ts'
+      link https://github.com/govuk-once/govuk-chat-v2/blob/main/services/chat-api/src/http/zod-validator.ts 'zod-validator.ts'
       metadata {
         type 'AWS::Lambda::Function'
         tech 'middy · zod · streamed response'
@@ -122,8 +122,8 @@ model {
     request_table = platform 'Thread and run table' {
       #request-path
       description 'one run per thread'
-      link https://github.com/govuk-once/govuk-chat-v2/blob/main/services/chat-api-ts/src/persistence/runs.ts 'persistence/runs.ts'
-      link https://github.com/govuk-once/govuk-chat-v2/blob/main/services/chat-api-ts/src/persistence/threads.ts 'persistence/threads.ts'
+      link https://github.com/govuk-once/govuk-chat-v2/blob/main/services/chat-api/src/persistence/runs.ts 'persistence/runs.ts'
+      link https://github.com/govuk-once/govuk-chat-v2/blob/main/services/chat-api/src/persistence/threads.ts 'persistence/threads.ts'
       metadata {
         type 'AWS::DynamoDB::Table'
         tech 'the lock and the transcript in one table'
@@ -177,7 +177,7 @@ model {
         tech 'read by the agent, not the API'
         role 'Gives the agent the turns that came before, so the answer follows the conversation rather than the last message alone.'
         facts [
-          'Read and written by the agent runtime itself. Neither API touches it, so a conversation deleted through an API leaves its memory behind.'
+          'Read and written by the agent runtime itself. The API never touches it, and nothing in the repository deletes memory.'
         ]
         sourceId 'memory'
         order '7'

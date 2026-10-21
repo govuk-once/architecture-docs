@@ -82,7 +82,7 @@ model {
     metadata {
       type 'Shell script'
       tech 'needs the private token, not AWS'
-      role 'Proves the four stacks still build. This is as far as continuous integration goes.'
+      role 'Proves the three stacks still build. This is as far as continuous integration goes.'
       facts [
         'It is the only job given the private repository token, because synthesising bundles each agent in Docker and that is when the prompts package is fetched.',
         'Because the bundling is a Docker build against a private dependency, this step is also the reason the app cannot be synthesised outside this repository\'s own CI.'
@@ -101,11 +101,11 @@ model {
     #request-path
     description 'one stack at a time'
     link https://github.com/govuk-once/govuk-chat-v2/blob/main/scripts/dev-cdk-deploy.sh 'dev-cdk-deploy.sh'
-    link https://github.com/govuk-once/govuk-chat-v2/blob/main/services/chat-api-fastapi/scripts/cdk-deploy.sh 'chat-api-fastapi/cdk-deploy.sh'
+    link https://github.com/govuk-once/govuk-chat-v2/blob/main/services/chat-api/scripts/cdk-deploy.sh 'chat-api/cdk-deploy.sh'
     metadata {
       type 'Shell script'
       tech 'cdk deploy, from a laptop'
-      role 'The only thing in this repository that deploys. Each of the four services wraps it with its own stack name, so a developer deploys one stack rather than the app.'
+      role 'The only thing in this repository that deploys. Each of the three services wraps it with its own stack name, so a developer deploys one stack rather than the app.'
       facts [
         'It checks credentials first, then clears orphaned assets, then runs <code>cdk deploy</code> and writes the stack outputs to a file per stack.',
         'CloudFormation validation is turned off with a comment explaining that it makes deploys slow once assets build up.',
@@ -146,16 +146,16 @@ model {
 
   delivery_env = platform 'An environment' {
     #request-path
-    description 'four stacks, one prefix'
+    description 'three stacks, one prefix'
     link https://github.com/govuk-once/govuk-chat-v2/blob/main/cdk/src/constants/environment.ts 'environment.ts'
     link https://github.com/govuk-once/govuk-chat-v2/blob/main/cdk/bin/app.ts 'cdk/bin/app.ts'
     metadata {
-      type 'One copy of all four stacks'
+      type 'One copy of all three stacks'
       tech 'named by ENVIRONMENT, or by $USER'
       role 'What a deploy lands in. An environment is just a name: it prefixes every resource, and there are as many of them as there are names people use.'
       facts [
         'The name falls back to the developer\'s own <code>$USER</code> when <code>ENVIRONMENT</code> is unset, so an unconfigured deploy creates an environment named after the person doing it.',
-        'Everything except <code>stag</code> and <code>prod</code> is treated as ephemeral, which is what decides whether tables are destroyed with the stack and whether SnapStart is on.',
+        'Everything except <code>stag</code> and <code>prod</code> is treated as ephemeral, which is what decides whether the table, the user pool, the UI\'s log group and its session secret are destroyed with the stack or retained.',
         'The prefix is truncated to forty characters, and the region defaults to <code>eu-west-1</code>.'
       ]
       sourceId 'env'
@@ -188,7 +188,7 @@ model {
     metadata {
       protocol 'cdk synth --quiet'
       auth 'The private repository token, so the agents can be bundled'
-      carries 'Proof that the four stacks still build'
+      carries 'Proof that the three stacks still build'
       order '3'
     }
   }

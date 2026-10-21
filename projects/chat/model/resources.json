@@ -8,31 +8,35 @@
         {
           "id": "agent-runtimes",
           "name": "Agent runtimes",
-          "n": { "dev": 2, "stg": 2, "prod": 2 },
-          "meta": ["AguiAgentStack", "ExampleAgentStack", "Python 3.13"],
+          "n": {
+            "dev": 1,
+            "stg": 1,
+            "prod": 1
+          },
+          "meta": ["AguiAgentStack", "Python 3.13"],
           "d": {
             "type": "AWS::BedrockAgentCore::Runtime",
-            "role": "Each hosts one Strands agent, invoked by its API and streaming events back.",
+            "role": "Hosts one Strands agent, invoked by the API and streaming AG-UI events back.",
             "facts": [
               "The runtime name may not contain dashes, so the construct replaces them with underscores."
             ],
             "code": [
-              ["agui-agent-stack.ts", "cdk/src/stacks/agui-agent-stack.ts"],
-              [
-                "example-agent-stack.ts",
-                "cdk/src/stacks/example-agent-stack.ts"
-              ]
+              ["agui-agent-stack.ts", "cdk/src/stacks/agui-agent-stack.ts"]
             ]
           }
         },
         {
           "id": "agent-memory",
           "name": "Agent memory",
-          "n": { "dev": 2, "stg": 2, "prod": 2 },
+          "n": {
+            "dev": 1,
+            "stg": 1,
+            "prod": 1
+          },
           "meta": ["90-day expiry", "keyed by session and actor"],
           "d": {
             "type": "AWS::BedrockAgentCore::Memory",
-            "role": "Holds the turns of a conversation so the next question has context. One per agent.",
+            "role": "Holds the turns of a conversation so the next question has context.",
             "facts": [
               "Events expire after 90 days. Nothing in the repository deletes memory when a conversation is deleted through an API."
             ],
@@ -51,54 +55,55 @@
         {
           "id": "rest-apis",
           "name": "REST APIs",
-          "n": { "dev": 2, "stg": 2, "prod": 2 },
-          "meta": ["one Cognito, one IAM", "both stream"],
+          "n": {
+            "dev": 1,
+            "stg": 1,
+            "prod": 1
+          },
+          "meta": ["Cognito on every method", "two routes"],
           "d": {
             "type": "AWS::ApiGateway::RestApi",
-            "role": "The TypeScript API exposes one route; the Python one is a catch-all proxy. Both use streaming response transfer.",
-            "code": [
-              ["chat-api-ts-stack.ts", "cdk/src/stacks/chat-api-ts-stack.ts"],
-              [
-                "chat-api-fastapi-stack.ts",
-                "cdk/src/stacks/chat-api-fastapi-stack.ts"
-              ]
-            ]
+            "role": "Two routes: invoke, which streams the answer back, and messages, which reads a conversation. Behind a Web ACL and stage throttling.",
+            "code": [["chat-api-stack.ts", "cdk/src/stacks/chat-api-stack.ts"]]
           }
         },
         {
           "id": "lambdas",
           "name": "Lambda functions",
-          "n": { "dev": 2, "stg": 2, "prod": 2 },
-          "meta": ["Node 24 · arm64 · 30 s", "Python 3.13 · arm64 · 15 min"],
+          "n": {
+            "dev": 2,
+            "stg": 2,
+            "prod": 2
+          },
+          "meta": ["Node 24 · arm64 · 30 s"],
           "d": {
             "type": "AWS::Lambda::Function",
-            "role": "One per API. The Python one runs uvicorn behind the Lambda Web Adapter layer, so its handler is a shell script.",
+            "role": "threads/invoke, which streams, and threads/messages, which reads a conversation back.",
             "facts": [
               "Neither sets a memory size, so both take the CDK default.",
-              "SnapStart is enabled on the Python function outside ephemeral environments."
+              "The invoke timeout and the run lock lease are the same thirty seconds."
             ],
-            "code": [
-              ["chat-api-ts-stack.ts", "cdk/src/stacks/chat-api-ts-stack.ts"],
-              [
-                "lambda-run.sh",
-                "services/chat-api-fastapi/scripts/lambda-run.sh"
-              ]
-            ]
+            "code": [["chat-api-stack.ts", "cdk/src/stacks/chat-api-stack.ts"]]
           }
         },
         {
           "id": "user-pool",
           "name": "Cognito user pools",
-          "n": { "dev": 1, "stg": 1, "prod": 1 },
-          "meta": ["client credentials only", "self sign-up disabled"],
+          "n": {
+            "dev": 1,
+            "stg": 1,
+            "prod": 1
+          },
+          "meta": ["two clients", "self sign-up disabled"],
           "d": {
             "type": "AWS::Cognito::UserPool",
-            "role": "Machine-to-machine access to the TypeScript API: a resource server <code>chat-api</code> with one scope, <code>invoke</code>.",
+            "role": "One pool, two clients: the API's, client credentials only, with a resource server chat-api and one scope, invoke; and the UI's sign-in client, code flow with PKCE and the scope openid.",
             "facts": [
               "Access tokens last an hour in staging and production, and a day in ephemeral environments."
             ],
             "code": [
-              ["chat-api-ts-stack.ts", "cdk/src/stacks/chat-api-ts-stack.ts"]
+              ["chat-api-stack.ts", "cdk/src/stacks/chat-api-stack.ts"],
+              ["chat-ui-stack.ts", "cdk/src/stacks/chat-ui-stack.ts"]
             ]
           }
         }
@@ -112,21 +117,130 @@
         {
           "id": "tables",
           "name": "Tables",
-          "n": { "dev": 2, "stg": 2, "prod": 2 },
-          "meta": ["one per API", "single-table designs"],
+          "n": {
+            "dev": 1,
+            "stg": 1,
+            "prod": 1
+          },
+          "meta": ["single-table design", "TTL on expiresAt"],
           "d": {
             "type": "AWS::DynamoDB::Table",
-            "role": "The TypeScript API keeps threads, runs, locks and messages in one table with a one-year TTL; the Python API keeps conversations, branches, messages and streams in another with a GSI.",
+            "role": "Threads, runs, locks and messages in one table with a one-year TTL.",
             "facts": [
-              "Only the TypeScript table sets a TTL attribute. The Python table has none, so nothing there expires."
+              "Retained outside ephemeral environments; destroyed with the stack in them."
             ],
             "code": [
-              ["service.ts", "services/chat-api-ts/src/persistence/service.ts"],
-              [
-                "chat-api-fastapi-stack.ts",
-                "cdk/src/stacks/chat-api-fastapi-stack.ts"
-              ]
+              ["service.ts", "services/chat-api/src/persistence/service.ts"],
+              ["chat-api-stack.ts", "cdk/src/stacks/chat-api-stack.ts"]
             ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "UI · ECS Express, VPC and Secrets Manager",
+      "items": [
+        {
+          "id": "express-service",
+          "name": "ECS Express services",
+          "n": {
+            "dev": 1,
+            "stg": 1,
+            "prod": 1
+          },
+          "meta": ["512 CPU · 1 GB", "one task, fixed", "port 3000"],
+          "d": {
+            "type": "AWS::ECS::ExpressGatewayService",
+            "tech": "a Docker image built from the repository root",
+            "role": "The Next.js web app, health-checked on /api/health, with the session secret injected and a month of logs.",
+            "facts": [
+              "Scales between one task and one task.",
+              "Three roles: execution, task, and an infrastructure role for ECS itself."
+            ],
+            "code": [
+              ["chat-ui-stack.ts", "cdk/src/stacks/chat-ui-stack.ts"],
+              ["chat-ui/README.md", "services/chat-ui/README.md"]
+            ]
+          }
+        },
+        {
+          "id": "ui-vpc",
+          "name": "VPCs",
+          "n": {
+            "dev": 1,
+            "stg": 1,
+            "prod": 1
+          },
+          "meta": ["2 AZs", "public subnets only", "no NAT"],
+          "d": {
+            "type": "AWS::EC2::VPC",
+            "tech": "created for the ECS service alone",
+            "role": "The only network this repository creates. Nothing private, so nothing needs a NAT gateway.",
+            "facts": [],
+            "code": [["chat-ui-stack.ts", "cdk/src/stacks/chat-ui-stack.ts"]]
+          }
+        },
+        {
+          "id": "session-secret",
+          "name": "Secrets",
+          "n": {
+            "dev": 1,
+            "stg": 1,
+            "prod": 1
+          },
+          "meta": [
+            "64 characters",
+            "no punctuation",
+            "RETAIN outside ephemeral"
+          ],
+          "d": {
+            "type": "AWS::SecretsManager::Secret",
+            "tech": "generated by the stack",
+            "role": "The key the UI seals its session cookie with. The API app client's secret is not here: it lives in Cognito and is read from there.",
+            "facts": [],
+            "code": [["chat-ui-stack.ts", "cdk/src/stacks/chat-ui-stack.ts"]]
+          }
+        },
+        {
+          "id": "sign-in-client",
+          "name": "Sign-in clients",
+          "n": {
+            "dev": 1,
+            "stg": 1,
+            "prod": 1
+          },
+          "meta": [
+            "code flow · PKCE",
+            "openid",
+            "callback set by a custom resource"
+          ],
+          "d": {
+            "type": "AWS::Cognito::UserPoolClient",
+            "tech": "on the API's user pool",
+            "role": "How a person signs in to the web app. Its callback and logout URLs are written after deploy, once the service's endpoint exists.",
+            "facts": [
+              "An ephemeral environment also allows http://localhost:3000, so the app can run locally against a deployed stack."
+            ],
+            "code": [["chat-ui-stack.ts", "cdk/src/stacks/chat-ui-stack.ts"]]
+          }
+        },
+        {
+          "id": "web-acl",
+          "name": "Web ACLs",
+          "n": {
+            "dev": 1,
+            "stg": 1,
+            "prod": 1
+          },
+          "meta": ["REGIONAL", "one rate rule", "default allow"],
+          "d": {
+            "type": "AWS::WAFv2::WebACL",
+            "tech": "associated with the API stage",
+            "role": "More than fifteen POST /v1/threads/invoke in a minute from one end-user-id answers 429 with a JSON body.",
+            "facts": [
+              "The limits are V1's (CHAT-968), carried over: 900 a minute per client, 15 a minute per end user."
+            ],
+            "code": [["chat-api-stack.ts", "cdk/src/stacks/chat-api-stack.ts"]]
           }
         }
       ]

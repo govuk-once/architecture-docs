@@ -112,7 +112,7 @@ model {
       link https://github.com/govuk-once/user-data-platform/blob/main/cdk/bin/app.ts 'cdk/bin/app.ts'
       metadata {
         type 'GitHub Actions job'
-        tech 'OIDC to DEV_DEPLOYMENT_ROLE · nx cdk:deploy:dev'
+        tech 'OIDC to DEV_DEPLOYMENT_ROLE · pnpm cdk:deploy:dev'
         role 'A full copy of every stack except the VPC, prefixed <code>pr-{n}-dev</code>, in the development account. Needs validate-pr, not ci: the deploy does not wait for the checks.'
         sourceId 'prdeploy'
         order '5'
@@ -128,7 +128,7 @@ model {
       #off-request-path
       description 'CodeBuild · commented on the PR'
       link https://github.com/govuk-once/user-data-platform/blob/main/.github/workflows/pr-deploy.yml 'pr-deploy.yml'
-      link https://github.com/govuk-once/user-data-platform/blob/main/e2e/project.json 'e2e/project.json'
+      link https://github.com/govuk-once/user-data-platform/blob/main/e2e/package.json 'e2e/package.json'
       metadata {
         type 'GitHub Actions job'
         tech 'zips the checkout to S3 · polls CodeBuild every 30 s'
@@ -148,9 +148,9 @@ model {
 
     delivery_cleanup = internal '6. pr-cleanup · on close' {
       #off-request-path
-      description 'nx cdk:destroy:dev'
+      description 'pnpm cdk:destroy:dev'
       link https://github.com/govuk-once/user-data-platform/blob/main/.github/workflows/pr-cleanup.yml 'pr-cleanup.yml'
-      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/project.json 'cdk/project.json'
+      link https://github.com/govuk-once/user-data-platform/blob/main/package.json 'package.json'
       link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/macie/index.ts 'cdk/lib/macie/index.ts'
       metadata {
         type 'GitHub Actions job'
@@ -246,7 +246,7 @@ model {
       link https://github.com/govuk-once/user-data-platform/blob/main/.github/workflows/release.yml 'release.yml'
       metadata {
         type 'Reusable workflow · GitHub environment'
-        tech 'OIDC to DEV_DEPLOYMENT_ROLE · nx cdk:deploy:dev'
+        tech 'OIDC to DEV_DEPLOYMENT_ROLE · pnpm cdk:deploy:dev'
         role 'Writes the release-candidate version into <code>package.json</code> so it lands as the <code>Version</code> tag on every stack, deploys all stacks, and reads the e2e project name back from the stack outputs.'
         sourceId 'dev'
         order '4'
@@ -304,7 +304,7 @@ model {
       link https://github.com/govuk-once/user-data-platform/blob/main/.github/workflows/release.yml 'release.yml'
       metadata {
         type 'Reusable workflow · GitHub environment'
-        tech 'OIDC to STAGING_DEPLOYMENT_ROLE · nx cdk:deploy:stag'
+        tech 'OIDC to STAGING_DEPLOYMENT_ROLE · pnpm cdk:deploy:stag'
         role 'Needs e2e-dev and version — not the development perf test.'
         sourceId 'staging'
         order '7'
@@ -359,7 +359,7 @@ model {
       link https://github.com/govuk-once/user-data-platform/blob/main/.github/workflows/release.yml 'release.yml'
       metadata {
         type 'Reusable workflow · GitHub environment'
-        tech 'OIDC to PRODUCTION_DEPLOYMENT_ROLE · nx cdk:deploy:prod'
+        tech 'OIDC to PRODUCTION_DEPLOYMENT_ROLE · pnpm cdk:deploy:prod'
         role 'No e2e or perf stacks are created here, so nothing tests production after the deploy. Rollback is a redeploy; the tables are RETAIN.'
         sourceId 'prod'
         order '10'
@@ -409,9 +409,9 @@ model {
 
     delivery_perfbuild = platform 'CodeBuild · perf' {
       #off-request-path
-      description 'k6 · 8 nx targets'
+      description 'k6 · 8 scenarios'
       link https://github.com/govuk-once/user-data-platform/blob/main/cdk/buildspec-perf.yml 'buildspec-perf.yml'
-      link https://github.com/govuk-once/user-data-platform/blob/main/performance/project.json 'performance/project.json'
+      link https://github.com/govuk-once/user-data-platform/blob/main/performance/scripts/build.mjs 'performance/scripts/build.mjs'
       link https://github.com/govuk-once/user-data-platform/blob/main/performance/src/config.ts 'performance/src/config.ts'
       metadata {
         type 'AWS::CodeBuild::Project'

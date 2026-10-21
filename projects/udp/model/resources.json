@@ -8,7 +8,11 @@
         {
           "id": "api-routes",
           "name": "Routes",
-          "n": { "dev": 10, "stg": 10, "prod": 10 },
+          "n": {
+            "dev": 10,
+            "stg": 10,
+            "prod": 10
+          },
           "from": "counts.apiRoutes",
           "meta": ["main stack", "AWS_IAM", "AWS_PROXY"],
           "d": {
@@ -30,7 +34,11 @@
         {
           "id": "web-acl",
           "name": "Web ACL",
-          "n": { "dev": 1, "stg": 1, "prod": 1 },
+          "n": {
+            "dev": 1,
+            "stg": 1,
+            "prod": 1
+          },
           "from": "counts.webAcls",
           "meta": ["main stack", "REGIONAL"],
           "d": {
@@ -44,7 +52,11 @@
         {
           "id": "usage-plans",
           "name": "Usage plans",
-          "n": { "dev": 1, "stg": 1, "prod": 1 },
+          "n": {
+            "dev": 1,
+            "stg": 1,
+            "prod": 1
+          },
           "from": "counts.usagePlans",
           "meta": ["main stack", "test consumer only here"],
           "d": {
@@ -61,7 +73,11 @@
         {
           "id": "api-keys",
           "name": "API keys",
-          "n": { "dev": 1, "stg": 1, "prod": 1 },
+          "n": {
+            "dev": 1,
+            "stg": 1,
+            "prod": 1
+          },
           "from": "counts.apiKeys",
           "meta": ["main stack", "test consumer only here"],
           "d": {
@@ -85,22 +101,31 @@
         {
           "id": "fn-main",
           "name": "Route functions",
-          "n": { "dev": 13, "stg": 13, "prod": 13 },
+          "n": {
+            "dev": 13,
+            "stg": 10,
+            "prod": 10
+          },
           "from": "counts.functions.main",
           "meta": ["main stack", "isolated subnets", "nodejs24.x"],
           "d": {
             "type": "AWS::Lambda::Function",
-            "role": "One per route: 512 MB, 30 s, X-Ray on, reserved concurrency 2 in development or 50 elsewhere.",
+            "role": "One per route: 512 MB, 30 s, X-Ray on, reserved concurrency 2 in development or 50 elsewhere. Ten outside development: the SAR status, start-SAR and start-DSAR routes carry <code>disableRoute</code> in <code>routes.ts</code>, and <code>setRoutes</code> in the main stack drops a disabled route in staging and production (a9f97ed, 19 Oct 2026), so neither its function, its log group, its role nor its queue is created there.",
             "code": [
               ["lambda-construct.ts", "cdk/lib/constructs/lambda-construct.ts"],
-              ["main-stack.ts", "cdk/lib/stacks/main-stack.ts"]
+              ["main-stack.ts", "cdk/lib/stacks/main-stack.ts"],
+              ["routes.ts", "libs/utils/schemas/routes/routes.ts"]
             ]
           }
         },
         {
           "id": "fn-sar",
           "name": "Rights pipeline functions",
-          "n": { "dev": 4, "stg": 4, "prod": 4 },
+          "n": {
+            "dev": 4,
+            "stg": 4,
+            "prod": 4
+          },
           "from": "counts.functions.sar",
           "meta": ["sar stack", "SQS and S3 triggered", "not in production"],
           "d": {
@@ -115,7 +140,11 @@
         {
           "id": "fn-dvla",
           "name": "DVLA pilot purge",
-          "n": { "dev": 1, "stg": 1, "prod": 1 },
+          "n": {
+            "dev": 1,
+            "stg": 1,
+            "prod": 1
+          },
           "from": "counts.functions.dvla-pilot",
           "meta": ["dvla-pilot stack", "no trigger"],
           "d": {
@@ -133,14 +162,18 @@
         {
           "id": "fn-total",
           "name": "All named functions",
-          "n": { "dev": 18, "stg": 18, "prod": 18 },
+          "n": {
+            "dev": 18,
+            "stg": 15,
+            "prod": 15
+          },
           "from": "counts.functionsTotal",
           "meta": ["every stack"],
           "d": {
             "type": "AWS::Lambda::Function",
-            "role": "The eighteen the repository builds; eleven in production, which has neither the three rights route functions nor the sar stack. Custom-resource providers CDK adds have no FunctionName and are not counted.",
+            "role": "The eighteen <code>build-lambdas.mjs</code> builds, one per <code>src/*/handler.ts</code>: thirteen main route functions, four in the sar stack and the DVLA pilot purge. Fifteen in staging and production, where the three SAR and DSAR routes are disabled. Custom-resource providers CDK adds have no FunctionName and are not counted.",
             "code": [
-              ["cdk/project.json", "cdk/project.json"],
+              ["build-lambdas.mjs", "scripts/build-lambdas.mjs"],
               ["cdk/bin/app.ts", "cdk/bin/app.ts"],
               ["main-stack.ts", "cdk/lib/stacks/main-stack.ts"]
             ]
@@ -156,7 +189,11 @@
         {
           "id": "tables",
           "name": "Tables",
-          "n": { "dev": 2, "stg": 2, "prod": 2 },
+          "n": {
+            "dev": 2,
+            "stg": 2,
+            "prod": 2
+          },
           "from": "counts.tables",
           "meta": ["main stack", "on demand", "CMK", "PITR"],
           "d": {
@@ -173,12 +210,16 @@
         {
           "id": "queues",
           "name": "Queues",
-          "n": { "dev": 5, "stg": 5, "prod": 5 },
+          "n": {
+            "dev": 5,
+            "stg": 3,
+            "prod": 3
+          },
           "from": "counts.queues",
           "meta": ["main and sar stacks", "KMS", "none in production"],
           "d": {
             "type": "AWS::SQS::Queue",
-            "role": "SAR and DSAR queues in main; the delete queue, its dead-letter queue and the SAR file dead-letter queue in sar. None in production: main creates a queue only for a route that names one, and the sar stack is not created there.",
+            "role": "The SAR and DSAR queues in main, created only for a route that names one — so not in staging or production, where those routes are disabled; the delete queue, its dead-letter queue and the SAR file dead-letter queue in sar.",
             "code": [
               ["main-stack.ts", "cdk/lib/stacks/main-stack.ts"],
               ["sar-stack.ts", "cdk/lib/stacks/sar-stack.ts"],
@@ -190,7 +231,11 @@
         {
           "id": "buckets",
           "name": "Buckets",
-          "n": { "dev": 4, "stg": 4, "prod": 3 },
+          "n": {
+            "dev": 4,
+            "stg": 4,
+            "prod": 3
+          },
           "from": "counts.buckets",
           "meta": ["sar, macie and e2e stacks"],
           "d": {
@@ -207,7 +252,11 @@
         {
           "id": "kms-keys",
           "name": "KMS keys",
-          "n": { "dev": 4, "stg": 5, "prod": 5 },
+          "n": {
+            "dev": 4,
+            "stg": 5,
+            "prod": 5
+          },
           "from": "counts.kmsKeys",
           "meta": ["90-day rotation", "+1 per real consumer config"],
           "d": {
@@ -226,7 +275,11 @@
         {
           "id": "appconfig",
           "name": "AppConfig applications",
-          "n": { "dev": 1, "stg": 1, "prod": 1 },
+          "n": {
+            "dev": 1,
+            "stg": 1,
+            "prod": 1
+          },
           "from": "counts.appConfigApplications",
           "meta": ["main stack", "one flag", "unread"],
           "d": {
@@ -250,7 +303,11 @@
         {
           "id": "subnets",
           "name": "Subnets",
-          "n": { "dev": 6, "stg": 6, "prod": 6 },
+          "n": {
+            "dev": 6,
+            "stg": 6,
+            "prod": 6
+          },
           "from": "counts.subnets",
           "meta": ["vpc stack", "2 AZs", "/24"],
           "d": {
@@ -264,7 +321,11 @@
         {
           "id": "vpc-endpoints",
           "name": "VPC endpoints",
-          "n": { "dev": 12, "stg": 12, "prod": 12 },
+          "n": {
+            "dev": 12,
+            "stg": 12,
+            "prod": 12
+          },
           "from": "counts.vpcEndpoints",
           "meta": ["vpc stack", "12 interface"],
           "d": {
@@ -278,7 +339,11 @@
         {
           "id": "sgs",
           "name": "Security groups",
-          "n": { "dev": 3, "stg": 3, "prod": 3 },
+          "n": {
+            "dev": 3,
+            "stg": 3,
+            "prod": 3
+          },
           "from": "counts.securityGroups",
           "meta": ["vpc stack"],
           "d": {
@@ -292,7 +357,11 @@
         {
           "id": "nacls",
           "name": "Network ACLs",
-          "n": { "dev": 1, "stg": 1, "prod": 1 },
+          "n": {
+            "dev": 1,
+            "stg": 1,
+            "prod": 1
+          },
           "from": "counts.networkAcls",
           "meta": ["vpc stack"],
           "d": {
@@ -306,7 +375,11 @@
         {
           "id": "nacl-entries",
           "name": "Network ACL entries",
-          "n": { "dev": 4, "stg": 4, "prod": 4 },
+          "n": {
+            "dev": 4,
+            "stg": 4,
+            "prod": 4
+          },
           "from": "counts.networkAclEntries",
           "meta": ["vpc stack"],
           "d": {
@@ -320,7 +393,11 @@
         {
           "id": "flow-logs",
           "name": "Flow logs",
-          "n": { "dev": 1, "stg": 1, "prod": 1 },
+          "n": {
+            "dev": 1,
+            "stg": 1,
+            "prod": 1
+          },
           "from": "counts.flowLogs",
           "meta": ["vpc stack", "ALL", "CloudWatch Logs"],
           "d": {
@@ -340,7 +417,11 @@
         {
           "id": "alarms",
           "name": "Alarms",
-          "n": { "dev": 48, "stg": 36, "prod": 36 },
+          "n": {
+            "dev": 48,
+            "stg": 36,
+            "prod": 36
+          },
           "from": "counts.alarmsTotal",
           "meta": ["monitoring stack"],
           "d": {
@@ -355,7 +436,11 @@
         {
           "id": "alarms-fn-errors",
           "name": "Lambda error alarms",
-          "n": { "dev": 14, "stg": 10, "prod": 10 },
+          "n": {
+            "dev": 14,
+            "stg": 10,
+            "prod": 10
+          },
           "from": "counts.alarmsLambdaErrors",
           "meta": ["critical", "≥ 2 in two 1-min periods"],
           "d": {
@@ -368,7 +453,11 @@
         {
           "id": "alarms-fn-duration",
           "name": "Lambda duration alarms",
-          "n": { "dev": 14, "stg": 10, "prod": 10 },
+          "n": {
+            "dev": 14,
+            "stg": 10,
+            "prod": 10
+          },
           "from": "counts.alarmsLambdaDuration",
           "meta": ["critical", "p95 over 150 ms"],
           "d": {
@@ -382,7 +471,11 @@
         {
           "id": "alarms-fn-throttles",
           "name": "Lambda throttle alarms",
-          "n": { "dev": 14, "stg": 10, "prod": 10 },
+          "n": {
+            "dev": 14,
+            "stg": 10,
+            "prod": 10
+          },
           "from": "counts.alarmsLambdaThrottles",
           "meta": ["critical", "any throttle"],
           "d": {
@@ -395,7 +488,11 @@
         {
           "id": "alarms-dynamo",
           "name": "DynamoDB alarms",
-          "n": { "dev": 3, "stg": 3, "prod": 3 },
+          "n": {
+            "dev": 3,
+            "stg": 3,
+            "prod": 3
+          },
           "from": "counts.alarmsDynamo",
           "meta": ["critical"],
           "d": {
@@ -409,7 +506,11 @@
         {
           "id": "alarms-api",
           "name": "API alarms",
-          "n": { "dev": 3, "stg": 3, "prod": 3 },
+          "n": {
+            "dev": 3,
+            "stg": 3,
+            "prod": 3
+          },
           "from": "counts.alarmsApi",
           "meta": ["5xx and latency critical", "4xx warning"],
           "d": {
@@ -422,12 +523,16 @@
         {
           "id": "log-groups",
           "name": "Log groups",
-          "n": { "dev": 25, "stg": 25, "prod": 23 },
+          "n": {
+            "dev": 25,
+            "stg": 22,
+            "prod": 20
+          },
           "from": "counts.logGroups",
           "meta": ["1 year · 1 month in dev", "KMS"],
           "d": {
             "type": "AWS::Logs::LogGroup",
-            "role": "One per function, plus the WAF, the flow log and the test builds outside production.",
+            "role": "One per function, plus the WAF, the flow log and the test builds outside production; three fewer outside development, with the SAR and DSAR route functions.",
             "code": [
               ["lambda-construct.ts", "cdk/lib/constructs/lambda-construct.ts"],
               ["environment.ts", "cdk/constants/environment.ts"]
@@ -437,7 +542,11 @@
         {
           "id": "sns-topics",
           "name": "SNS topics",
-          "n": { "dev": 3, "stg": 4, "prod": 4 },
+          "n": {
+            "dev": 3,
+            "stg": 4,
+            "prod": 4
+          },
           "from": "counts.snsTopics",
           "meta": ["critical", "warning", "release", "backup outside dev"],
           "d": {
@@ -453,7 +562,11 @@
         {
           "id": "dashboards",
           "name": "Dashboards",
-          "n": { "dev": 2, "stg": 2, "prod": 2 },
+          "n": {
+            "dev": 2,
+            "stg": 2,
+            "prod": 2
+          },
           "from": "counts.dashboards",
           "meta": ["monitoring stack"],
           "d": {
@@ -474,12 +587,16 @@
         {
           "id": "iam-roles",
           "name": "IAM roles",
-          "n": { "dev": 29, "stg": 28, "prod": 26 },
+          "n": {
+            "dev": 29,
+            "stg": 25,
+            "prod": 23
+          },
           "from": "counts.iamRoles",
           "meta": ["every stack", "+1 per real consumer"],
           "d": {
             "type": "AWS::IAM::Role",
-            "role": "A role per function, the API's CloudWatch role, the test consumer role, custom-resource roles, the backup role outside development, the CodeBuild roles outside production.",
+            "role": "A role per function, the API's CloudWatch role, the test consumer role, custom-resource roles, the backup role outside development, the CodeBuild roles outside production; three fewer outside development, with the SAR and DSAR route functions.",
             "code": [
               ["lambda-construct.ts", "cdk/lib/constructs/lambda-construct.ts"],
               [
@@ -499,7 +616,11 @@
         {
           "id": "backup-vaults",
           "name": "Backup vaults",
-          "n": { "dev": 0, "stg": 1, "prod": 1 },
+          "n": {
+            "dev": 0,
+            "stg": 1,
+            "prod": 1
+          },
           "from": "counts.backupVaults",
           "meta": ["backup stack", "own key"],
           "d": {
@@ -511,7 +632,11 @@
         {
           "id": "backup-plans",
           "name": "Backup plans",
-          "n": { "dev": 0, "stg": 3, "prod": 3 },
+          "n": {
+            "dev": 0,
+            "stg": 3,
+            "prod": 3
+          },
           "from": "counts.backupPlans",
           "meta": ["daily 35 d", "monthly 1 y", "monthly 5 y"],
           "d": {
@@ -522,7 +647,11 @@
         {
           "id": "backup-selections",
           "name": "Backup selections",
-          "n": { "dev": 0, "stg": 4, "prod": 4 },
+          "n": {
+            "dev": 0,
+            "stg": 4,
+            "prod": 4
+          },
           "from": "counts.backupSelections",
           "meta": ["DynamoDB and RDS by ARN", "backup-plan tag"],
           "d": {
@@ -541,7 +670,11 @@
         {
           "id": "codebuild",
           "name": "CodeBuild projects",
-          "n": { "dev": 2, "stg": 2, "prod": 0 },
+          "n": {
+            "dev": 2,
+            "stg": 2,
+            "prod": 0
+          },
           "from": "counts.codeBuildProjects",
           "meta": ["e2e and perf stacks", "not in production"],
           "d": {
@@ -562,7 +695,11 @@
         {
           "id": "e2e-stacks",
           "name": "e2e stacks",
-          "n": { "dev": 1, "stg": 1, "prod": 0 },
+          "n": {
+            "dev": 1,
+            "stg": 1,
+            "prod": 0
+          },
           "from": "counts.e2eStacks",
           "meta": ["isNotProd"],
           "d": {
@@ -574,7 +711,11 @@
         {
           "id": "macie-stacks",
           "name": "Macie stacks",
-          "n": { "dev": 1, "stg": 1, "prod": 1 },
+          "n": {
+            "dev": 1,
+            "stg": 1,
+            "prod": 1
+          },
           "from": "counts.macieStacks",
           "meta": ["every environment"],
           "d": {

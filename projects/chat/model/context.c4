@@ -84,10 +84,11 @@ model {
       link https://github.com/govuk-once/govuk-chat-v2/blob/main/docs/adr/0002-use-python-for-ai-and-typescript-elsewhere.md 'adr 0002'
       metadata {
         type 'Software system · in scope'
-        tech 'AWS · TypeScript and Python · four stacks · eu-west-1'
+        tech 'AWS · TypeScript and Python · three stacks · eu-west-1'
         role 'Turns a question into an answer, streamed back a token at a time, and keeps the conversation so it can be continued.'
         facts [
-          'Two APIs, each with an agent of its own: a TypeScript API behind Cognito, and a Python one behind IAM. Both stream server-sent events.',
+          'One API behind Cognito, one agent behind it, and a web UI in front of it for people with a sign-in. The API streams server-sent events.',
+          'A Python API and a second agent were removed on 20 October 2026, after ADR 0002 moved HTTP APIs to TypeScript; their CloudFormation stacks are left in developers\' environments to delete by hand.',
           'The successor to GOV.UK Chat V1, and agentic rather than a single prompt — the decision and its alternatives are recorded as ADRs in the repository.',
           'Nothing here searches or retrieves GOV.UK content: there is no index, no vector store and no content API client anywhere in this repository.'
         ]
@@ -130,13 +131,12 @@ model {
     #request-path
     description 'the models'
     link https://github.com/govuk-once/govuk-chat-v2/blob/main/services/agui-agent/src/agui_agent/main.py 'agui_agent/main.py'
-    link https://github.com/govuk-once/govuk-chat-v2/blob/main/services/example-agent/src/example_agent/main.py 'example_agent/main.py'
     metadata {
       type 'AWS service · outside GOV.UK Once'
       tech 'Claude, through inference profiles'
-      role 'Answers. Two agents name two different models, and a third is used only to title a conversation.'
+      role 'Answers. The one agent names one model, Claude Sonnet 5 through an EU inference profile, at 4,000 tokens an answer.'
       facts [
-        'The agents are granted <code>bedrock:InvokeModel</code> and <code>InvokeModelWithResponseStream</code> on inference profiles and foundation models.'
+        'The agent is granted <code>bedrock:InvokeModel</code> and <code>InvokeModelWithResponseStream</code> on every inference profile and every foundation model, not only the one it names.'
       ]
       sourceId 'bedrock'
       order '6'
