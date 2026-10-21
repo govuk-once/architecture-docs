@@ -543,7 +543,62 @@ function markTabs() {
   });
 }
 
+/*
+ * Where the reader is looking, in terms that survive a rebuild. A state or Changes toggle
+ * composes a view of different size — the retired strip makes Changes taller — and a re-fit
+ * moves every box, which is the one thing a reader comparing two states, zoomed in on the
+ * part that differs, must not have happen. So once the reader has panned or zoomed (`held`,
+ * the same rule a resize follows) the canvas point under the stage centre and the on-screen
+ * scale are kept across a toggle. A reader who has not is re-fitted, so the strip of what a
+ * state retires is in view rather than under the floor. The tables strip keeps the section
+ * it was scrolled to either way. A new tab still fits, as before.
+ */
+function viewportAnchor() {
+  if (!view || view.type === "doc") return null;
+  const r = svg.getBoundingClientRect();
+  if (!r.width || !r.height) return null;
+  const m = Math.min(r.width / view.w, r.height / view.h);
+  return {
+    cx: (view.w / 2 - vp.x) / vp.k,
+    cy: (view.h / 2 - vp.y) / vp.k,
+    scale: vp.k * m,
+    held,
+  };
+}
+function restoreViewport(a) {
+  const r = svg.getBoundingClientRect();
+  if (!a || !r.width || !r.height || view.type === "doc") return;
+  const m = Math.min(r.width / view.w, r.height / view.h);
+  const k = a.scale / m;
+  vp = { k, x: view.w / 2 - a.cx * k, y: view.h / 2 - a.cy * k };
+  held = a.held;
+  apply();
+}
+function tablesAnchor() {
+  const body = document.getElementById("tbl-body");
+  if (!body || !body.scrollTop) return null;
+  const top = body.scrollTop;
+  for (const s of body.querySelectorAll("section.grp"))
+    if (s.offsetTop + s.offsetHeight > top)
+      return {
+        name: s.querySelector("h3")?.dataset.name,
+        delta: top - s.offsetTop,
+      };
+  return null;
+}
+function restoreTables(a) {
+  const body = document.getElementById("tbl-body");
+  if (!a || !body) return;
+  const s = [...body.querySelectorAll("section.grp")].find(
+    (x) => x.querySelector("h3")?.dataset.name === a.name,
+  );
+  body.scrollTop = s ? s.offsetTop + a.delta : 0;
+}
+
 function applyState() {
+  /* The same tab, re-composed, and a place the reader chose: keep it. Otherwise fit. */
+  const keep =
+    held && view && view.id === baseView.id ? viewportAnchor() : null;
   view = compose(baseView);
   sel = null;
   /* The toggle survives a move from one state to another — a reader comparing S2 and S3
@@ -559,6 +614,7 @@ function applyState() {
   writeHash();
   build();
   fit();
+  restoreViewport(keep);
   renderIdle();
 }
 
@@ -1255,6 +1311,7 @@ function renderTables() {
     return;
   }
   const names = t.map((x) => x.name).join(" · ");
+  const place = tablesAnchor();
   box.innerHTML = `
     <button class="tbl-head" id="tbl-toggle" aria-expanded="${tablesOpen}" aria-controls="tbl-body">
       <span class="caret" aria-hidden="true"></span>
@@ -1271,6 +1328,7 @@ function renderTables() {
   box
     .querySelector("#tbl-toggle")
     .addEventListener("click", () => setTablesOpen(!tablesOpen));
+  restoreTables(place);
 }
 
 /* Colour carries ownership, border carries plane. They are two axes, so the legend
