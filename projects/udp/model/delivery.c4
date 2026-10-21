@@ -248,6 +248,9 @@ model {
         type 'Reusable workflow · GitHub environment'
         tech 'OIDC to DEV_DEPLOYMENT_ROLE · pnpm cdk:deploy:dev'
         role 'Writes the release-candidate version into <code>package.json</code> so it lands as the <code>Version</code> tag on every stack, deploys all stacks, and reads the e2e project name back from the stack outputs.'
+        facts [
+          'Broken as committed since Nx was removed (udp-420, #361, 20 October 2026): the reusable workflow declares its input as <code>deploy-script</code> but reads <code>inputs.deploy-target</code>, so <code>DEPLOY_SCRIPT</code> is empty and the deploy step runs <code>pnpm run</code> with no script name. Staging and production go through the same workflow.'
+        ]
         sourceId 'dev'
         order '4'
         x '724'
