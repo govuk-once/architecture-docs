@@ -25,7 +25,6 @@ import { existsSync, mkdirSync, rmSync } from "node:fs";
 import path from "node:path";
 
 import { DOCS_ROOT, inDocs } from "./lib/paths.js";
-import { pinnedRef } from "./lib/sourcePin.js";
 import {
   loadProjects,
   locateOrThrow,
@@ -34,6 +33,7 @@ import {
   type Source,
   sourceLabel,
 } from "./lib/projects.js";
+import { pinnedRef } from "./lib/sourcePin.js";
 import {
   changedFiles,
   type Commit,

@@ -8,7 +8,9 @@
  * says what has been read, and the schedule over the branch still reports what has not.
  *
  * `ARCH_SOURCE_REF_FLEX` pins a project's one source; `ARCH_SOURCE_REF_APP_IOS` pins one
- * of several. Ids are upper-cased with `-` as `_`. An empty value is no pin.
+ * of several. Ids are upper-cased with `-` as `_`. An empty value is no pin. The value is a
+ * full commit sha: git fetches a commit by its whole name and refuses an abbreviation, and
+ * the refusal — "couldn't find remote ref" — reads like a typo in the repository, not the pin.
  */
 export function pinEnvName(projectId: string, sourceId: string): string {
   const up = (s: string) => s.toUpperCase().replaceAll("-", "_");
@@ -24,5 +26,10 @@ export function pinnedRef(
 ): { name: string; ref: string } | null {
   const name = pinEnvName(projectId, sourceId);
   const ref = env[name]?.trim();
-  return ref ? { name, ref } : null;
+  if (!ref) return null;
+  if (!/^[0-9a-f]{40}$/i.test(ref))
+    throw new Error(
+      `${name} is "${ref}", which is not a full commit sha — git fetches a commit by its whole 40-character name`,
+    );
+  return { name, ref };
 }
