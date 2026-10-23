@@ -1,22 +1,22 @@
 /**
  * Derives the architecture facts that can drift, for every project that declares a way to
- * derive them, from the CloudFormation `pnpm synth` wrote for each one.
+ * derive them, from the CloudFormation each one's source holds or `pnpm synth` wrote.
  *
  * This file owns the loop, the skip decision and the recording. What is counted is the
  * project's `derive.counts`, read by `scripts/derive/cloudformation.ts` — no TypeScript per
  * project. A project with no `derive` block has no generated facts, and that is a
  * supported state.
  *
- * Deriving is skipped when nothing that feeds it has moved: the source commit, the code
+ * Deriving is skipped when nothing that feeds it has moved: each source's commit, the code
  * that reads it and the output file are all recorded in that project's
- * architecture-source.json, and a run that finds all three unchanged leaves the facts
+ * architecture-source.json, and a run that finds all of them unchanged leaves the facts
  * alone. See lib/sourceState.ts.
  *
  * Run: pnpm facts               every project
  *      pnpm facts flex          one of them
  *      pnpm facts --force       derive regardless
  */
-import { writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import { format } from "prettier";
@@ -24,7 +24,7 @@ import { format } from "prettier";
 import { loadDerivation } from "./derive/index.js";
 import { DOCS_ROOT } from "./lib/paths.js";
 import {
-  assertSourceRoot,
+  assertCheckouts,
   builtFrom,
   type Project,
   selectProjects,
@@ -35,10 +35,11 @@ import {
   ensureRange,
   hashFile,
   headCommit,
-  readState,
+  readStates,
   short,
+  type SourceState,
   staleness,
-  writeState,
+  writeStates,
 } from "./lib/sourceState.js";
 
 /**
@@ -56,34 +57,49 @@ const forcedBy = forcedBecause();
 const rel = (file: string) => path.relative(DOCS_ROOT, file);
 
 async function deriveProject(project: Project): Promise<void> {
-  assertSourceRoot(project);
+  assertCheckouts(project);
   const derivation = project.derive
     ? await loadDerivation(project.derive.module)
     : null;
 
-  const head = headCommit(project);
-  const state = readState(project);
-  const stale = staleness(project, derivation, state, head);
-  if (!forcedBy && stale === null) {
-    console.log(`  current at ${short(head.sha)} — ${head.subject}`);
+  const states = readStates(project);
+  const rows = project.sources.map((source) => ({
+    source,
+    head: headCommit(source),
+    state: states[source.id] ?? null,
+    // With several sources a line has to say which one it is about.
+    name: project.qualified ? `${source.id}: ` : "",
+  }));
+  const stale = rows.flatMap((r) => {
+    const why = staleness(project, r.source, derivation, r.state, r.head);
+    return why ? [`${r.name}${why}`] : [];
+  });
+  if (!forcedBy && !stale.length) {
+    for (const r of rows)
+      console.log(
+        `  ${r.name}current at ${short(r.head.sha)} — ${r.head.subject}`,
+      );
     console.log(
       "  nothing it derives from has moved, so nothing was re-derived",
     );
     return;
   }
-  console.log(`  deriving: ${stale ?? forcedBy ?? ""}`);
+  console.log(`  deriving: ${stale.join("; ") || forcedBy || ""}`);
   // Naming the range turns "something moved" into a list of commits to actually read;
   // `pnpm drift` then says which of them touch a file the docs cite.
-  if (state && state.derived.sha !== head.sha)
-    console.log(
-      ensureRange(project, state.derived.sha)
-        ? `  ${String(commitsBetween(project, state.derived.sha, head.sha).length)} commits since ` +
-            `${short(state.derived.sha)} — run \`pnpm drift ${project.id}\` for the cited files`
-        : `  the range since ${short(state.derived.sha)} cannot be listed in this checkout`,
-    );
+  for (const r of rows)
+    if (r.state && r.state.derived.sha !== r.head.sha)
+      console.log(
+        ensureRange(r.source, r.state.derived.sha)
+          ? `  ${r.name}${String(commitsBetween(r.source, r.state.derived.sha, r.head.sha).length)} commits since ` +
+              `${short(r.state.derived.sha)} — run \`pnpm drift ${project.id}\` for the cited files`
+          : `  ${r.name}the range since ${short(r.state.derived.sha)} cannot be listed in this checkout`,
+      );
 
   if (derivation) {
     const facts = await derivation.derive(project);
+    // A new project has no derived/ yet; its first derivation is what creates it.
+    mkdirSync(path.dirname(project.factsPath), { recursive: true });
     // Formatted with prettier so the committed file is lint-clean by construction —
     // eslint checks it like any other JSON, and nobody should have to remember --fix.
     writeFileSync(
@@ -102,25 +118,33 @@ async function deriveProject(project: Project): Promise<void> {
   // Recorded only now, and including a hash of what was just written, so the state can
   // never claim a derivation that did not finish or an output somebody edited after.
   // `read` is not this command's to touch: deriving is not reading.
-  await writeState(project, {
-    repo: project.source.repo,
-    ref: project.source.ref,
-    derived: {
-      sha: head.sha,
-      subject: head.subject,
-      committed: head.committed,
-      builtFrom: builtFrom(project),
-      derivation: derivationHash(project, derivation),
-      facts: derivation ? hashFile(project.factsPath) : "",
-    },
-    read: state?.read ?? null,
-  });
-  console.log(
-    `  wrote ${rel(project.statePath)} — derived from ${short(head.sha)}` +
-      (state?.read
-        ? `, read up to ${short(state.read.sha)}`
-        : ", nothing recorded as read"),
+  const next: Record<string, SourceState> = Object.fromEntries(
+    rows.map((r) => [
+      r.source.id,
+      {
+        repo: r.source.repo,
+        ref: r.source.ref,
+        derived: {
+          sha: r.head.sha,
+          subject: r.head.subject,
+          committed: r.head.committed,
+          builtFrom: builtFrom(project),
+          derivation: derivationHash(project, derivation),
+          facts: derivation ? hashFile(project.factsPath) : "",
+        },
+        read: r.state?.read ?? null,
+      },
+    ]),
   );
+  await writeStates(project, next);
+  for (const r of rows)
+    console.log(
+      `  ${r.name}derived from ${short(r.head.sha)}` +
+        (r.state?.read
+          ? `, read up to ${short(r.state.read.sha)}`
+          : ", nothing recorded as read"),
+    );
+  console.log(`  wrote ${rel(project.statePath)}`);
 }
 
 for (const project of selectProjects(process.argv.slice(2))) {

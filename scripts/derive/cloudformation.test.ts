@@ -31,8 +31,11 @@ function project(root: string, counts: Record<string, CountSpec>): Project {
   ];
   return {
     id: "t",
-    config: { stages } as Project["config"],
-    source: { repo: "x", ref: "main", root: "." },
+    config: { stages, synth: {} } as Project["config"],
+    sources: [
+      { id: "t", repo: "x", ref: "main", root: ".", url: "", dir: root },
+    ],
+    qualified: false,
     derive: {
       module: "cloudformation",
       inputs: { templates: "cdk.out/{id}/*.template.json" },
@@ -42,7 +45,6 @@ function project(root: string, counts: Record<string, CountSpec>): Project {
     modelDir: root,
     factsPath: path.join(root, "f.json"),
     statePath: path.join(root, "s.json"),
-    sourceRoot: root,
     pagePath: path.join(root, "index.html"),
     href: "t/",
   };
@@ -254,5 +256,208 @@ describe("internal", () => {
         synth: "development",
       }),
     ).toBe("cdk.out/dev/development-x");
+  });
+});
+
+/**
+ * A SAM or plain CloudFormation app is not synthesised: the template as written is what
+ * deploys, the same file for every stage, and its Conditions decide what each stage gets.
+ */
+describe("templates read as written", () => {
+  function written(files: Record<string, string>): string {
+    const root = mkdtempSync(path.join(tmpdir(), "sam-"));
+    for (const [rel, text] of Object.entries(files)) {
+      const file = path.join(root, rel);
+      mkdirSync(path.dirname(file), { recursive: true });
+      writeFileSync(file, text);
+    }
+    return root;
+  }
+
+  const ENVS = [
+    {
+      id: "dev",
+      label: "Dev",
+      facts: "dev",
+      parameters: { Environment: "dev" },
+    },
+    {
+      id: "int",
+      label: "Integration",
+      facts: "integration",
+      parameters: { Environment: "integration" },
+    },
+    {
+      id: "prod",
+      label: "Prod",
+      facts: "production",
+      parameters: { Environment: "production" },
+    },
+  ];
+
+  function sam(
+    root: string,
+    counts: Record<string, CountSpec>,
+    stages: Project["config"]["stages"] = ENVS,
+  ): Project {
+    return {
+      ...project(root, counts),
+      config: { stages } as Project["config"],
+      derive: {
+        module: "cloudformation",
+        inputs: { templates: "services/*/template.yaml" },
+        counts,
+      },
+    };
+  }
+
+  const AUTH = [
+    "Transform: AWS::Serverless-2016-10-31",
+    "Parameters:",
+    "  Environment:",
+    "    Type: String",
+    "Conditions:",
+    "  IsProduction: !Equals [!Ref Environment, production]",
+    "  IsNotProduction: !Not [!Condition IsProduction]",
+    "  IsTesting: !Or",
+    "    - !Equals [!Ref Environment, dev]",
+    "    - !Equals [!Ref Environment, staging]",
+    "Resources:",
+    "  Proxy:",
+    "    Type: AWS::Serverless::Function",
+    "    Properties:",
+    "      Role: !GetAtt ProxyRole.Arn",
+    "  PagerDutyTest:",
+    "    Type: AWS::Serverless::Function",
+    "    Condition: IsNotProduction",
+    "  Smoke:",
+    "    Type: AWS::Serverless::Function",
+    "    Condition: IsTesting",
+    "  ProxyErrors:",
+    "    Type: AWS::CloudWatch::Alarm",
+    "    Properties:",
+    "      Threshold: 5",
+    "      AlarmActions:",
+    "        - !Ref AlarmTopic",
+    "",
+  ].join("\n");
+  const CHAT = [
+    "Resources:",
+    "  Authorizer:",
+    "    Type: AWS::Serverless::Function",
+    "",
+  ].join("\n");
+  const fixtureSam = () =>
+    written({
+      "services/auth/template.yaml": AUTH,
+      "services/chat/template.yaml": CHAT,
+    });
+
+  it("counts per stage by evaluating each resource's Condition against its parameters", async () => {
+    const facts = await derivation.derive(
+      sam(fixtureSam(), { fns: { type: "AWS::Serverless::Function" } }),
+    );
+    // dev: all four. integration: not the smoke test. production: proxy and chat only.
+    expect((facts.counts as Record<string, unknown>).fns).toEqual({
+      dev: 4,
+      integration: 3,
+      production: 2,
+    });
+  });
+
+  it("names a template by its path, since every SAM template is template.yaml", async () => {
+    const facts = await derivation.derive(
+      sam(fixtureSam(), {
+        fns: {
+          type: "AWS::Serverless::Function",
+          perTemplate: "^services/(?<name>[a-z]+)/template$",
+        },
+      }),
+    );
+    expect((facts.counts as Record<string, unknown>).fns).toEqual({
+      auth: { dev: 3, integration: 2, production: 1 },
+      chat: { dev: 1, integration: 1, production: 1 },
+    });
+  });
+
+  it("reads a short-form intrinsic as what it refers to", async () => {
+    const facts = await derivation.derive(
+      sam(fixtureSam(), {
+        alarms: {
+          type: "AWS::CloudWatch::Alarm",
+          distinctBy: "construct",
+          capture: ["Threshold", "AlarmActions"],
+        },
+      }),
+    );
+    expect((facts.counts as Record<string, unknown>).alarms).toEqual([
+      {
+        scope: "",
+        id: "ProxyErrors",
+        stages: ["dev", "integration", "production"],
+        Threshold: "5",
+        AlarmActions: "AlarmTopic",
+      },
+    ]);
+  });
+
+  /* A stage that does not say what it deploys with cannot evaluate a condition; it
+     counts everything, which is what a synthesised stage always did. */
+  it("counts every resource for a stage that declares no parameters", async () => {
+    const stages = [{ id: "all", label: "All", facts: "all" }];
+    const facts = await derivation.derive(
+      sam(fixtureSam(), { fns: { type: "AWS::Serverless::Function" } }, stages),
+    );
+    expect((facts.counts as Record<string, unknown>).fns).toEqual({ all: 4 });
+  });
+
+  it("refuses a condition it cannot evaluate, rather than guessing", async () => {
+    const root = written({
+      "services/x/template.yaml": [
+        "Conditions:",
+        "  InRegion: !Equals [!FindInMap [Regions, !Ref Env, Name], eu-west-2]",
+        "Resources:",
+        "  Fn:",
+        "    Type: AWS::Serverless::Function",
+        "    Condition: InRegion",
+        "",
+      ].join("\n"),
+    });
+    await expect(
+      derivation.derive(
+        sam(root, { fns: { type: "AWS::Serverless::Function" } }),
+      ),
+    ).rejects.toThrow(/cannot evaluate/);
+  });
+
+  it("refuses a parameter no stage gives and the template does not default, and takes a Default", async () => {
+    const template = (dflt: string) =>
+      [
+        "Parameters:",
+        "  Tier:",
+        "    Type: String",
+        ...(dflt ? [`    Default: ${dflt}`] : []),
+        "Conditions:",
+        "  IsPlus: !Equals [!Ref Tier, plus]",
+        "Resources:",
+        "  Fn:",
+        "    Type: AWS::Serverless::Function",
+        "    Condition: IsPlus",
+        "",
+      ].join("\n");
+    const counts = { fns: { type: "AWS::Serverless::Function" } };
+    await expect(
+      derivation.derive(
+        sam(written({ "services/x/template.yaml": template("") }), counts),
+      ),
+    ).rejects.toThrow(/Tier has no value for stage "dev"/);
+    const facts = await derivation.derive(
+      sam(written({ "services/x/template.yaml": template("plus") }), counts),
+    );
+    expect((facts.counts as Record<string, unknown>).fns).toEqual({
+      dev: 1,
+      integration: 1,
+      production: 1,
+    });
   });
 });

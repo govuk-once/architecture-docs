@@ -1,0 +1,224 @@
+// UNS architecture — Read-back API.
+//
+// What FLEX reads and changes on the app's behalf: a person's notifications, and the
+// groups their device belongs to. Numbered from the caller down.
+
+model {
+
+  flex_flex = internal '1. FLEX · uns gateway' {
+    #request-path
+    description 'through its own VPC endpoint'
+    link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/cdk.postdeploy.ssm.ts 'cdk.postdeploy.ssm.ts'
+    metadata {
+      type 'GOV.UK Once system · consumer'
+      tech 'SigV4 with an invoker role · x-api-key'
+      role 'Identifies the person by query string — <code>externalUserID</code> or <code>pushID</code> — the same id UDP handed back on the send path. There is no header, token or udpId.'
+      sourceId 'flex'
+      order '1'
+      x '64'
+      y '30'
+      w '262'
+      h '62'
+      ownership 'govuk'
+    }
+  }
+
+  flex_secret = platform 'flex/consumer secret' {
+    #off-request-path
+    description 'written after every deploy'
+    link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/cdk.postdeploy.ssm.ts 'cdk.postdeploy.ssm.ts'
+    link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/constructs/UNSFlexResources.ts 'UNSFlexResources.ts'
+    metadata {
+      type 'AWS::SecretsManager::Secret · own KMS key'
+      tech 'readable from FLEX\'s account'
+      role 'The private API\'s execute-api URL, its key, the invoker role ARN and the region — looked up from the deployed gateway by a script, not by CDK. <code>apiUrl</code> is a placeholder underscore.'
+      sourceId 'secret'
+      order '2'
+      x '350'
+      y '30'
+      w '262'
+      h '62'
+      ownership 'uns'
+      awsIcon 'secretsmanager'
+    }
+  }
+
+  flex_api = platform '2. FLEX private API' {
+    #request-path
+    description 'PRIVATE · IAM · WAF · 100 rps'
+    link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/constructs/UNSFlexResources.ts 'UNSFlexResources.ts'
+    link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/constructs/bases/UNSApiGatewayConstruct.ts 'UNSApiGatewayConstruct.ts'
+    metadata {
+      type 'AWS::ApiGateway::RestApi'
+      tech 'apigw-flex-private · stage api · quota 100,000 a day'
+      role 'Private when SSM names FLEX\'s account and endpoint ids: a Deny for any other <code>aws:SourceVpce</code>, IAM on every method, an invoker role FLEX\'s account may assume. An API key is required regardless.'
+      facts [
+        'Without those two parameters the same gateway synthesises as regional with no resource policy and no IAM. The repository cannot show which applies where.',
+        'The burst limit falls back to the rate limit, so the effective burst is 100, not the 200 written.'
+      ]
+      sourceId 'api'
+      order '3'
+      x '64'
+      y '160'
+      w '262'
+      h '62'
+      ownership 'uns'
+      awsIcon 'apigateway'
+    }
+  }
+
+  flex_public = platform 'FLEX public API · dev only' {
+    #off-request-path
+    description 'apigw-flex · flex.{zone}'
+    link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/constructs/UNSFlexResources.ts 'UNSFlexResources.ts'
+    link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/config.ts 'config.ts'
+    metadata {
+      type 'AWS::ApiGateway::RestApi'
+      tech 'REGIONAL · API key only · usage plan e2e'
+      role 'The same six routes on a public gateway with no mTLS and no IAM, for the end-to-end tests. Created in development and developer sandboxes only.'
+      sourceId 'public'
+      order '4'
+      x '350'
+      y '160'
+      w '262'
+      h '62'
+      ownership 'uns'
+      awsIcon 'apigateway'
+    }
+  }
+
+  flex_notifications = platform '3. Notification routes · 4' {
+    #request-path
+    description 'list · one · status · delete'
+    link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/lambdas/flex/http.getNotifications/handler.ts 'http.getNotifications/handler.ts'
+    link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/lambdas/flex/http.patchNotification/handler.ts 'http.patchNotification/handler.ts'
+    link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/lambdas/flex/http.deleteNotification/handler.ts 'http.deleteNotification/handler.ts'
+    link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/lambdas/interfaces/IFlexNotification.ts 'IFlexNotification.ts'
+    metadata {
+      type 'AWS::Lambda::Function ×4'
+      tech 'not in the VPC'
+      role 'A list is a query on <code>ExternalUserIDIndex</code>, expired and hidden items filtered in code; one item is a get with an ownership check that answers 404, not 403.'
+      facts [
+        'PATCH and DELETE write nothing themselves: they publish <code>READ</code>, <code>MARKED_AS_UNREAD</code> or <code>HIDDEN</code> to the analytics queue and answer 202 or 204. The status the app sees next is whatever the analytics function has appended since.',
+        'The sender\'s display name comes from the organisations table; message title and body fall back to the notification\'s.'
+      ]
+      sourceId 'notifications'
+      order '5'
+      x '64'
+      y '290'
+      w '262'
+      h '62'
+      ownership 'uns'
+      awsIcon 'lambda'
+    }
+  }
+
+  flex_groups = platform '4. Group routes · 2' {
+    #request-path
+    description 'GET /v1/groups · POST /v1/groups'
+    link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/lambdas/flex/http.getGroups/handler.ts 'http.getGroups/handler.ts'
+    link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/lambdas/flex/http.modifyGroups/handler.ts 'http.modifyGroups/handler.ts'
+    link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/lambdas/interfaces/IModifyGroups.ts 'IModifyGroups.ts'
+    metadata {
+      type 'AWS::Lambda::Function ×2 · feature-flagged'
+      tech 'off in production'
+      role 'What a device subscribes to: a list of <code>{Namespace, Group, Subgroup?}</code> by <code>pushID</code>, and a batch of <code>JOIN</code> and <code>LEAVE</code> actions that deletes then re-creates rows.'
+      sourceId 'groups'
+      order '6'
+      x '350'
+      y '290'
+      w '262'
+      h '62'
+      ownership 'uns'
+      awsIcon 'lambda'
+    }
+  }
+
+  flex_messages = platform '5. Messages table' {
+    #request-path
+    description 'ExternalUserIDIndex'
+    link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/constructs/UNSCommon.ts 'UNSCommon.ts'
+    link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/common/repositories/interfaces/IMessageRecord.ts 'IMessageRecord.ts'
+    metadata {
+      type 'AWS::DynamoDB::Table'
+      tech 'pk NotificationID · TTL ExpirationDateTime'
+      role 'One item per notification with its <code>Events</code> list: every state it has been through, appended by the analytics function.'
+      sourceId 'messages'
+      order '7'
+      x '64'
+      y '420'
+      w '262'
+      h '62'
+      ownership 'uns'
+      awsIcon 'dynamodb'
+    }
+  }
+
+  flex_groupstore = platform '6. Group store table' {
+    #request-path
+    description 'PushIDIndex · CompositeIDIndex'
+    link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/constructs/UNSCommon.ts 'UNSCommon.ts'
+    link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/common/repositories/groupStoreDynamoRepository.ts 'groupStoreDynamoRepository.ts'
+    metadata {
+      type 'AWS::DynamoDB::Table · feature-flagged'
+      tech 'pk GroupID · sk PushID'
+      role 'One row per subscription, queried by device here and by group on the send path.'
+      sourceId 'groupstore'
+      order '8'
+      x '350'
+      y '420'
+      w '262'
+      h '62'
+      ownership 'uns'
+      awsIcon 'dynamodb'
+    }
+  }
+
+  flex_analytics = platform '7. Analytics queue' {
+    #request-path
+    description 'READ · MARKED_AS_UNREAD · HIDDEN'
+    link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/lambdas/pso/sqs.analytics/handler.ts 'sqs.analytics/handler.ts'
+    metadata {
+      type 'AWS::SQS::Queue'
+      tech 'the same queue the send path uses'
+      role 'A status change from the app is an event like any other: appended to the record, counted on the campaign, logged for export.'
+      sourceId 'analytics'
+      order '9'
+      x '64'
+      y '550'
+      w '262'
+      h '62'
+      ownership 'uns'
+    }
+  }
+
+  flex_flex -> flex_secret 'reads' {
+    metadata { protocol 'Secrets Manager, cross-account' auth 'The secret and key policies name FLEX\'s account' carries 'URL, key, role ARN' edgeStyle 'dash' order '1' }
+  }
+  flex_flex -> flex_api 'HTTPS · SigV4' {
+    metadata { protocol 'PrivateLink through FLEX\'s execute-api endpoint' auth 'The invoker role, then the API key' carries 'Six routes' order '2' }
+  }
+  flex_api -> flex_notifications 'AWS_PROXY' {
+    metadata { protocol 'Lambda proxy' auth 'Invoke permission' carries 'externalUserID or pushID, a notification id' order '3' }
+  }
+  flex_api -> flex_groups 'AWS_PROXY' {
+    metadata { protocol 'Lambda proxy' auth 'Invoke permission' carries 'pushID; join and leave actions' order '4' }
+  }
+  flex_notifications -> flex_messages 'Query · GetItem' {
+    metadata { protocol 'DynamoDB' auth 'Function role: read' carries 'A person\'s notifications' order '5' }
+  }
+  flex_groups -> flex_groupstore 'Query · Delete · BatchWrite' {
+    metadata { protocol 'DynamoDB' auth 'Function role: read and write' carries 'A device\'s subscriptions' order '6' }
+  }
+  flex_messages -> flex_analytics 'PATCH and DELETE publish' {
+    metadata { protocol 'SQS' auth 'Function role: SendMessage' carries 'A status event for the notification just checked' order '7' }
+  }
+}
+
+views {
+  view flex {
+    title 'Read-back API'
+    include flex_flex, flex_secret, flex_api, flex_public
+    include flex_notifications, flex_groups, flex_messages, flex_groupstore, flex_analytics
+  }
+}

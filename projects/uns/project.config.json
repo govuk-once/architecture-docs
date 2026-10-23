@@ -1,0 +1,37 @@
+{
+  "name": "UNS",
+  "title": "UNS Architecture Explorer",
+  "tagline": "Unified Notification Service",
+  "blurb": "GOV.UK Once’s notification system: government services post a message or a group message over mTLS, UNS validates, processes and dispatches it, and FLEX reads the result back for the app. One CDK app, two APIs.",
+  "repo": "https://github.com/govuk-once/gds-unified-notification-service/blob/main/",
+  "inventoryView": "resources",
+  "inventoryLabel": "AWS resources",
+  "iconLabel": "AWS icons",
+  "filterHint": "Filter — try SQS, mTLS, alarm, production",
+  "kinds": [
+    { "id": "person", "label": "Person", "colour": "purple" },
+    { "id": "uns", "label": "UNS", "colour": "blue" },
+    { "id": "govuk", "label": "GOV.UK Once", "colour": "teal" },
+    { "id": "third", "label": "Outside GOV.UK Once", "colour": "amber" }
+  ],
+  "stages": [
+    {
+      "id": "dev",
+      "label": "Development",
+      "facts": "development",
+      "synth": "dev"
+    },
+    { "id": "stg", "label": "Staging", "facts": "staging", "synth": "stg" },
+    {
+      "id": "prod",
+      "label": "Production",
+      "facts": "production",
+      "synth": "prod"
+    }
+  ],
+  "source": {
+    "repo": "https://github.com/govuk-once/gds-unified-notification-service.git",
+    "ref": "main",
+    "root": ".sources/uns"
+  }
+}

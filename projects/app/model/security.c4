@@ -1,0 +1,494 @@
+// GOV.UK App architecture — Security.
+//
+// The trust boundary between the phone and the backend: what the phone does before a
+// request leaves it, what guards each way in, and the controls that bound all of them in a
+// column at the side. Each client-side box sits above the backend box it talks to.
+
+model {
+
+  security_device = boundary 'On the phone' {
+    metadata {
+      type 'Trust boundary'
+      tech '—'
+      role 'Everything here runs on a device nobody here controls.'
+      facts [
+        'The client secret, the config signing key and every backend credential stay on the far side of this line.',
+        'Neither app pins certificates: Android trusts the system CAs, and user-added CAs in debug builds only; iOS uses a default URLSession.'
+      ]
+      sourceId 'device'
+      order '0'
+      x '40'
+      y '30'
+      w '1318'
+      h '134'
+      boundary 'hard'
+    }
+
+    security_appcheck = internal 'App Check provider' {
+      #request-path
+      description 'App Attest · Integrity'
+      link https://github.com/govuk-once/govuk-mobile-ios-app/blob/main/Production/govuk_ios/Services/AppAttest/GovUKProviderFactory.swift 'ios · GovUKProviderFactory.swift'
+      link https://github.com/govuk-once/govuk-mobile-ios-app/blob/main/Production/govuk_ios/Services/AppAttest/AppAttestService.swift 'ios · AppAttestService.swift'
+      link https://github.com/govuk-once/govuk-mobile-android-app/blob/main/app/src/main/kotlin/uk/gov/govuk/MainActivity.kt 'android · MainActivity.kt'
+      link https://github.com/govuk-once/govuk-mobile-android-app/blob/main/data/src/main/kotlin/uk/gov/govuk/data/auth/FirebaseAttestationProvider.kt 'android · FirebaseAttestationProvider.kt'
+      metadata {
+        type 'Firebase App Check'
+        tech 'DeviceCheck App Attest · Play Integrity'
+        role 'Proves a token request came from the real app on a real device — when the backend asks.'
+        facts [
+          'iOS release builds use App Attest; staging builds a provider that returns an empty token. Android installs Play Integrity in every build type.',
+          'Fetched only when the app asks for tokens, and sent only to the token proxy.'
+        ]
+        sourceId 'appcheck'
+        order '1'
+        x '64'
+        y '80'
+        w '200'
+        h '62'
+        ownership 'app'
+      }
+    }
+
+    security_signin = internal 'Sign-in client' {
+      #request-path
+      description 'AppAuth · ephemeral tab'
+      link https://github.com/govuk-once/govuk-mobile-ios-app/blob/main/Production/govuk_ios/ServiceClients/AuthenticationServiceClient.swift 'ios · AuthenticationServiceClient.swift'
+      link https://github.com/govuk-once/govuk-mobile-ios-app/blob/main/Production/govuk_ios/Services/JailbreakDetectionService.swift 'ios · JailbreakDetectionService.swift'
+      link https://github.com/govuk-once/govuk-mobile-android-app/blob/main/data/src/main/kotlin/uk/gov/govuk/data/auth/AuthRepo.kt 'android · AuthRepo.kt'
+      link https://github.com/govuk-once/govuk-mobile-android-app/blob/main/app/src/main/kotlin/uk/gov/govuk/TimeoutManager.kt 'android · TimeoutManager.kt'
+      metadata {
+        type 'OAuth client'
+        tech 'AppAuth · PKCE · 15-minute session'
+        role 'Runs the authorization code flow and keeps the session honest afterwards.'
+        facts [
+          'The browser session is ephemeral on both platforms, so no One Login cookie outlives the sign-in.',
+          'A session ends after 15 minutes without interaction, with a warning at 13.',
+          'iOS refuses to start on a jailbroken device. Nothing equivalent was found on Android.'
+        ]
+        sourceId 'signin'
+        order '2'
+        x '278'
+        y '80'
+        w '200'
+        h '62'
+        ownership 'app'
+      }
+    }
+
+    security_dvlaclient = internal 'DVLA link client' {
+      #request-path
+      description 'token in the body'
+      link https://github.com/govuk-once/govuk-mobile-ios-app/blob/main/Production/govuk_ios/Networking/GOVRequest/GovRequest+Authentication.swift 'ios · GovRequest+Authentication.swift'
+      link https://github.com/govuk-once/govuk-mobile-android-app/blob/main/feature/dvla/src/main/kotlin/uk/gov/govuk/dvla/linking/data/LinkingRepo.kt 'android · LinkingRepo.kt'
+      metadata {
+        type 'Feature client'
+        tech 'POST /linking/verification'
+        role 'Asks the backend for the token a DVLA link starts with.'
+        facts [
+          'Sends the access token as JSON, with no Authorization header — the one place the token is a payload rather than a credential.'
+        ]
+        sourceId 'dvlaclient'
+        order '3'
+        x '492'
+        y '80'
+        w '200'
+        h '62'
+        ownership 'app'
+      }
+    }
+
+    security_chatclient = internal 'Chat client' {
+      #request-path
+      description 'Bearer · refresh on 401'
+      link https://github.com/govuk-once/govuk-mobile-android-app/blob/main/feature/chat/src/main/kotlin/uk/gov/govuk/chat/data/remote/ApiCall.kt 'android · chat · ApiCall.kt'
+      link https://github.com/govuk-once/govuk-mobile-ios-app/blob/main/Production/govuk_ios/Networking/GOVRequest/GOVRequest+Chat.swift 'ios · GOVRequest+Chat.swift'
+      metadata {
+        type 'Feature client'
+        tech 'Cognito access token'
+        role 'Sends the same access token FLEX gets, to the chat proxy.'
+        facts [
+          'A 401 or 403 refreshes the token once and retries once, on both platforms.'
+        ]
+        sourceId 'chatclient'
+        order '4'
+        x '706'
+        y '80'
+        w '200'
+        h '62'
+        ownership 'app'
+      }
+    }
+
+    security_verifier = internal 'Config verifier' {
+      #request-path
+      description 'P-256 · compiled-in key'
+      link https://github.com/govuk-once/govuk-mobile-ios-app/blob/main/Production/govuk_ios/Networking/APIServiceClient.swift 'ios · APIServiceClient.swift'
+      link https://github.com/govuk-once/govuk-mobile-android-app/blob/main/config/src/main/kotlin/uk/gov/govuk/config/SignatureValidator.kt 'android · SignatureValidator.kt'
+      link https://github.com/govuk-once/govuk-mobile-android-app/blob/main/app/src/main/kotlin/uk/gov/govuk/AppViewModel.kt 'android · AppViewModel.kt'
+      metadata {
+        type 'Signature check'
+        tech 'ECDSA P-256 · SHA-256'
+        role 'Refuses a config or topic page whose signature does not verify.'
+        facts [
+          'The public key ships in the app — <code>integration_pubkey</code> on iOS, <code>CONFIG_PUBLIC_KEY</code> on Android — the same key for every build.',
+          'A bad signature stops the app: Android shows its forced-update screen.'
+        ]
+        sourceId 'verifier'
+        order '5'
+        x '920'
+        y '80'
+        w '200'
+        h '62'
+        ownership 'app'
+      }
+    }
+
+    security_store = internal 'Secure store' {
+      #request-path
+      description 'refresh token · biometrics'
+      link https://github.com/govuk-once/govuk-mobile-ios-app/blob/main/Production/govuk_ios/Extensions/Container/Container+Configs.swift 'ios · Container+Configs.swift'
+      link https://github.com/govuk-once/govuk-mobile-android-app/blob/main/data/src/main/kotlin/uk/gov/govuk/data/auth/di/AuthModule.kt 'android · AuthModule.kt'
+      link https://github.com/govuk-once/govuk-mobile-android-app/blob/main/data/src/main/kotlin/uk/gov/govuk/data/crypto/TinkClient.kt 'android · TinkClient.kt'
+      link https://github.com/govuk-once/govuk-mobile-android-app/blob/main/data/src/main/kotlin/uk/gov/govuk/data/local/RealmEncryptionHelper.kt 'android · RealmEncryptionHelper.kt'
+      metadata {
+        type 'On-device storage'
+        tech 'GOV.UK secure-store · Keystore'
+        role 'The only credential written to disk, and what guards it.'
+        facts [
+          'The refresh token needs the current biometrics on iOS, and biometrics or the passcode on Android; the access and ID tokens are never written down.',
+          'Android also wraps the user\'s <code>sub</code> with Tink AES-GCM under an Android Keystore master key, and the Realm database key with a Keystore AES key.'
+        ]
+        sourceId 'store'
+        order '6'
+        x '1134'
+        y '80'
+        w '200'
+        h '62'
+        ownership 'app'
+      }
+    }
+  }
+
+  security_onelogin = external 'GOV.UK One Login' {
+    #request-path
+    description 'Security Event Tokens'
+    link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/template.yaml 'backend · services/auth/template.yaml'
+    metadata {
+      type 'Outside GOV.UK Once'
+      tech 'Shared Signals Framework'
+      role 'The one caller of the backend that is not the app.'
+      facts [
+        'Its events are accepted only from the IPs in an SSM-held allowlist.'
+      ]
+      sourceId 'onelogin'
+      order '7'
+      x '1400'
+      y '80'
+      w '220'
+      h '62'
+      ownership 'third'
+    }
+  }
+
+  security_backend = boundary 'App backend' {
+    metadata {
+      type 'Trust boundary'
+      tech 'Two SAM stacks · one bucket'
+      role 'Every way into the backend, and what stands in front of it.'
+      facts [
+        'Every API here has a regional WAF with a per-IP rate limit and AWS\'s known-bad-inputs rules.'
+      ]
+      sourceId 'backend'
+      order '0'
+      x '40'
+      y '220'
+      w '1604'
+      h '134'
+      boundary 'hard'
+    }
+
+    security_proxy = internal 'Token proxy' {
+      #request-path
+      description 'secret · App Check'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/proxy/middleware/attestation.ts 'backend · middleware/attestation.ts'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/proxy/feature-flags.ts 'backend · feature-flags.ts'
+  
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/template.yaml 'backend · services/auth/template.yaml'
+    metadata {
+        type 'AWS::Serverless::Api + Function'
+        tech 'WAF · no authorizer'
+        role 'The only way to exchange a code or refresh a token.'
+        facts [
+          'Requires PKCE for a code grant, and adds the client secret itself.',
+          'Checks the App Check token only while <code>/{ConfigStackName}/feature-flags/attestation</code> is on, and caches the flag for 15 minutes.'
+        ]
+        sourceId 'proxy'
+        order '8'
+        x '64'
+        y '270'
+        w '200'
+        h '62'
+        ownership 'app'
+      }
+    }
+
+    security_cognito = internal 'Cognito hosted UI' {
+      #request-path
+      description 'WAF · 300 per IP'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/template.yaml 'backend · services/auth/template.yaml'
+      metadata {
+        type 'AWS::Cognito::UserPool'
+        tech 'WAF on the user pool'
+        role 'The authorize endpoint. One Login does the authenticating.'
+        facts [
+          'Advanced security runs in audit mode in production only: it records risk and blocks nothing.',
+          'No MFA is configured in Cognito.'
+        ]
+        sourceId 'cognito'
+        order '9'
+        x '278'
+        y '270'
+        w '200'
+        h '62'
+        ownership 'app'
+      }
+    }
+
+    security_linking = internal 'Linking verification' {
+      #request-path
+      description 'no authorizer'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/linking-verification/app.ts 'backend · linking-verification/app.ts'
+  
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/template.yaml 'backend · services/auth/template.yaml'
+    metadata {
+        type 'AWS::Serverless::Function'
+        tech 'POST /linking/verification'
+        role 'Mints a DVLA linking token for the user named in the caller\'s token.'
+        facts [
+          'Decodes the caller\'s token with <code>decodeJwt</code> and never verifies it; the route has no authorizer and no attestation check.',
+          'The username in that unverified token is what it looks up and signs for.'
+        ]
+        sourceId 'linking'
+        order '10'
+        x '492'
+        y '270'
+        w '200'
+        h '62'
+        ownership 'app'
+      }
+    }
+
+    security_chat = internal 'Chat authorizer' {
+      #request-path
+      description 'verifies, swaps token'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/chat/authorizer/client/getAuthorizerResult.ts 'backend · getAuthorizerResult.ts'
+  
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/chat/template.yaml 'backend · services/chat/template.yaml'
+    metadata {
+        type 'Lambda REQUEST authorizer'
+        tech '300 s result cache'
+        role 'Verifies the Cognito access token, then hands the proxy a service token to send upstream.'
+        facts [
+          'Its Allow names every resource of the API, and API Gateway caches it for 300 seconds per token.'
+        ]
+        sourceId 'chat'
+        order '11'
+        x '706'
+        y '270'
+        w '200'
+        h '62'
+        ownership 'app'
+      }
+    }
+
+    security_config = internal 'Signed config' {
+      #request-path
+      description 'ECDSA P-256'
+      link https://github.com/alphagov/govuk-mobile-backend-config/blob/main/tools/create-signature.sh 'config · create-signature.sh'
+      link https://github.com/alphagov/govuk-mobile-backend-config/blob/main/tools/deploy-signed-json.sh 'config · deploy-signed-json.sh'
+      metadata {
+        type 'S3 objects · KMS signature'
+        tech 'alias/config-signing-key'
+        role 'Unauthenticated to read, and useless to tamper with.'
+        facts [
+          'Signed in CI with a KMS key, over a SHA-256 digest, and stored as the object metadata <code>govuk-sig</code>.',
+          'Whether the key the apps ship is the public half of <code>alias/config-signing-key</code> cannot be proven from these repositories.'
+        ]
+        sourceId 'config'
+        order '12'
+        x '920'
+        y '270'
+        w '200'
+        h '62'
+        ownership 'app'
+      }
+    }
+
+    security_receiver = internal 'Shared-signals receiver' {
+      #request-path
+      description 'allowlist · SET checks'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/template.yaml 'backend · services/auth/template.yaml'
+  
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/shared-signal-receiver/signature-verification/verify-signature.ts 'backend · verify-signature.ts'
+    metadata {
+        type 'AWS::Serverless::Api + Function'
+        tech 'WAF IP set · Cognito authorizer'
+        role 'Signs users out, or deletes them, when One Login says so.'
+        facts [
+          'Three gates: an IP allowlist at the WAF, a client-credentials token at the authorizer, and the event\'s own signature in the function.',
+          'Throttled at 6,000 requests a minute by the WAF.'
+        ]
+        sourceId 'receiver'
+        order '13'
+        x '1400'
+        y '270'
+        w '220'
+        h '62'
+        ownership 'app'
+      }
+    }
+  }
+
+  security_waf = internal 'Web ACLs' {
+    #off-request-path
+    description 'four, all regional'
+    link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/template.yaml 'backend · services/auth/template.yaml'
+    link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/chat/template.yaml 'backend · services/chat/template.yaml'
+    metadata {
+      type 'AWS::WAFv2::WebACL'
+      tech 'Rate rules · managed rules · IP set'
+      role 'One in front of the user pool, the token proxy, the shared-signals API and the chat proxy.'
+      facts [
+        'Every one logs to a KMS-encrypted log group.'
+      ]
+      sourceId 'waf'
+      order '14'
+      x '1690'
+      y '30'
+      w '230'
+      h '62'
+      ownership 'app'
+      resources [ 'web-acls' ]
+    }
+  }
+
+  security_kms = internal 'KMS keys' {
+    #off-request-path
+    description 'logs · env · signing'
+    link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/template.yaml 'backend · services/auth/template.yaml'
+    metadata {
+      type 'AWS::KMS::Key'
+      tech 'Customer managed'
+      role 'A key per log group, per function environment and per alarm topic, and one to sign DVLA linking tokens.'
+      facts [
+        'Every key rotates except the RSA signing key, which cannot.'
+      ]
+      sourceId 'kms'
+      order '15'
+      x '1690'
+      y '120'
+      w '230'
+      h '62'
+      ownership 'app'
+      resources [ 'kms-keys' ]
+    }
+  }
+
+  security_secrets = internal 'Secrets and parameters' {
+    #off-request-path
+    description 'Secrets Manager · SSM'
+    link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/template.yaml 'backend · services/auth/template.yaml'
+    metadata {
+      type 'Read, never created'
+      tech '/{ConfigStackName}/…'
+      role 'Every credential and every switch the stacks read.'
+      facts [
+        'Neither template creates a secret or a parameter: the Cognito client secret, the One Login client, the chat service token and both feature flags are all put there by something outside these repositories.'
+      ]
+      sourceId 'secrets'
+      order '16'
+      x '1690'
+      y '210'
+      w '230'
+      h '62'
+      ownership 'app'
+    }
+  }
+
+  security_logs = internal 'Log groups' {
+    #off-request-path
+    description 'masked · 30 or 365 days'
+    link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/template.yaml 'backend · services/auth/template.yaml'
+    metadata {
+      type 'AWS::Logs::LogGroup'
+      tech 'Data protection policies'
+      role 'Where every function, API and WAF writes.'
+      facts [
+        'Kept 365 days in production and 30 elsewhere.',
+        'Each masks email addresses, IP addresses and JWTs; the shared-signals groups mask One Login user IDs too.'
+      ]
+      sourceId 'logs'
+      order '17'
+      x '1690'
+      y '300'
+      w '230'
+      h '62'
+      ownership 'app'
+      resources [ 'log-groups' ]
+    }
+  }
+
+  security_iam = internal 'IAM roles' {
+    #off-request-path
+    description 'one per function'
+    link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/template.yaml 'backend · services/auth/template.yaml'
+    metadata {
+      type 'AWS::IAM::Role'
+      tech 'Optional permissions boundary'
+      role 'What each function may call.'
+      facts [
+        'A permissions boundary is applied when the <code>PermissionsBoundary</code> parameter is set, and not otherwise.'
+      ]
+      sourceId 'iam'
+      order '18'
+      x '1690'
+      y '390'
+      w '230'
+      h '62'
+      ownership 'app'
+      resources [ 'iam-roles' ]
+    }
+  }
+
+  security_appcheck -> security_proxy 'attests' {
+    metadata { protocol 'HTTPS header' auth 'x-attestation-token' carries 'A Firebase App Check JWT, with every token request' order '1' }
+  }
+  security_signin -> security_cognito 'authorize' {
+    metadata { protocol 'HTTPS, in the browser' auth '—' carries 'The authorize request, and the code back' order '2' }
+  }
+  security_signin -> security_proxy 'code · refresh' {
+    metadata { protocol 'HTTPS POST' auth 'The grant itself, plus attestation' carries 'A code and verifier, or a refresh token' order '3' }
+  }
+  security_dvlaclient -> security_linking 'token in the body' {
+    metadata { protocol 'HTTPS POST' auth 'None on the request' carries 'The access token, as JSON' order '4' }
+  }
+  security_chatclient -> security_chat 'Bearer' {
+    metadata { protocol 'HTTPS' auth 'Cognito access token' carries 'Chat requests' order '5' }
+  }
+  security_verifier -> security_config 'verifies' {
+    metadata { protocol 'HTTPS GET' auth 'None — signed' carries 'Config and topic pages, and their signatures' order '6' }
+  }
+  security_onelogin -> security_receiver 'account events' {
+    metadata { protocol 'HTTPS POST' auth 'Client-credentials token, allowlisted IP' carries 'Security Event Tokens' order '7' }
+  }
+}
+
+views {
+  view security {
+    title 'Security'
+    include security_device, security_device.**
+    include security_onelogin
+    include security_backend, security_backend.**
+    include security_waf, security_kms, security_secrets, security_logs, security_iam
+  }
+}

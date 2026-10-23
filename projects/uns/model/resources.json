@@ -1,0 +1,650 @@
+{
+  "groups": [
+    {
+      "name": "API · Amazon API Gateway and WAF",
+      "note": "Read from the constructs, not synthesised: see the note above.",
+      "table": null,
+      "items": [
+        {
+          "id": "rest-apis",
+          "name": "REST APIs",
+          "n": {
+            "dev": 3,
+            "stg": 2,
+            "prod": 2
+          },
+          "meta": ["PSO public", "FLEX private", "FLEX public in dev"],
+          "d": {
+            "type": "AWS::ApiGateway::RestApi",
+            "role": "The PSO gateway with mTLS, the private FLEX gateway, and in development a public FLEX gateway for the tests.",
+            "code": [
+              [
+                "UNSPSOResources.ts",
+                "infrastructure/cdk/constructs/UNSPSOResources.ts"
+              ],
+              [
+                "UNSFlexResources.ts",
+                "infrastructure/cdk/constructs/UNSFlexResources.ts"
+              ]
+            ]
+          }
+        },
+        {
+          "id": "routes",
+          "name": "Routes",
+          "n": {
+            "dev": 17,
+            "stg": 11,
+            "prod": 8
+          },
+          "meta": [
+            "counted as API Gateway methods",
+            "3 gateways in dev, 2 elsewhere"
+          ],
+          "d": {
+            "type": "AWS::ApiGateway::Method",
+            "role": "One method resource per route per gateway — so development counts the FLEX routes twice, once on the private gateway and once on the public one the tests use.",
+            "code": [
+              [
+                "UNSPSOResources.ts",
+                "infrastructure/cdk/constructs/UNSPSOResources.ts"
+              ],
+              [
+                "UNSFlexResources.ts",
+                "infrastructure/cdk/constructs/UNSFlexResources.ts"
+              ]
+            ]
+          }
+        },
+        {
+          "id": "web-acls",
+          "name": "Web ACLs",
+          "n": {
+            "dev": 3,
+            "stg": 2,
+            "prod": 2
+          },
+          "meta": ["one per gateway", "REGIONAL"],
+          "d": {
+            "type": "AWS::WAFv2::WebACL",
+            "role": "Common and KnownBadInputs rule sets, logged a year.",
+            "code": [
+              [
+                "UNSApiGatewayConstruct.ts",
+                "infrastructure/cdk/constructs/bases/UNSApiGatewayConstruct.ts"
+              ]
+            ]
+          }
+        },
+        {
+          "id": "usage-plans",
+          "name": "Usage plans and API keys",
+          "n": {
+            "dev": 5,
+            "stg": 5,
+            "prod": 3
+          },
+          "meta": ["one per consumer organisation", "flex", "e2e in dev"],
+          "d": {
+            "type": "AWS::ApiGateway::UsagePlan · AWS::ApiGateway::ApiKey",
+            "role": "PSO: one per organisation named for the environment. FLEX: one named flex, and one named e2e on the public dev gateway.",
+            "code": [
+              [
+                "UNSPSOResources.ts",
+                "infrastructure/cdk/constructs/UNSPSOResources.ts"
+              ],
+              ["consumers.ts", "infrastructure/cdk/consumers/consumers.ts"]
+            ]
+          }
+        },
+        {
+          "id": "domains",
+          "name": "Custom domains and DNS records",
+          "n": {
+            "dev": 2,
+            "stg": 1,
+            "prod": 1
+          },
+          "meta": [
+            "pso.{zone}",
+            "flex.{zone} in dev",
+            "none without the hosted-zone parameter"
+          ],
+          "d": {
+            "type": "AWS::ApiGateway::DomainName · AWS::Route53::RecordSet",
+            "role": "Created only when SSM supplies the hosted zone and certificate, so a synthesis without credentials produces none at all; the private gateway never has one.",
+            "code": [
+              [
+                "UNSApiGatewayConstruct.ts",
+                "infrastructure/cdk/constructs/bases/UNSApiGatewayConstruct.ts"
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Compute · AWS Lambda",
+      "note": null,
+      "table": null,
+      "items": [
+        {
+          "id": "fn-pso",
+          "name": "PSO functions",
+          "n": {
+            "dev": 12,
+            "stg": 12,
+            "prod": 10
+          },
+          "meta": ["5 http", "5 sqs", "1 schedule", "1 authorizer"],
+          "d": {
+            "type": "AWS::Lambda::Function",
+            "role": "postGroupMessage and groupProcessingWorker only with the groups flag.",
+            "code": [
+              [
+                "UNSPSOResources.ts",
+                "infrastructure/cdk/constructs/UNSPSOResources.ts"
+              ]
+            ]
+          }
+        },
+        {
+          "id": "fn-flex",
+          "name": "FLEX functions",
+          "n": {
+            "dev": 6,
+            "stg": 6,
+            "prod": 4
+          },
+          "meta": ["4 notifications", "2 groups, flagged"],
+          "d": {
+            "type": "AWS::Lambda::Function",
+            "code": [
+              [
+                "UNSFlexResources.ts",
+                "infrastructure/cdk/constructs/UNSFlexResources.ts"
+              ]
+            ]
+          }
+        },
+        {
+          "id": "fn-cr",
+          "name": "Custom-resource functions",
+          "n": {
+            "dev": 6,
+            "stg": 6,
+            "prod": 6
+          },
+          "meta": ["NodejsFunction", "not code-signed"],
+          "d": {
+            "type": "AWS::Lambda::Function",
+            "role": "A CSR generator, three writers (DynamoDB ×2, Secrets Manager ×2 share one source), an S3 writer — each with a provider framework function beside it.",
+            "code": [
+              [
+                "UNSCustomResourceConstruct.ts",
+                "infrastructure/cdk/constructs/bases/UNSCustomResourceConstruct.ts"
+              ],
+              ["UNSMTLS.ts", "infrastructure/cdk/constructs/UNSMTLS.ts"]
+            ]
+          }
+        },
+        {
+          "id": "schedules",
+          "name": "EventBridge rules",
+          "n": {
+            "dev": 1,
+            "stg": 1,
+            "prod": 1
+          },
+          "meta": ["cron 30 * * * *"],
+          "d": {
+            "type": "AWS::Events::Rule",
+            "role": "The hourly analytics export.",
+            "code": [
+              [
+                "UNSPSOResources.ts",
+                "infrastructure/cdk/constructs/UNSPSOResources.ts"
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Data · DynamoDB, SQS, S3, ElastiCache, KMS",
+      "note": null,
+      "table": null,
+      "items": [
+        {
+          "id": "tables",
+          "name": "Tables",
+          "n": {
+            "dev": 5,
+            "stg": 5,
+            "prod": 4
+          },
+          "meta": ["on demand", "main key", "PITR 30 d", "group store flagged"],
+          "d": {
+            "type": "AWS::DynamoDB::Table",
+            "role": "messages, campaigns, organisations, certificates; groupstore outside production.",
+            "code": [
+              ["UNSCommon.ts", "infrastructure/cdk/constructs/UNSCommon.ts"],
+              [
+                "UNSDynamoDBConstruct.ts",
+                "infrastructure/cdk/constructs/bases/UNSDynamoDBConstruct.ts"
+              ]
+            ]
+          }
+        },
+        {
+          "id": "queues",
+          "name": "Queues, with dead-letter queues",
+          "n": {
+            "dev": 10,
+            "stg": 10,
+            "prod": 8
+          },
+          "meta": ["5 + 5 DLQ", "KMS", "10 s delay", "2 KB"],
+          "d": {
+            "type": "AWS::SQS::Queue",
+            "role": "analytics, incoming, processing, dispatch, and groupprocessing outside production, each with a dead-letter queue redriven after three receives.",
+            "code": [
+              [
+                "UNSQueueConstruct.ts",
+                "infrastructure/cdk/constructs/bases/UNSQueueConstruct.ts"
+              ],
+              [
+                "UNSPSOResources.ts",
+                "infrastructure/cdk/constructs/UNSPSOResources.ts"
+              ]
+            ]
+          }
+        },
+        {
+          "id": "buckets",
+          "name": "Buckets",
+          "n": {
+            "dev": 3,
+            "stg": 4,
+            "prod": 4
+          },
+          "meta": ["SSE-S3", "versioned", "flow-log bucket outside dev"],
+          "d": {
+            "type": "AWS::S3::Bucket",
+            "role": "Access logs, the mTLS truststore, the analytics export, and outside development the VPC flow logs.",
+            "code": [
+              [
+                "UNSS3BucketConstruct.ts",
+                "infrastructure/cdk/constructs/bases/UNSS3BucketConstruct.ts"
+              ],
+              [
+                "UNSVpcConstruct.ts",
+                "infrastructure/cdk/constructs/bases/UNSVpcConstruct.ts"
+              ]
+            ]
+          }
+        },
+        {
+          "id": "cache",
+          "name": "ElastiCache serverless caches",
+          "n": {
+            "dev": 1,
+            "stg": 1,
+            "prod": 1
+          },
+          "meta": ["Valkey 8", "IAM user", "10 GB · 5,000 ECPU"],
+          "d": {
+            "type": "AWS::ElastiCache::ServerlessCache",
+            "code": [
+              [
+                "UNSElasticacheConstruct.ts",
+                "infrastructure/cdk/constructs/bases/UNSElasticacheConstruct.ts"
+              ]
+            ]
+          }
+        },
+        {
+          "id": "kms-keys",
+          "name": "KMS keys",
+          "n": {
+            "dev": 3,
+            "stg": 3,
+            "prod": 3
+          },
+          "meta": ["main", "flex-consumer", "mtls-external-consumer"],
+          "d": {
+            "type": "AWS::KMS::Key",
+            "role": "Rotation on, 30-day pending window.",
+            "code": [
+              [
+                "UNSKMSConstruct.ts",
+                "infrastructure/cdk/constructs/bases/UNSKMSConstruct.ts"
+              ]
+            ]
+          }
+        },
+        {
+          "id": "secrets",
+          "name": "Secrets",
+          "n": {
+            "dev": 16,
+            "stg": 16,
+            "prod": 8
+          },
+          "meta": [
+            "2 per consumer certificate",
+            "OneSignal key",
+            "flex/consumer",
+            "BigQuery ×2"
+          ],
+          "d": {
+            "type": "AWS::SecretsManager::Secret",
+            "role": "Four fixed, plus a private key and a certificate for each consumer the environment names.",
+            "code": [
+              [
+                "UNSClientCertificateConstruct.ts",
+                "infrastructure/cdk/constructs/bases/UNSClientCertificateConstruct.ts"
+              ],
+              [
+                "UNSPSOResources.ts",
+                "infrastructure/cdk/constructs/UNSPSOResources.ts"
+              ],
+              [
+                "devConsumers.ts",
+                "infrastructure/cdk/consumers/devConsumers.ts"
+              ],
+              [
+                "stagingConsumers.ts",
+                "infrastructure/cdk/consumers/stagingConsumers.ts"
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Network · Amazon VPC",
+      "note": null,
+      "table": null,
+      "items": [
+        {
+          "id": "subnets",
+          "name": "Subnets",
+          "n": {
+            "dev": 6,
+            "stg": 6,
+            "prod": 6
+          },
+          "meta": ["3 AZs", "/23", "public and private"],
+          "d": {
+            "type": "AWS::EC2::Subnet",
+            "code": [
+              [
+                "UNSVpcConstruct.ts",
+                "infrastructure/cdk/constructs/bases/UNSVpcConstruct.ts"
+              ]
+            ]
+          }
+        },
+        {
+          "id": "nat",
+          "name": "NAT gateways",
+          "n": {
+            "dev": 3,
+            "stg": 3,
+            "prod": 3
+          },
+          "meta": ["one per AZ"],
+          "d": {
+            "type": "AWS::EC2::NatGateway",
+            "code": [
+              [
+                "UNSVpcConstruct.ts",
+                "infrastructure/cdk/constructs/bases/UNSVpcConstruct.ts"
+              ]
+            ]
+          }
+        },
+        {
+          "id": "endpoints",
+          "name": "VPC endpoints",
+          "n": {
+            "dev": 13,
+            "stg": 13,
+            "prod": 13
+          },
+          "meta": ["11 interface", "2 gateway"],
+          "d": {
+            "type": "AWS::EC2::VPCEndpoint",
+            "code": [
+              ["UNSCommon.ts", "infrastructure/cdk/constructs/UNSCommon.ts"]
+            ]
+          }
+        },
+        {
+          "id": "sgs",
+          "name": "Security groups",
+          "n": {
+            "dev": 2,
+            "stg": 2,
+            "prod": 2
+          },
+          "meta": ["privateEgress", "privateIsolated"],
+          "d": {
+            "type": "AWS::EC2::SecurityGroup",
+            "code": [
+              [
+                "UNSVpcConstruct.ts",
+                "infrastructure/cdk/constructs/bases/UNSVpcConstruct.ts"
+              ]
+            ]
+          }
+        },
+        {
+          "id": "flow-logs",
+          "name": "Flow logs",
+          "n": {
+            "dev": 0,
+            "stg": 1,
+            "prod": 1
+          },
+          "meta": ["to S3", "not in development"],
+          "d": {
+            "type": "AWS::EC2::FlowLog",
+            "code": [
+              [
+                "UNSVpcConstruct.ts",
+                "infrastructure/cdk/constructs/bases/UNSVpcConstruct.ts"
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Identity and certificates",
+      "note": null,
+      "table": null,
+      "items": [
+        {
+          "id": "ca",
+          "name": "Private certificate authorities",
+          "n": {
+            "dev": 1,
+            "stg": 1,
+            "prod": 1
+          },
+          "meta": ["ACM PCA", "ROOT", "RSA 4096"],
+          "d": {
+            "type": "AWS::ACMPCA::CertificateAuthority",
+            "code": [
+              [
+                "UNSCertificateAuthorityConstruct.ts",
+                "infrastructure/cdk/constructs/bases/UNSCertificateAuthorityConstruct.ts"
+              ]
+            ]
+          }
+        },
+        {
+          "id": "client-certs",
+          "name": "Client certificates",
+          "n": {
+            "dev": 7,
+            "stg": 7,
+            "prod": 3
+          },
+          "meta": [
+            "the CA's own root, plus one per consumer",
+            "dated in code",
+            "rolling in dev and staging"
+          ],
+          "d": {
+            "type": "AWS::ACMPCA::Certificate",
+            "role": "The certificate authority signs its own root certificate and one per consumer, and all of them are ACMPCA certificates: UNS and DVLA everywhere, Foreign Travel Advice in dev and staging, pentest in staging. Development adds a rolling three-month certificate each for UNS, DVLA and Foreign Travel Advice, staging for UNS and DVLA, so these counts hold for a synth between 14 Sep and 15 Nov 2026; in the four weeks before one ends, its successor is issued beside it.",
+            "code": [
+              ["consumers.ts", "infrastructure/cdk/consumers/consumers.ts"],
+              [
+                "devConsumers.ts",
+                "infrastructure/cdk/consumers/devConsumers.ts"
+              ],
+              [
+                "stagingConsumers.ts",
+                "infrastructure/cdk/consumers/stagingConsumers.ts"
+              ],
+              [
+                "productionConsumers.ts",
+                "infrastructure/cdk/consumers/productionConsumers.ts"
+              ]
+            ]
+          }
+        },
+        {
+          "id": "iam-user",
+          "name": "IAM users",
+          "n": {
+            "dev": 1,
+            "stg": 1,
+            "prod": 1
+          },
+          "meta": ["bigquery-export", "access key in Secrets Manager"],
+          "d": {
+            "type": "AWS::IAM::User",
+            "role": "Read-only on the analytics export bucket. The one long-lived credential in the account.",
+            "code": [
+              [
+                "UNSPSOResources.ts",
+                "infrastructure/cdk/constructs/UNSPSOResources.ts"
+              ]
+            ]
+          }
+        },
+        {
+          "id": "signing",
+          "name": "Code-signing profiles",
+          "n": {
+            "dev": 1,
+            "stg": 1,
+            "prod": 1
+          },
+          "meta": ["WARN on untrusted"],
+          "d": {
+            "type": "AWS::Signer::SigningProfile",
+            "code": [
+              ["UNSCommon.ts", "infrastructure/cdk/constructs/UNSCommon.ts"]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Observability · CloudWatch and SNS",
+      "note": "Alarm counts are read from the loops in the alarms stack, not from templates; treat them as approximate.",
+      "table": null,
+      "items": [
+        {
+          "id": "alarms",
+          "name": "Alarms",
+          "n": {
+            "dev": 57,
+            "stg": 57,
+            "prod": 51
+          },
+          "meta": ["alarms stack", "P1 · P2 · P3"],
+          "d": {
+            "type": "AWS::CloudWatch::Alarm",
+            "role": "Fewer in production because the flagged functions have no error-rate alarms there.",
+            "code": [
+              [
+                "UNSAlarmsStack.ts",
+                "infrastructure/cdk/constructs/UNSAlarmsStack.ts"
+              ]
+            ]
+          }
+        },
+        {
+          "id": "dashboards",
+          "name": "Dashboards",
+          "n": {
+            "dev": 4,
+            "stg": 4,
+            "prod": 4
+          },
+          "meta": ["2 in this repository", "2 from once-platform-constructs"],
+          "d": {
+            "type": "AWS::CloudWatch::Dashboard",
+            "code": [
+              [
+                "UNSPSOFlow.ts",
+                "infrastructure/cdk/constructs/dashboards/UNSPSOFlow.ts"
+              ]
+            ]
+          }
+        },
+        {
+          "id": "log-groups",
+          "name": "Log groups",
+          "n": {
+            "dev": 31,
+            "stg": 29,
+            "prod": 25
+          },
+          "meta": ["one per function", "gateways ×2", "WAF", "export"],
+          "d": {
+            "type": "AWS::Logs::LogGroup",
+            "role": "One per application and custom-resource function, an access log and a WAF log per gateway, and the analytics export group. All a year, all on the main key.",
+            "code": [
+              [
+                "UNSLambdaConstruct.ts",
+                "infrastructure/cdk/constructs/bases/UNSLambdaConstruct.ts"
+              ],
+              [
+                "UNSApiGatewayConstruct.ts",
+                "infrastructure/cdk/constructs/bases/UNSApiGatewayConstruct.ts"
+              ]
+            ]
+          }
+        },
+        {
+          "id": "sns",
+          "name": "SNS topics",
+          "n": {
+            "dev": 2,
+            "stg": 2,
+            "prod": 2
+          },
+          "meta": [
+            "sns-topic-alerts",
+            "sns-topic-releases",
+            "Chatbot each, when SSM names its channel"
+          ],
+          "d": {
+            "type": "AWS::SNS::Topic",
+            "code": [
+              ["UNSCommon.ts", "infrastructure/cdk/constructs/UNSCommon.ts"]
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

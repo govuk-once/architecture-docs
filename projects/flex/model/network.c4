@@ -21,7 +21,8 @@ model {
       h '330'
       boundary 'hard'
       resources [
-        'kms-relay'
+        'kms-relay',
+        'kms-relay-health'
       ]
     }
 

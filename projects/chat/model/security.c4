@@ -1,0 +1,288 @@
+// GOV.UK Chat architecture — Security.
+//
+// The chain of authority on each API: what admits a caller, what the code then runs as,
+// and what that identity may reach. Two chains: the API's, which admits a machine client,
+// and the UI's, which admits a person and then calls the API as that machine client.
+//
+// Each chain is drawn inside its own zone, including the credential at the top of it, so
+// that no line crosses a zone edge and no line's label lands on a zone title.
+//
+// What is absent is as much of this tab as what is present, and the absences are in the
+// reference table rather than drawn as boxes: nothing in this repository creates a
+// customer-managed key, point-in-time recovery, deletion protection or tracing. The Web ACL,
+// the secret and the log retention that an earlier reading found absent arrived in September.
+
+model {
+
+  security_tszone = boundary 'Chat API' {
+    metadata {
+      type 'Chain of authority'
+      tech 'Cognito, then two roles'
+      role 'What guards the Chat API, and what the code behind it may reach.'
+      sourceId 'tszone'
+      order '0'
+      x '40'
+      y '40'
+      w '310'
+      h '520'
+      boundary 'hard'
+    }
+
+    security_tscred = internal 'A Cognito access token' {
+      #request-path
+      description 'one scope, one hour'
+      link https://github.com/govuk-once/govuk-chat-v2/blob/main/cdk/src/stacks/chat-api-stack.ts 'chat-api-stack.ts'
+      metadata {
+        type 'OAuth 2.0 client credentials'
+        tech 'issued by this system\'s own pool'
+        role 'What a caller presents to the Chat API. Minted by the pool this stack creates, using the client credentials flow and an app client with a generated secret.'
+        facts [
+          'The pool has self sign-up disabled, and this client has no other OAuth flow. People exist in the pool only for the UI\'s sign-in client, and never hold a token for the API.',
+          'A token lasts an hour in staging and production and a day in an ephemeral environment, which the code explains as saving developers from refreshing so often.'
+        ]
+        sourceId 'tscred'
+        order '1'
+        x '64'
+        y '90'
+        w '262'
+        h '62'
+        ownership 'govuk'
+      }
+    }
+
+    security_tsapi = platform 'Chat REST API' {
+      #request-path
+      description 'a scope on every method'
+      link https://github.com/govuk-once/govuk-chat-v2/blob/main/cdk/src/stacks/chat-api-stack.ts 'chat-api-stack.ts'
+      metadata {
+        type 'AWS::ApiGateway::RestApi'
+        tech 'Cognito authorizer · scope chat-api/invoke'
+        role 'Checks the token and the scope before the function runs. The check is a default on the API rather than on the method, so a route added later inherits it.'
+        facts [
+          'The resource server declares one scope, <code>invoke</code>, so there is nothing finer to grant: a caller admitted at all is admitted to everything this API does.',
+          'A REGIONAL Web ACL on the stage blocks more than fifteen invokes a minute per <code>end-user-id</code> with a 429, and the stage throttles at 15 a second, burst 30. There is no usage plan.'
+        ]
+        sourceId 'tsapi'
+        order '2'
+        x '64'
+        y '220'
+        w '262'
+        h '62'
+        ownership 'chat'
+        resources [ 'user-pool' ]
+        awsIcon 'cognito'
+      }
+    }
+
+    security_tsrole = platform 'Invoke function role' {
+      #request-path
+      description 'one table, one runtime'
+      link https://github.com/govuk-once/govuk-chat-v2/blob/main/cdk/src/stacks/chat-api-stack.ts 'chat-api-stack.ts'
+      metadata {
+        type 'AWS::IAM::Role'
+        tech 'granted in the stack, not by hand'
+        role 'What the invoke function runs as. It may read and write its own table, and invoke its own agent runtime. Nothing else. The messages function has a role of its own, granted read on the table and nothing more.'
+        facts [
+          'The AgentCore grant names the runtime ARN and a wildcard beneath it, because the service needs the sub-path as well as the runtime itself.',
+          'This role is not granted any Bedrock model permission. The model call is made further along the chain, by the agent, not by the API.'
+        ]
+        sourceId 'tsrole'
+        order '3'
+        x '64'
+        y '350'
+        w '262'
+        h '62'
+        ownership 'chat'
+        awsIcon 'iam'
+      }
+    }
+
+    security_aguirole = platform 'AG-UI runtime role' {
+      #request-path
+      description 'any model, any region'
+      link https://github.com/govuk-once/govuk-chat-v2/blob/main/cdk/src/stacks/agui-agent-stack.ts 'agui-agent-stack.ts'
+      metadata {
+        type 'AWS::IAM::Role'
+        tech 'the agent\'s own identity'
+        role 'What the AG-UI agent runs as. It may call Bedrock models and read and write its own memory.'
+        facts [
+          'The Bedrock grant is two wildcards: every inference profile in this account, and <code>arn:aws:bedrock:*::foundation-model/*</code> — every foundation model in every region. The agent names one model in code; the role permits all of them.',
+          'The memory grant is narrow by comparison: <code>CreateEvent</code>, <code>GetEvent</code> and <code>ListEvents</code>, on this memory alone.'
+        ]
+        sourceId 'aguirole'
+        order '4'
+        x '64'
+        y '480'
+        w '262'
+        h '62'
+        ownership 'chat'
+        awsIcon 'iam'
+      }
+    }
+  }
+
+  security_uizone = boundary 'Chat UI' {
+    metadata {
+      type 'Chain of authority'
+      tech 'Cognito, then the API\'s own client'
+      role 'What admits a person to the web app, and how the app then reaches the API on their behalf.'
+      sourceId 'uizone'
+      order '0'
+      x '396'
+      y '40'
+      w '310'
+      h '400'
+      boundary 'hard'
+    }
+
+    security_uicred = internal 'A signed-in person' {
+      #request-path
+      description 'Hosted UI · code + PKCE'
+      link https://github.com/govuk-once/govuk-chat-v2/blob/main/services/chat-ui/src/auth/cognito-sign-in.ts 'auth/cognito-sign-in.ts'
+      link https://github.com/govuk-once/govuk-chat-v2/blob/main/services/chat-ui/src/auth/session.ts 'auth/session.ts'
+      metadata {
+        type 'OpenID Connect session'
+        tech 'openid-client · iron-session'
+        role 'What a person presents to the web app: a session cookie, sealed with the stack\'s secret, that holds their Cognito <code>sub</code> and nothing else.'
+        facts [
+          'Sign-in is the authorization code flow with PKCE against the Cognito Hosted UI, scope <code>openid</code>; a session lasts 24 hours.',
+          'Self sign-up is off: a person exists only if a script created them in the pool.'
+        ]
+        sourceId 'uicred'
+        order '4'
+        x '420'
+        y '90'
+        w '262'
+        h '62'
+        ownership 'chat'
+      }
+    }
+
+    security_uisvc = platform 'Chat UI service' {
+      #request-path
+      description 'calls the API as a client'
+      link https://github.com/govuk-once/govuk-chat-v2/blob/main/services/chat-ui/src/chat-api/client.ts 'chat-api/client.ts'
+      link https://github.com/govuk-once/govuk-chat-v2/blob/main/services/chat-ui/src/chat-api/end-user-id.ts 'chat-api/end-user-id.ts'
+      metadata {
+        type 'AWS::ECS::ExpressGatewayService'
+        tech 'Next.js, server-side routes'
+        role 'Admits the person, then calls the API as the API\'s own app client. The identity changes here: the person goes forward only as an <code>end-user-id</code>, a UUIDv5 of their <code>sub</code>.'
+        facts [
+          'The app client\'s secret is not stored anywhere: the server reads it from Cognito with <code>DescribeUserPoolClient</code> and caches the token it mints.',
+          'Unauthenticated page requests go to the Hosted UI and API requests get a 401; only <code>/api/health</code> is open.'
+        ]
+        sourceId 'uisvc'
+        order '5'
+        x '420'
+        y '220'
+        w '262'
+        h '62'
+        ownership 'chat'
+      }
+    }
+
+    security_uiroles = platform 'UI task and execution roles' {
+      #request-path
+      description 'pool client · session secret'
+      link https://github.com/govuk-once/govuk-chat-v2/blob/main/cdk/src/stacks/chat-ui-stack.ts 'chat-ui-stack.ts'
+      metadata {
+        type 'AWS::IAM::Role'
+        tech 'granted in the stack, not by hand'
+        role 'What the container runs as. The task role may describe the pool\'s clients, which is how the API secret is read; the execution role may read the session secret. Neither may touch the table or the agent.'
+        facts [
+          'A third role, for ECS itself, carries the managed infrastructure policy for Express Gateway services.'
+        ]
+        sourceId 'uiroles'
+        order '6'
+        x '420'
+        y '350'
+        w '262'
+        h '62'
+        ownership 'chat'
+        awsIcon 'iam'
+      }
+    }
+  }
+
+  security_token = external 'The prompts token' {
+    #off-request-path
+    description 'build time only'
+    link https://github.com/govuk-once/govuk-chat-v2/blob/main/cdk/bin/app.ts 'cdk/bin/app.ts'
+    link https://github.com/govuk-once/govuk-chat-v2/blob/main/cdk/src/bundling/python.ts 'bundling/python.ts'
+    metadata {
+      type 'GitHub token'
+      tech 'an environment variable at synth'
+      role 'Not on any request path. It is what fetches the private prompts package while an agent is being built, and the reason only this repository\'s own CI can synthesise the app.'
+      facts [
+        'The app refuses to synthesise at all without it: <code>cdk/bin/app.ts</code> throws when <code>GITHUB_TOKEN</code> is unset, before any stack is constructed.',
+        'During bundling it is written into git\'s configuration with an <code>insteadOf</code> rule, so every GitHub fetch in that container carries it.',
+        'In CI it is the only secret used, and it is not an AWS credential. No workflow in the repository holds AWS access at all.'
+      ]
+      sourceId 'token'
+      order '9'
+      x '752'
+      y '350'
+      w '262'
+      h '62'
+      ownership 'third'
+    }
+  }
+
+  security_tscred -> security_tsapi 'admits the caller' {
+    metadata {
+      protocol 'HTTPS, with the token as a bearer credential'
+      auth 'The authorizer verifies the token against the pool and checks the scope'
+      carries 'The access token on every method'
+      order '1'
+    }
+  }
+  security_tsapi -> security_tsrole 'runs as' {
+    metadata {
+      protocol 'Lambda execution role'
+      auth 'Assumed by the function, not by the caller'
+      carries 'Read and write on one table; invoke on one agent runtime'
+      order '2'
+    }
+  }
+  security_tsrole -> security_aguirole 'may invoke' {
+    metadata {
+      protocol 'bedrock-agentcore:InvokeAgentRuntime'
+      auth 'The runtime then acts under its own role, not the caller\'s'
+      carries 'The identity changes here: nothing of the caller is passed on but the end user id'
+      order '3'
+    }
+  }
+  security_uicred -> security_uisvc 'admits the person' {
+    metadata {
+      protocol 'HTTPS, with the session cookie'
+      auth 'The cookie is unsealed with the session secret; no cookie means a redirect to the Hosted UI'
+      carries 'The person\'s sub'
+      order '4'
+    }
+  }
+  security_uisvc -> security_uiroles 'runs as' {
+    metadata {
+      protocol 'ECS task and execution roles'
+      auth 'Assumed by the container, not by the person'
+      carries 'DescribeUserPoolClient on the pool; read on the session secret'
+      order '5'
+    }
+  }
+  security_uisvc -> security_tsapi 'calls as the app client' {
+    metadata {
+      protocol 'HTTPS with a client-credentials token'
+      auth 'The API app client and its secret, read from Cognito at run time'
+      carries 'Nothing of the person but an end-user-id'
+      order '6'
+    }
+  }
+}
+
+views {
+  view security {
+    title 'Security'
+    include security_tszone, security_tszone.**
+    include security_uizone, security_uizone.**
+    include security_token
+  }
+}

@@ -1,0 +1,421 @@
+// GOV.UK Chat architecture — Containers.
+//
+// Every separately deployable part the CDK app creates per environment, grouped by the
+// stack that owns it, and the traffic between them. C4 level 2.
+//
+// The only network is the UI's: a VPC of two public subnets, with no NAT, for the ECS
+// service that runs the web app. The API and the agent run in none — every other call in
+// this view is one AWS service reaching another over its public endpoint, authorised by IAM.
+
+model {
+
+  containers_tsstack = boundary 'Chat API stack' {
+    metadata {
+      type 'CloudFormation stack'
+      tech 'ChatApiStack · chat-api-stack.ts'
+      role 'The Chat API: two routes, the user pool and the Web ACL that guard them, the two functions behind them, and the table that keeps a conversation.'
+      facts [
+        'Tagged <code>ServiceName</code>, <code>TeamName</code>, <code>RepositoryUrl</code> and <code>Environment</code>, all from one <code>serviceMetadata</code> constant.',
+        'Every name is prefixed from <code>getResourceNamePrefix()</code>, so one developer\'s deploy cannot collide with another\'s in the shared account.'
+      ]
+      sourceId 'tsstack'
+      order '0'
+      x '40'
+      y '200'
+      w '1168'
+      h '270'
+      boundary 'hard'
+    }
+
+    containers_tsapi = platform 'Chat REST API' {
+      #request-path
+      description 'two routes · Cognito scope'
+      link https://github.com/govuk-once/govuk-chat-v2/blob/main/cdk/src/stacks/chat-api-stack.ts 'chat-api-stack.ts'
+      metadata {
+        type 'AWS::ApiGateway::RestApi'
+        tech 'stage named for the environment'
+        role 'Exposes two methods: <code>POST /v1/threads/invoke</code>, which asks the agent, and <code>GET /v1/threads/{threadId}/messages</code>, which reads a conversation back. Every method inherits Cognito authorisation and the scope by default, so a route added without thinking is still guarded.'
+        facts [
+          'The invoke integration is set to <code>ResponseTransferMode.STREAM</code>, which is what lets the answer come back a token at a time rather than in one response; the messages integration is a plain one.',
+          'A REGIONAL Web ACL on the stage answers a sixteenth <code>POST /v1/threads/invoke</code> in a minute from one <code>end-user-id</code> with a 429, and the stage itself throttles at 15 requests a second with a burst of 30 — V1\'s limits, carried over.'
+        ]
+        sourceId 'tsapi'
+        order '1'
+        x '350'
+        y '250'
+        w '262'
+        h '62'
+        ownership 'chat'
+        resources [ 'rest-apis', 'web-acl' ]
+        awsIcon 'apigateway'
+      }
+    }
+
+    containers_tscognito = platform 'Cognito user pool' {
+      #request-path
+      description 'two clients · no self sign-up'
+      link https://github.com/govuk-once/govuk-chat-v2/blob/main/cdk/src/stacks/chat-api-stack.ts 'chat-api-stack.ts'
+      metadata {
+        type 'AWS::Cognito::UserPool'
+        tech 'resource server chat-api · scope invoke'
+        role 'Guards the API. Self sign-up is disabled; the API app client uses only the client credentials flow, and the UI stack adds a second client to this pool for signing people in.'
+        facts [
+          'The app client is created with a secret, and the authorizer checks the scope <code>chat-api/invoke</code> on every method.',
+          'An access token lasts a day in an ephemeral environment and an hour in staging and production, so that refreshing is rarer while developing.'
+        ]
+        sourceId 'tscognito'
+        order '2'
+        x '64'
+        y '250'
+        w '262'
+        h '62'
+        ownership 'chat'
+        resources [ 'user-pool' ]
+        awsIcon 'cognito'
+      }
+    }
+
+    containers_tsfn = platform 'threads/invoke function' {
+      #request-path
+      description 'Node 24 · arm64 · 30 s'
+      link https://github.com/govuk-once/govuk-chat-v2/blob/main/cdk/src/stacks/chat-api-stack.ts 'chat-api-stack.ts'
+      link https://github.com/govuk-once/govuk-chat-v2/blob/main/services/chat-api/src/handlers/threads/invoke.ts 'threads/invoke.ts'
+      metadata {
+        type 'AWS::Lambda::Function'
+        tech 'one of two functions in this stack'
+        role 'Validates the request, claims the thread so two runs cannot overlap, invokes the agent, and relays the agent\'s events back to the caller.'
+        facts [
+          'Its timeout and the run lock lease are the same thirty seconds, on purpose: a function that dies without releasing the thread must not hold it longer than it could have run for.',
+          'It is granted <code>bedrock-agentcore:InvokeAgentRuntime</code> on both the runtime ARN and a wildcard beneath it, because AgentCore needs the sub-path as well.'
+        ]
+        sourceId 'tsfn'
+        order '3'
+        x '350'
+        y '380'
+        w '262'
+        h '62'
+        ownership 'chat'
+        resources [ 'lambdas' ]
+        awsIcon 'lambda'
+      }
+    }
+
+    containers_tsmsgfn = platform 'threads/messages function' {
+      #request-path
+      description 'Node 24 · arm64 · 30 s'
+      link https://github.com/govuk-once/govuk-chat-v2/blob/main/cdk/src/stacks/chat-api-stack.ts 'chat-api-stack.ts'
+      link https://github.com/govuk-once/govuk-chat-v2/blob/main/services/chat-api/src/handlers/threads/messages.ts 'threads/messages.ts'
+      metadata {
+        type 'AWS::Lambda::Function'
+        tech 'read-only on the table'
+        role 'Answers <code>GET /v1/threads/{threadId}/messages</code>: resolves the caller\'s thread id to the system one, reads its messages and returns a page of them.'
+        facts [
+          'Granted read on the table and nothing else — it cannot invoke the agent.',
+          'A thread the caller does not own answers 404; a failed read answers 500 with nothing about the cause.'
+        ]
+        sourceId 'tsmsgfn'
+        order '4'
+        x '636'
+        y '250'
+        w '262'
+        h '62'
+        ownership 'chat'
+        resources [ 'lambdas' ]
+      }
+    }
+
+    containers_tstable = platform 'Thread and run table' {
+      #request-path
+      description 'pk/sk · TTL on expiresAt'
+      link https://github.com/govuk-once/govuk-chat-v2/blob/main/cdk/src/stacks/chat-api-stack.ts 'chat-api-stack.ts'
+      link https://github.com/govuk-once/govuk-chat-v2/blob/main/services/chat-api/src/persistence/service.ts 'persistence/service.ts'
+      metadata {
+        type 'AWS::DynamoDB::Table'
+        tech 'on demand · single table'
+        role 'Threads, runs, the lock a run holds, and the messages either side of it, all under one <code>pk</code> and <code>sk</code>.'
+        facts [
+          'Sets a time to live on <code>expiresAt</code>; retained outside ephemeral environments, destroyed with the stack in them.'
+        ]
+        sourceId 'tstable'
+        order '4'
+        x '636'
+        y '380'
+        w '262'
+        h '62'
+        ownership 'chat'
+        resources [ 'tables' ]
+        awsIcon 'dynamodb'
+      }
+    }
+  }
+
+  containers_aguistack = boundary 'AG-UI agent stack' {
+    metadata {
+      type 'CloudFormation stack'
+      tech 'AguiAgentStack · agui-agent-stack.ts'
+      role 'The agent the Chat API invokes, and the memory that lets a conversation continue.'
+      facts [
+        'Identical in shape to ExampleAgentStack. The two differ only in name, in the model they choose, and in the package bundled into them.'
+      ]
+      sourceId 'aguistack'
+      order '0'
+      x '326'
+      y '500'
+      w '596'
+      h '130'
+      boundary 'hard'
+    }
+
+    containers_aguiruntime = platform 'AG-UI agent runtime' {
+      #request-path
+      description 'Claude Sonnet 5 · 4,000 tokens'
+      link https://github.com/govuk-once/govuk-chat-v2/blob/main/cdk/src/stacks/agui-agent-stack.ts 'agui-agent-stack.ts'
+      link https://github.com/govuk-once/govuk-chat-v2/blob/main/services/agui-agent/src/agui_agent/main.py 'agui_agent/main.py'
+      link https://github.com/govuk-once/govuk-chat-v2/blob/main/cdk/src/bundling/python.ts 'bundling/python.ts'
+      metadata {
+        type 'AWS::BedrockAgentCore::Runtime'
+        tech 'Python 3.13 · Strands · AG-UI protocol'
+        role 'Hosts one Strands agent behind the AG-UI protocol, serving <code>/invocations</code> with <code>/ping</code> as its health check, and streaming events back as it goes.'
+        facts [
+          'Its system prompt is loaded at import from <code>govuk_chat_v2_private</code>, a pinned git dependency fetched during Docker bundling with a GitHub token. That token is why nothing outside this repository\'s own CI can synthesise this stack.',
+          'The runtime name may not contain dashes, so the construct replaces them with underscores.',
+          'Granted <code>bedrock:InvokeModel</code> and <code>InvokeModelWithResponseStream</code> on inference profiles and foundation models, so the model call is made from here rather than from the API.'
+        ]
+        sourceId 'aguiruntime'
+        order '5'
+        x '350'
+        y '550'
+        w '262'
+        h '62'
+        ownership 'chat'
+        resources [ 'agent-runtimes' ]
+      }
+    }
+
+    containers_aguimemory = platform 'AG-UI agent memory' {
+      #request-path
+      description '90 days · session and actor'
+      link https://github.com/govuk-once/govuk-chat-v2/blob/main/cdk/src/stacks/agui-agent-stack.ts 'agui-agent-stack.ts'
+      link https://github.com/govuk-once/govuk-chat-v2/blob/main/services/agui-agent/src/agui_agent/main.py 'agui_agent/main.py'
+      metadata {
+        type 'AWS::BedrockAgentCore::Memory'
+        tech 'read and written by the agent, not the API'
+        role 'Holds the turns of one conversation so the next question has the ones before it. Keyed by a session id and an actor id.'
+        facts [
+          'The session id is the thread id and the actor id is the end user the caller asserted; the agent falls back to <code>default-user</code> when no end user is forwarded, which the code marks as a development workaround.',
+          'Events expire after ninety days. Nothing in the repository deletes memory when a conversation is deleted through an API.',
+          'The region is hard-coded to <code>eu-west-1</code> in the agent, not taken from the environment.'
+        ]
+        sourceId 'aguimemory'
+        order '6'
+        x '636'
+        y '550'
+        w '262'
+        h '62'
+        ownership 'chat'
+        resources [ 'agent-memory' ]
+      }
+    }
+  }
+
+  containers_uistack = boundary 'Chat UI stack' {
+    metadata {
+      type 'CloudFormation stack'
+      tech 'ChatUiStack · chat-ui-stack.ts'
+      role 'The web app for trying the API in a browser: a Next.js service on ECS Express Mode, the client it signs people in with, the secret its sessions are sealed with, and the subnets it runs in.'
+      facts [
+        'Takes the API\'s URL, token endpoint, user pool and app client from <code>ChatApiStack</code> as stack props, so it cannot deploy without that stack.',
+        'Deployed to ECS since 29 September 2026 (947ae0d), and never modelled here until the Python API was removed.'
+      ]
+      sourceId 'uistack'
+      order '0'
+      x '40'
+      y '40'
+      w '1168'
+      h '140'
+      boundary 'hard'
+    }
+
+    containers_uivpc = platform 'Public subnets' {
+      #off-request-path
+      description 'VPC · 2 AZs · no NAT'
+      link https://github.com/govuk-once/govuk-chat-v2/blob/main/cdk/src/stacks/chat-ui-stack.ts 'chat-ui-stack.ts'
+      metadata {
+        type 'AWS::EC2::VPC'
+        tech 'the only network in this repository'
+        role 'Two public subnets for the ECS service, and nothing private: no NAT gateway, so there is nothing for a private subnet to reach out through.'
+        sourceId 'uivpc'
+        order '1'
+        x '922'
+        y '90'
+        w '262'
+        h '62'
+        ownership 'chat'
+        resources [ 'ui-vpc' ]
+      }
+    }
+
+    containers_uisignin = platform 'Sign-in client' {
+      #request-path
+      description 'code flow · PKCE · openid'
+      link https://github.com/govuk-once/govuk-chat-v2/blob/main/cdk/src/stacks/chat-ui-stack.ts 'chat-ui-stack.ts'
+      link https://github.com/govuk-once/govuk-chat-v2/blob/main/services/chat-ui/src/auth/cognito-sign-in.ts 'auth/cognito-sign-in.ts'
+      metadata {
+        type 'AWS::Cognito::UserPoolClient'
+        tech 'a second client on the API\'s pool'
+        role 'How a person signs in: the Cognito Hosted UI, the authorization code flow with PKCE, and the one scope <code>openid</code>.'
+        facts [
+          'Its callback and logout URLs are set after deploy by a custom resource, because the service\'s endpoint is not known until it exists; an ephemeral environment also allows <code>localhost:3000</code>.',
+          'People are created by a script, never by self sign-up.'
+        ]
+        sourceId 'uisignin'
+        order '2'
+        x '64'
+        y '90'
+        w '262'
+        h '62'
+        ownership 'chat'
+        resources [ 'sign-in-client' ]
+      }
+    }
+
+    containers_uisecret = platform 'Session secret' {
+      #off-request-path
+      description 'Secrets Manager · 64 chars'
+      link https://github.com/govuk-once/govuk-chat-v2/blob/main/cdk/src/stacks/chat-ui-stack.ts 'chat-ui-stack.ts'
+      link https://github.com/govuk-once/govuk-chat-v2/blob/main/services/chat-ui/src/auth/session.ts 'auth/session.ts'
+      metadata {
+        type 'AWS::SecretsManager::Secret'
+        tech 'generated, no punctuation'
+        role 'The key the session cookie is sealed with. Generated by the stack, injected into the container as <code>SESSION_SECRET</code>, retained outside ephemeral environments.'
+        sourceId 'uisecret'
+        order '3'
+        x '636'
+        y '90'
+        w '262'
+        h '62'
+        ownership 'chat'
+        resources [ 'session-secret' ]
+      }
+    }
+
+    containers_uiservice = platform 'Chat UI service' {
+      #request-path
+      description 'ECS Express · Next.js · 1 task'
+      link https://github.com/govuk-once/govuk-chat-v2/blob/main/cdk/src/stacks/chat-ui-stack.ts 'chat-ui-stack.ts'
+      link https://github.com/govuk-once/govuk-chat-v2/blob/main/services/chat-ui/README.md 'chat-ui/README.md'
+      link https://github.com/govuk-once/govuk-chat-v2/blob/main/services/chat-ui/src/chat-api/client.ts 'chat-api/client.ts'
+      metadata {
+        type 'AWS::ECS::ExpressGatewayService'
+        tech '512 CPU · 1 GB · port 3000'
+        role 'A chat page that sends each message to the API through a server-side route and streams the answer back. The person never holds an API token: the server calls the API as the API\'s own app client.'
+        facts [
+          'Unauthenticated page requests are redirected to the Hosted UI and API requests get a 401; <code>/api/health</code> is exempt so health checks pass.',
+          'The person is passed to the API only as an <code>end-user-id</code>, a UUIDv5 of their Cognito <code>sub</code>, which is also what the Web ACL rate-limits on.',
+          'Runs in the stack\'s two public subnets, scales between one task and one task, and keeps a month of logs.'
+        ]
+        sourceId 'uiservice'
+        order '4'
+        x '350'
+        y '90'
+        w '262'
+        h '62'
+        ownership 'chat'
+        resources [ 'express-service' ]
+      }
+    }
+  }
+
+  containers_tsapi -> containers_tscognito 'checks the token' {
+    metadata {
+      protocol 'API Gateway Cognito authorizer'
+      auth 'A JWT from the pool, carrying the scope chat-api/invoke'
+      carries 'The access token on every method'
+      order '1'
+    }
+  }
+  containers_tsapi -> containers_tsfn 'proxies, streaming' {
+    metadata {
+      protocol 'Lambda proxy integration, ResponseTransferMode.STREAM'
+      auth 'The gateway\'s invoke permission'
+      carries 'The run request; server-sent events back'
+      order '2'
+    }
+  }
+  containers_tsfn -> containers_tstable 'threads, runs, messages' {
+    link https://github.com/govuk-once/govuk-chat-v2/blob/main/services/chat-api/src/persistence/runs.ts 'persistence/runs.ts'
+    metadata {
+      protocol 'DynamoDB'
+      auth 'Function role: read and write the table'
+      carries 'The thread, the run lock, and both messages when the run finishes'
+      order '3'
+    }
+  }
+  containers_tsfn -> containers_aguiruntime 'invokes the agent' {
+    metadata {
+      protocol 'bedrock-agentcore:InvokeAgentRuntime, accept text/event-stream'
+      auth 'Function role, on the runtime ARN and everything beneath it'
+      carries 'The messages so far and the end user id; events back'
+      order '4'
+    }
+  }
+  containers_aguiruntime -> containers_aguimemory 'the turns so far' {
+    metadata {
+      protocol 'bedrock-agentcore CreateEvent, GetEvent and ListEvents'
+      auth 'The runtime\'s own role, scoped to this memory'
+      carries 'One event per turn, under the session and actor'
+      order '5'
+    }
+  }
+  containers_tsapi -> containers_tsmsgfn 'proxies' {
+    metadata {
+      protocol 'Lambda proxy integration'
+      auth 'The gateway\'s invoke permission'
+      carries 'The thread id and a page cursor; a page of messages back'
+      order '6'
+    }
+  }
+  containers_tsmsgfn -> containers_tstable 'reads messages' {
+    link https://github.com/govuk-once/govuk-chat-v2/blob/main/services/chat-api/src/persistence/messages.ts 'persistence/messages.ts'
+    metadata {
+      protocol 'DynamoDB'
+      auth 'Function role: read the table'
+      carries 'The thread, then its messages'
+      order '7'
+    }
+  }
+  containers_uiservice -> containers_tsapi 'asks the API' {
+    link https://github.com/govuk-once/govuk-chat-v2/blob/main/services/chat-ui/src/chat-api/client.ts 'chat-api/client.ts'
+    metadata {
+      protocol 'HTTPS from the server side, streaming back'
+      auth 'A client-credentials token for the API app client, whose secret the UI reads from Cognito at run time'
+      carries 'The message, the thread id, and an end-user-id derived from the person\'s sub'
+      order '8'
+    }
+  }
+  containers_uiservice -> containers_uisignin 'signs people in with' {
+    metadata {
+      protocol 'OAuth authorization code with PKCE, against the Cognito Hosted UI'
+      auth 'The sign-in client and its generated secret'
+      carries 'The scope openid; the session that results lasts 24 hours in a sealed cookie'
+      order '9'
+    }
+  }
+  containers_uiservice -> containers_uisecret 'seals the session with' {
+    metadata {
+      protocol 'Secrets Manager, injected as SESSION_SECRET'
+      auth 'The task execution role may read it'
+      carries 'The key iron-session encrypts the cookie with'
+      order '10'
+    }
+  }
+}
+
+views {
+  view containers {
+    title 'Containers'
+    include containers_tsstack, containers_tsstack.**
+    include containers_aguistack, containers_aguistack.**
+    include containers_uistack, containers_uistack.**
+  }
+}

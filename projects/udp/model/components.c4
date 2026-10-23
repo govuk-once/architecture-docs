@@ -1,0 +1,359 @@
+// UDP architecture — Components.
+//
+// Inside one route Lambda: the middleware every request runs through, in the order it
+// runs, and the data-access layer beneath the handler. The thirteen route
+// functions share it with two variations, so it is drawn once and a table lists them. C4 level 3.
+
+model {
+
+  components_event = internal 'API Gateway event' {
+    #request-path
+    description 'proxy integration'
+    link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/lambda-construct.ts 'lambda-construct.ts'
+    metadata {
+      type 'Input'
+      tech 'APIGatewayProxyEvent'
+      role 'The whole request — headers, path parameters, query, body — as one event.'
+      sourceId 'event'
+      order '1'
+      x '64'
+      y '30'
+      w '262'
+      h '62'
+      ownership 'udp'
+    }
+  }
+
+  components_chain = boundary 'Middy chain · every route Lambda' {
+    metadata {
+      type 'Code · @middy/core'
+      tech 'src/*/handler.ts'
+      role 'Read top to bottom: a <code>before</code> runs in this order, an <code>after</code> in reverse, and a thrown error stops at the error handler.'
+      facts [
+        'The order in the file is logger, tracer, a stack annotation, response serialiser, sanitiser, error handling, then the validator — so validation is the last <code>before</code> and runs just ahead of the handler.',
+        'Nine of the thirteen routes run the sanitiser. createIdentity, createUser, deleteData and deleteIdentity do not — each returns a message, not a record.',
+        'The four routes with a body — createUser, createIdentity, postData, patchData — add <code>@middy/http-json-body-parser</code> between the error handler and the validator. It is not drawn.',
+        'The five queue- and event-driven functions run the logger, the tracer and the annotation only: no serialiser, no sanitiser, no error handler, no validator.',
+        'An <code>envValidator</code> middleware exists in libs/utils, with a test; nothing uses it. <code>requireEnvVars</code> at cold start does that job.'
+      ]
+      sourceId 'chain'
+      order '0'
+      x '40'
+      y '150'
+      w '310'
+      h '794'
+      boundary 'hard'
+    }
+
+    components_logger = internal 'injectLambdaContext' {
+      #request-path
+      description 'Powertools logger'
+      link https://github.com/govuk-once/user-data-platform/blob/main/src/getDataLambda/handler.ts 'getDataLambda/handler.ts'
+      link https://github.com/govuk-once/user-data-platform/blob/main/libs/utils/logger/Logger.ts 'logger/Logger.ts'
+      metadata {
+        type 'Middleware'
+        tech '@aws-lambda-powertools/logger'
+        role 'Adds the request id and function context to every log line.'
+        sourceId 'logger'
+        order '1'
+        x '64'
+        y '200'
+        w '262'
+        h '62'
+        ownership 'udp'
+      }
+    }
+
+    components_tracer = internal 'captureLambdaHandler' {
+      #request-path
+      description 'X-Ray · response not captured'
+      link https://github.com/govuk-once/user-data-platform/blob/main/src/getDataLambda/handler.ts 'getDataLambda/handler.ts'
+      metadata {
+        type 'Middleware'
+        tech '@aws-lambda-powertools/tracer'
+        role 'Opens the handler segment; the next middleware annotates it with the stack name. Tracing is <code>ACTIVE</code> on the function.'
+        sourceId 'tracer'
+        order '2'
+        x '64'
+        y '330'
+        w '262'
+        h '62'
+        ownership 'udp'
+      }
+    }
+
+    components_serializer = internal 'httpResponseSerializer' {
+      #request-path
+      description 'JSON out'
+      link https://github.com/govuk-once/user-data-platform/blob/main/src/getDataLambda/handler.ts 'getDataLambda/handler.ts'
+      metadata {
+        type 'Middleware · after'
+        tech '@middy/http-response-serializer'
+        role 'Turns the handler\'s object body into <code>application/json</code>.'
+        sourceId 'serializer'
+        order '3'
+        x '64'
+        y '460'
+        w '262'
+        h '62'
+        ownership 'udp'
+      }
+    }
+
+    components_sanitiser = internal 'responseSanitiser' {
+      #request-path
+      description 'strips internal fields'
+      link https://github.com/govuk-once/user-data-platform/blob/main/libs/utils/middleware/responseSanitiser.ts 'responseSanitiser.ts'
+      metadata {
+        type 'Middleware · after'
+        tech 'libs/utils/middleware'
+        role 'Removes <code>pk</code>, <code>sk</code>, <code>udpId</code>, <code>ttl</code>, <code>lsi</code>, <code>lsi_1</code> and <code>__dataKey</code> from whatever the handler returns, at every depth, so no table key or wrapped data key reaches a consumer.'
+        sourceId 'sanitiser'
+        order '4'
+        x '64'
+        y '590'
+        w '262'
+        h '62'
+        ownership 'udp'
+      }
+    }
+
+    components_errors = internal 'udpErrorHandling' {
+      #request-path
+      description 'onError'
+      link https://github.com/govuk-once/user-data-platform/blob/main/libs/utils/middleware/udpErrorHandling.ts 'udpErrorHandling.ts'
+      metadata {
+        type 'Middleware · onError'
+        tech 'libs/utils/middleware'
+        role 'Maps a thrown error to a status and a body, and logs it. A not-found from the data layer becomes a 404 here.'
+        sourceId 'errors'
+        order '5'
+        x '64'
+        y '720'
+        w '262'
+        h '62'
+        ownership 'udp'
+      }
+    }
+
+    components_validator = internal 'zodValidator(route)' {
+      #request-path
+      description 'headers · path · query · body'
+      link https://github.com/govuk-once/user-data-platform/blob/main/libs/utils/middleware/zodValidator.ts 'zodValidator.ts'
+      link https://github.com/govuk-once/user-data-platform/blob/main/libs/utils/schemas/routes/routes.ts 'routes.ts'
+      metadata {
+        type 'Middleware · before'
+        tech 'zod · one schema per route'
+        role 'Parses the event against the route\'s schema from <code>routes.ts</code>; a failure is a 400 before the handler runs. The same schemas generate <code>docs/openapi.yml</code>.'
+        sourceId 'validator'
+        order '6'
+        x '64'
+        y '850'
+        w '262'
+        h '62'
+        ownership 'udp'
+      }
+    }
+  }
+
+  components_handler = internal 'lambdaHandler' {
+    #request-path
+    description 'the route\'s own logic'
+    link https://github.com/govuk-once/user-data-platform/blob/main/src/getDataLambda/handler.ts 'getDataLambda/handler.ts'
+    link https://github.com/govuk-once/user-data-platform/blob/main/libs/utils/env/requireEnvVars.ts 'requireEnvVars.ts'
+    metadata {
+      type 'Code'
+      tech 'src/{route}Lambda/handler.ts'
+      role 'Resolves the caller\'s identity from the two headers, then does the one thing the route is for. Table names and the key id come from <code>requireEnvVars</code> at cold start.'
+      sourceId 'handler'
+      order '2'
+      x '450'
+      y '850'
+      w '262'
+      h '62'
+      ownership 'udp'
+    }
+  }
+
+  components_dataaccess = boundary 'Data access · libs/data-access' {
+    metadata {
+      type 'Code · shared library'
+      tech 'libs/data-access'
+      role 'One factory hands each handler the services it names, each bound to a table and, when the function has a key id, to field encryption.'
+      sourceId 'dataaccess'
+      order '0'
+      x '790'
+      y '800'
+      w '650'
+      h '526'
+      boundary 'hard'
+    }
+
+    components_factory = internal 'ServiceFactory' {
+      #request-path
+      description 'identity · data · sar services'
+      link https://github.com/govuk-once/user-data-platform/blob/main/libs/data-access/factory/ServiceFactory.ts 'ServiceFactory.ts'
+      metadata {
+        type 'Code'
+        tech 'one DynamoDB document client'
+        role 'Builds each service once with its table name and its encrypted fields: <code>data</code> for data, the three token fields for identity, <code>presignedURL</code> for SAR.'
+        facts [
+          'Without <code>kmsKeyId</code> in its config the encryption is <code>undefined</code> and every field is stored as sent.'
+        ]
+        sourceId 'factory'
+        order '1'
+        x '814'
+        y '850'
+        w '262'
+        h '62'
+        ownership 'udp'
+      }
+    }
+
+    components_identitysvc = internal 'DynamoDBIdentityService' {
+      #request-path
+      description 'udp-identity · sk-index'
+      link https://github.com/govuk-once/user-data-platform/blob/main/libs/data-access/services/DynamoDbIdentityService.ts 'DynamoDbIdentityService.ts'
+      metadata {
+        type 'Code'
+        tech 'GetItem · PutItem · DeleteItem · Query'
+        role '<code>getByServiceId</code> is the first call every route makes; <code>deleteAllByUdpId</code> is what a DSAR ends with.'
+        facts [
+          'A record whose <code>ttl</code> has passed is treated as absent.'
+        ]
+        sourceId 'identitysvc'
+        order '2'
+        x '814'
+        y '980'
+        w '262'
+        h '62'
+        ownership 'udp'
+      }
+    }
+
+    components_datasvc = internal 'DynamoDBDataService' {
+      #request-path
+      description 'udp-data · pages of 100'
+      link https://github.com/govuk-once/user-data-platform/blob/main/libs/data-access/services/DynamoDbDataService.ts 'DynamoDbDataService.ts'
+      metadata {
+        type 'Code'
+        tech 'Put · Get · Update · Delete · Query'
+        role 'Keyed by <code>udpId</code> and the resource path. A patch reads, merges and updates; a delete is conditional on the item existing.'
+        sourceId 'datasvc'
+        order '3'
+        x '814'
+        y '1110'
+        w '262'
+        h '62'
+        ownership 'udp'
+      }
+    }
+
+    components_sarsvc = internal 'SarService' {
+      #request-path
+      description 'SAR/{sarId} records'
+      link https://github.com/govuk-once/user-data-platform/blob/main/libs/data-access/services/SarService.ts 'SarService.ts'
+      metadata {
+        type 'Code'
+        tech 'Get · Put on the data table'
+        role 'The request record the status route reads and the presigned-URL function writes.'
+        sourceId 'sarsvc'
+        order '4'
+        x '814'
+        y '1240'
+        w '262'
+        h '62'
+        ownership 'udp'
+      }
+    }
+
+    components_encryption = internal 'EncryptionService' {
+      #request-path
+      description 'GenerateDataKey · AES-256-GCM'
+      link https://github.com/govuk-once/user-data-platform/blob/main/libs/data-access/services/EncryptionService.ts 'EncryptionService.ts'
+      link https://github.com/govuk-once/user-data-platform/blob/main/libs/data-access/services/crypto.ts 'crypto.ts'
+      metadata {
+        type 'Code'
+        tech '@aws-sdk/client-kms · node:crypto'
+        role 'One data key per item from KMS; the named fields encrypted with it locally; the wrapped key stored as <code>__dataKey</code>. Decrypt calls KMS once per item read.'
+        sourceId 'encryption'
+        order '5'
+        x '1154'
+        y '1110'
+        w '262'
+        h '62'
+        ownership 'udp'
+      }
+    }
+
+    components_kms = platform 'KMS · DB key' {
+      #request-path
+      description 'via the KMS interface endpoint'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/kms-construct.ts 'kms-construct.ts'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/lambda-construct.ts 'lambda-construct.ts'
+      metadata {
+        type 'AWS::KMS::Key'
+        tech 'rotation every 90 days'
+        role 'The key <code>KMS_KEY_ID</code> names. The function role is granted encrypt and decrypt on it by the construct.'
+        sourceId 'kms'
+        order '6'
+        x '1154'
+        y '1240'
+        w '262'
+        h '62'
+        ownership 'udp'
+        awsIcon 'kms'
+      }
+    }
+  }
+
+  components_event -> components_logger 'invoke' {
+    metadata { protocol 'Lambda invocation' auth '—' carries 'The event' order '1' }
+  }
+  components_logger -> components_tracer 'next' {
+    metadata { protocol 'in-process' auth '—' carries 'The event, with context' order '2' }
+  }
+  components_tracer -> components_serializer 'next' {
+    metadata { protocol 'in-process' auth '—' carries 'The event' order '3' }
+  }
+  components_serializer -> components_sanitiser 'next' {
+    metadata { protocol 'in-process' auth '—' carries 'The event' order '4' }
+  }
+  components_sanitiser -> components_errors 'next' {
+    metadata { protocol 'in-process' auth '—' carries 'The event' order '5' }
+  }
+  components_errors -> components_validator 'next' {
+    metadata { protocol 'in-process' auth '—' carries 'The event' order '6' }
+  }
+  components_validator -> components_handler 'parsed request' {
+    metadata { protocol 'in-process' auth 'The schema has passed' carries 'Typed headers, params, query and body' order '7' }
+  }
+  components_handler -> components_factory 'getService' {
+    metadata { protocol 'in-process' auth '—' carries 'A service name' order '8' }
+  }
+  components_factory -> components_identitysvc 'builds' {
+    metadata { protocol 'in-process' auth '—' carries 'IDENTITY_TABLE_NAME and the token fields to encrypt' order '9' }
+  }
+  components_identitysvc -> components_datasvc 'then' {
+    metadata { protocol 'in-process' auth '—' carries 'The udpId the identity resolved to' edgeStyle 'dash' order '10' }
+  }
+  components_datasvc -> components_sarsvc 'shares the table' {
+    metadata { protocol 'in-process' auth '—' carries 'Nothing: both read TABLE_NAME' edgeStyle 'dash' order '11' }
+  }
+  components_datasvc -> components_encryption 'encryptItem · decryptItem' {
+    metadata { protocol 'in-process' auth '—' carries 'The named fields, in and out' order '12' }
+  }
+  components_encryption -> components_kms 'GenerateDataKey · Decrypt' {
+    metadata { protocol 'KMS API over the interface endpoint' auth 'Function role; the key policy allows the Lambda service' carries 'A 256-bit data key, wrapped and plain' order '13' }
+  }
+}
+
+views {
+  view components {
+    title 'Components'
+    include components_event
+    include components_chain, components_chain.**
+    include components_handler
+    include components_dataaccess, components_dataaccess.**
+  }
+}

@@ -770,11 +770,11 @@
           ],
           [
             "Macie scan of the CloudFront access-log bucket",
-            "<code>FlexMacieStack</code>, persistent stages only",
+            "<code>FlexMacieStack</code> — written, but no longer deployed",
             "us-east-1",
-            "Weekly",
-            "Monday, 100% sampling, recommended managed identifiers; findings published every 15 minutes, results to a KMS-encrypted bucket",
-            "<code>app.ts</code> lines 11 and 93, <code>stacks/macie.ts</code>"
+            "Not running",
+            "Monday, 100% sampling, recommended managed identifiers; findings published every 15 minutes, results to a KMS-encrypted bucket — the schedule the stack carries when it is enabled. FLEX-491 (#522) disabled it in <code>app.ts</code> while a deployment issue is investigated with the Platform team, so no stage synthesises it today",
+            "<code>app.ts</code>, <code>stacks/macie.ts</code>"
           ]
         ]
       },
@@ -883,7 +883,7 @@
           [
             "Amazon Macie",
             "<code>FlexMacieStack</code>",
-            "Deployed to persistent stages since FLEX-491, which re-enabled it with an explicit custom-resource role — the Platform IAM guardrail that held it back is resolved. <code>validate:macie-coverage</code> runs in Hygiene on every pull request and posts a Slack notice for uncovered domains; it now reports against a stack that is deployed."
+            "Written, but not deployed. FLEX-491 re-enabled it with an explicit custom-resource role (#519), then reverted to the dynamic-role pattern and disabled the stack in <code>app.ts</code> (#522) while a deployment issue is investigated with the Platform team. No stage synthesises it today, so <code>validate:macie-coverage</code> in Hygiene reports against a stack that is not deployed."
           ],
           [
             "VPC flow logs",
@@ -912,7 +912,7 @@
     "group": "Cross-cutting",
     "audience": "Platform engineers and on-call",
     "blurb": "How code reaches production, and how production reaches a human when it goes wrong. Nothing on this tab is on a user's request path.",
-    "note": "A <b>solid line blocks the release; a dashed one runs beside it and blocks nothing</b> — the spine down the middle is the only path to production. Two of the paths drawn here do not work today. The canary's alarm has no alarm action, and the cross-region relay's inline handler has a syntax error, so the smoke test and every us-east-1 edge alarm reach nobody. A third is worth reading the test table for: the platform suite is the only test that can fail a deploy, and it is skipped in production.",
+    "note": "A <b>solid line blocks the release; a dashed one runs beside it and blocks nothing</b> — the spine down the middle is the only path to production. One of the paths drawn here does not work today: the canary's alarm has no alarm action, so the smoke test reaches nobody. The cross-region relay now forwards, but the six alarms that watch it publish to a topic nothing subscribes to. Another is worth reading the test table for: the platform suite is the only test that can fail a deploy, and it is skipped in production.",
     "dashMeans": "runs beside the release and blocks nothing",
     "tables": [
       {
@@ -1004,7 +1004,7 @@
       },
       {
         "name": "Every alarm, its threshold, and which topic it reaches",
-        "note": "19 alarm kinds: 18 from six constructs in <code>constructs/alarms/</code>, plus the smoke-test alarm in <code>stacks/smoke-test.ts</code>, which sets no action and so reaches nobody. Every one sets <code>treatMissingData: NOT_BREACHING</code>, so silence never fires an alarm. Critical and Warning are two separate SNS topics, wired in <code>constructs/alarms/actions.ts</code>. The CloudFront, CloudFront Function and Shield rows are measured in us-east-1, because that is the only region those metrics are emitted to — they reach the eu-west-2 topics through the cross-region relay.",
+        "note": "44 alarm kinds. 24 watch traffic and the relay, from seven constructs in <code>constructs/alarms/</code>. The IAM, Lambda, CloudFormation and secret-rotation alerts are EventBridge rules that publish to the critical topic; each adds a <code>Lost</code> and an <code>Undelivered</code> alarm for an alert that could not be delivered there. Certificate expiry, the hourly credential monitor and DVLA's secret rotation add seven more, and the smoke-test alarm in <code>stacks/smoke-test.ts</code> sets no action and so reaches nobody. The canary treats missing data as breaching; <code>DaysToExpiry</code> and the credential monitor's three state alarms ignore it; every other alarm treats it as not breaching, so silence never fires it. Critical and Warning are two separate SNS topics, wired in <code>constructs/alarms/actions.ts</code>; the credential monitor reaches them through their SSM parameters. The six relay-health rows publish to a third, <code>{stage}-flex-alerts-relay-health</code>, which has no subscription in any stage. The CloudFront, CloudFront Function, Shield, Certificate, us-east-1 change-alert and relay rows are measured in us-east-1, because that is where those metrics and IAM's events are emitted; all but the relay-health rows reach the eu-west-2 topics through the cross-region relay. The change alerts, credential monitor and DVLA rotation are not deployed to ephemeral stages.",
         "code": [
           [
             "api-gateway.ts",
@@ -1025,7 +1025,51 @@
             "actions.ts",
             "platform/infra/flex/src/constructs/alarms/actions.ts"
           ],
-          ["smoke-test.ts", "platform/infra/flex/src/stacks/smoke-test.ts"]
+          ["smoke-test.ts", "platform/infra/flex/src/stacks/smoke-test.ts"],
+          [
+            "alarm-relay.ts",
+            "platform/infra/flex/src/constructs/alarms/alarm-relay.ts"
+          ],
+          [
+            "above-zero-alarm.ts",
+            "platform/infra/flex/src/constructs/alarms/above-zero-alarm.ts"
+          ],
+          [
+            "relay-health.ts",
+            "platform/infra/flex/src/constructs/alarms/relay-health.ts"
+          ],
+          [
+            "certificate.ts",
+            "platform/infra/flex/src/constructs/alarms/certificate.ts"
+          ],
+          [
+            "credential-monitor.ts",
+            "platform/infra/flex/src/constructs/alarms/credential-monitor.ts"
+          ],
+          [
+            "event-alert.ts",
+            "platform/infra/flex/src/constructs/alarms/event-alert.ts"
+          ],
+          [
+            "iam-change-alerts.ts",
+            "platform/infra/flex/src/constructs/alarms/iam-change-alerts.ts"
+          ],
+          [
+            "secret-rotation.ts",
+            "platform/infra/flex/src/constructs/alarms/secret-rotation.ts"
+          ],
+          [
+            "secret-rotation-alerts.ts",
+            "platform/infra/flex/src/stacks/core/secret-rotation-alerts.ts"
+          ],
+          [
+            "stacks/credential-monitor.ts",
+            "platform/infra/flex/src/stacks/credential-monitor.ts"
+          ],
+          [
+            "dvla-secret-rotation.ts",
+            "platform/infra/flex/src/stacks/core/dvla-secret-rotation.ts"
+          ]
         ],
         "derived": {
           "from": "counts.alarms",
@@ -1179,12 +1223,212 @@
             "Warning"
           ],
           [
+            "Alarm relay",
+            "<code>CriticalRelayErrors</code>",
+            "<code>Errors</code> sum",
+            "above 0",
+            "1 × 5 min",
+            "Relay health — no subscriber"
+          ],
+          [
+            "Alarm relay",
+            "<code>CriticalRelayFailureQueueNotEmpty</code>",
+            "<code>ApproximateNumberOfMessagesVisible</code> max",
+            "above 0",
+            "1 × 5 min",
+            "Relay health — no subscriber"
+          ],
+          [
+            "Alarm relay",
+            "<code>CriticalRelayFailureQueueUndelivered</code>",
+            "<code>DestinationDeliveryFailures</code> sum",
+            "above 0",
+            "1 × 5 min",
+            "Relay health — no subscriber"
+          ],
+          [
+            "Alarm relay",
+            "<code>WarningRelayErrors</code>",
+            "<code>Errors</code> sum",
+            "above 0",
+            "1 × 5 min",
+            "Relay health — no subscriber"
+          ],
+          [
+            "Alarm relay",
+            "<code>WarningRelayFailureQueueNotEmpty</code>",
+            "<code>ApproximateNumberOfMessagesVisible</code> max",
+            "above 0",
+            "1 × 5 min",
+            "Relay health — no subscriber"
+          ],
+          [
+            "Alarm relay",
+            "<code>WarningRelayFailureQueueUndelivered</code>",
+            "<code>DestinationDeliveryFailures</code> sum",
+            "above 0",
+            "1 × 5 min",
+            "Relay health — no subscriber"
+          ],
+          [
             "Smoke test",
             "<code>SmokeTestAlarm</code>",
             "<code>SmokeTestSuccess</code> sum",
             "below 1",
             "1 × 15 min",
             "— no action wired"
+          ],
+          [
+            "Change alerts · us-east-1",
+            "<code>IamChangeAlertLost</code>",
+            "<code>InvocationsFailedToBeSentToDlq</code> sum, on the rule",
+            "above 0",
+            "1 × 5 min",
+            "Warning"
+          ],
+          [
+            "Change alerts · us-east-1",
+            "<code>IamChangeAlertUndelivered</code>",
+            "<code>ApproximateNumberOfMessagesVisible</code> max, on the dead-letter queue",
+            "above 0",
+            "1 × 5 min",
+            "Warning"
+          ],
+          [
+            "Change alerts · us-east-1",
+            "<code>LambdaChangeAlertLost</code>",
+            "<code>InvocationsFailedToBeSentToDlq</code> sum, on the rule",
+            "above 0",
+            "1 × 5 min",
+            "Warning"
+          ],
+          [
+            "Change alerts · us-east-1",
+            "<code>LambdaChangeAlertUndelivered</code>",
+            "<code>ApproximateNumberOfMessagesVisible</code> max, on the dead-letter queue",
+            "above 0",
+            "1 × 5 min",
+            "Warning"
+          ],
+          [
+            "Change alerts · us-east-1",
+            "<code>CloudFormationChangeAlertLost</code>",
+            "<code>InvocationsFailedToBeSentToDlq</code> sum, on the rule",
+            "above 0",
+            "1 × 5 min",
+            "Warning"
+          ],
+          [
+            "Change alerts · us-east-1",
+            "<code>CloudFormationChangeAlertUndelivered</code>",
+            "<code>ApproximateNumberOfMessagesVisible</code> max, on the dead-letter queue",
+            "above 0",
+            "1 × 5 min",
+            "Warning"
+          ],
+          [
+            "Change alerts · eu-west-2",
+            "<code>LambdaChangeAlertLost</code>",
+            "<code>InvocationsFailedToBeSentToDlq</code> sum, on the rule",
+            "above 0",
+            "1 × 5 min",
+            "Warning"
+          ],
+          [
+            "Change alerts · eu-west-2",
+            "<code>LambdaChangeAlertUndelivered</code>",
+            "<code>ApproximateNumberOfMessagesVisible</code> max, on the dead-letter queue",
+            "above 0",
+            "1 × 5 min",
+            "Warning"
+          ],
+          [
+            "Change alerts · eu-west-2",
+            "<code>CloudFormationChangeAlertLost</code>",
+            "<code>InvocationsFailedToBeSentToDlq</code> sum, on the rule",
+            "above 0",
+            "1 × 5 min",
+            "Warning"
+          ],
+          [
+            "Change alerts · eu-west-2",
+            "<code>CloudFormationChangeAlertUndelivered</code>",
+            "<code>ApproximateNumberOfMessagesVisible</code> max, on the dead-letter queue",
+            "above 0",
+            "1 × 5 min",
+            "Warning"
+          ],
+          [
+            "Change alerts · eu-west-2",
+            "<code>SecretRotationAlertLost</code>",
+            "<code>InvocationsFailedToBeSentToDlq</code> sum, on the rule",
+            "above 0",
+            "1 × 5 min",
+            "Warning"
+          ],
+          [
+            "Change alerts · eu-west-2",
+            "<code>SecretRotationAlertUndelivered</code>",
+            "<code>ApproximateNumberOfMessagesVisible</code> max, on the dead-letter queue",
+            "above 0",
+            "1 × 5 min",
+            "Warning"
+          ],
+          [
+            "Certificate",
+            "<code>DaysToExpiry</code>",
+            "<code>DaysToExpiry</code> min",
+            "below 30 days",
+            "1 × 1 day",
+            "Critical"
+          ],
+          [
+            "Credential monitor",
+            "<code>CognitoConfigDrift</code>",
+            "<code>CognitoConfigDrift</code> max",
+            "above 0",
+            "1 × 1 h",
+            "Critical"
+          ],
+          [
+            "Credential monitor",
+            "<code>SecretRotationOverdue</code>",
+            "<code>SecretRotationOverdue</code> max: a credential 7+ days past rotation",
+            "above 0",
+            "1 × 1 h",
+            "Warning"
+          ],
+          [
+            "Credential monitor",
+            "<code>SecretRotationUnverifiable</code>",
+            "<code>SecretRotationUnverifiable</code> max",
+            "above 0",
+            "1 × 1 h",
+            "Warning"
+          ],
+          [
+            "Credential monitor",
+            "<code>NotReporting</code>",
+            "<code>CredentialMonitorSuccess</code> sum, missing as 0",
+            "below 1",
+            "4 × 1 h, 3 must breach",
+            "Warning"
+          ],
+          [
+            "Credential monitor",
+            "<code>Failing</code>",
+            "the monitor's <code>Errors</code> sum, missing as 0",
+            "above 0",
+            "3 × 1 h, all 3 must breach",
+            "Warning"
+          ],
+          [
+            "DVLA secret rotation",
+            "<code>Failed</code>",
+            "the rotation Lambda's <code>Errors</code> sum",
+            "above 0",
+            "1 × 5 min",
+            "Critical"
           ]
         ]
       }

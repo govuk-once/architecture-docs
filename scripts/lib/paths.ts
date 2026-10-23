@@ -28,12 +28,14 @@ const CONFIG_PATH = inDocs("explorer.config.json");
 export interface SiteContract {
   root: string;
   page: string;
+  /** Where the built site is published, for anything that has to link to it. */
+  url?: string;
 }
 
 /**
  * An architecture this site intends to document and does not yet.
  *
- * It earns a card on the index so the scope is visible, and the card says plainly that
+ * It earns a row on the index so the scope is visible, and the row says plainly that
  * nothing has been read from that repository. `seenFrom` names the project whose model
  * the description was taken from, because a description of UDP written while reading
  * FLEX is evidence about FLEX, not about UDP.
@@ -46,6 +48,39 @@ export interface PlannedProject {
   seenFrom?: string;
 }
 
+/**
+ * One box on the index's "how they fit" sketch. A node that names a `project` is one of
+ * the documented systems and links to its page; one that does not is a party outside the
+ * programme, drawn but not a door. `col` and `row` place it on a grid.
+ */
+export interface FitNode {
+  id: string;
+  project?: string;
+  label: string;
+  sub: string;
+  col: number;
+  row: number;
+}
+
+/**
+ * One line on the sketch. `see` is `<project>#<view>`: the tab that proves the line. The
+ * build refuses a tab that does not exist, because a line on the front door is a claim
+ * like any other and must name where it is argued.
+ */
+export interface FitEdge {
+  from: string;
+  to: string;
+  label: string;
+  see: string;
+}
+
+export interface FitSketch {
+  title: string;
+  note: string;
+  nodes: FitNode[];
+  edges: FitEdge[];
+}
+
 export interface SiteConfig {
   title: string;
   tagline: string;
@@ -56,6 +91,8 @@ export interface SiteConfig {
   /** Directory names under projects/, in the order they appear on the index. */
   projects: string[];
   planned: PlannedProject[];
+  /** How the documented systems call one another, drawn above the list. Optional. */
+  fit?: FitSketch;
 }
 
 function readSiteConfig(): SiteConfig {
@@ -109,13 +146,72 @@ function readSiteConfig(): SiteConfig {
       `explorer.config.json: ${clash.map((p) => p.id).join(", ")} is both built and ` +
         `planned — a project that exists is not planned.`,
     );
+  const fit = parsed.fit;
+  if (fit) {
+    if (!fit.title || !Array.isArray(fit.nodes) || !Array.isArray(fit.edges))
+      throw new Error(
+        `explorer.config.json: "fit" needs title, nodes and edges — the sketch of how the ` +
+          `documented systems call one another.`,
+      );
+    const ids = new Set<string>();
+    for (const n of fit.nodes) {
+      if (
+        !n.id ||
+        !n.label ||
+        typeof n.col !== "number" ||
+        typeof n.row !== "number"
+      )
+        throw new Error(
+          `explorer.config.json: fit node ${JSON.stringify(n)} needs id, label, col and row`,
+        );
+      if (ids.has(n.id))
+        throw new Error(
+          `explorer.config.json: fit node ${n.id} is listed twice`,
+        );
+      ids.add(n.id);
+      if (n.project && !parsed.projects.includes(n.project))
+        throw new Error(
+          `explorer.config.json: fit node ${n.id} names project ${n.project}, which the ` +
+            `site does not publish`,
+        );
+    }
+    for (const e of fit.edges) {
+      if (!ids.has(e.from) || !ids.has(e.to))
+        throw new Error(
+          `explorer.config.json: fit edge ${e.from} → ${e.to} names a node that is not listed`,
+        );
+      if (!/^[a-z][a-z0-9-]*#[a-z][a-z0-9-]*$/.test(e.see))
+        throw new Error(
+          `explorer.config.json: fit edge ${e.from} → ${e.to} needs see: "<project>#<view>", ` +
+            `the tab that proves it`,
+        );
+    }
+  }
   return { ...(parsed as SiteConfig), planned };
 }
 
 export const SITE_CONFIG = readSiteConfig();
 export const SITE = SITE_CONFIG.site;
 
-export const SITE_ROOT = path.resolve(DOCS_ROOT, SITE.root);
+/**
+ * `ARCH_SITE_ROOT` moves the whole site somewhere else — absolute, or relative to this
+ * repository. The build with planned states in it writes there, so it can never overwrite
+ * the public site, and nothing published from here can pick it up by accident.
+ */
+export const SITE_ROOT = path.resolve(
+  DOCS_ROOT,
+  process.env.ARCH_SITE_ROOT || SITE.root,
+);
+
+/**
+ * Where planned states are read from: a directory holding one `<project id>/` per project,
+ * set by `ARCH_STATES_DIR`. Unset, there are none — which is what this public repository
+ * builds. The states themselves live in govuk-once/architecture-docs-states, which is
+ * private, and set this when it builds its own copy of the site.
+ */
+export const STATES_ROOT = process.env.ARCH_STATES_DIR
+  ? path.resolve(DOCS_ROOT, process.env.ARCH_STATES_DIR)
+  : null;
 
 /** The index over the projects, at the root of the site. */
 export const SITE_INDEX = path.join(SITE_ROOT, SITE.page);
