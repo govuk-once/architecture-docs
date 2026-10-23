@@ -25,6 +25,7 @@ import { existsSync, mkdirSync, rmSync } from "node:fs";
 import path from "node:path";
 
 import { DOCS_ROOT, inDocs } from "./lib/paths.js";
+import { pinnedRef } from "./lib/sourcePin.js";
 import {
   loadProjects,
   locateOrThrow,
@@ -105,12 +106,21 @@ function syncSource(project: Project, source: Source, installs: boolean) {
   // git itself rather than on the directory.
   mkdirSync(parent, { recursive: true });
 
-  if (existsSync(path.join(source.dir, ".git"))) {
-    console.log(`  fetching ${source.ref} in ${source.root}`);
-    run("git", ["fetch", "--depth", "1", "origin", source.ref], source.dir);
+  /* A pin names a commit, which has no origin/ ref to reset to: it is fetched by name and
+     the checkout reset to what arrived. A branch keeps the shape it always had. */
+  const pin = pinnedRef(project.id, source.id);
+  const ref = pin?.ref ?? source.ref;
+  if (pin)
+    console.log(`  pinned to ${pin.ref} by ${pin.name}, not ${source.ref}`);
+  const resetTo = (dir: string) => {
+    run("git", ["fetch", "--depth", "1", "origin", ref], dir);
     // Hard reset rather than pull: this checkout is disposable and must never carry local
     // edits, or the docs would be built from something nobody else can reproduce.
-    run("git", ["reset", "--hard", `origin/${source.ref}`], source.dir);
+    run("git", ["reset", "--hard", pin ? "FETCH_HEAD" : `origin/${ref}`], dir);
+  };
+  if (existsSync(path.join(source.dir, ".git"))) {
+    console.log(`  fetching ${ref} in ${source.root}`);
+    resetTo(source.dir);
     // node_modules survives an install decision; cdk.out survives so a sync that finds
     // the app untouched does not force a re-synth. `pnpm synth` always rewrites it.
     run(
@@ -119,7 +129,7 @@ function syncSource(project: Project, source: Source, installs: boolean) {
       source.dir,
     );
   } else {
-    console.log(`  cloning ${source.repo} (${source.ref}) into ${source.root}`);
+    console.log(`  cloning ${source.repo} (${ref}) into ${source.root}`);
     run(
       "git",
       [
@@ -133,6 +143,8 @@ function syncSource(project: Project, source: Source, installs: boolean) {
       ],
       parent,
     );
+    /* `--branch` takes a branch, so a pinned commit is reached in a second step. */
+    if (pin) resetTo(source.dir);
   }
 
   const head = headCommit(source);
