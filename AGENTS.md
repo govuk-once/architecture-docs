@@ -56,8 +56,9 @@ count definitions or the facts file itself changed. `pnpm facts --force` and
 `pnpm sync --install` override that; CI ignores the recorded state entirely, because
 re-deriving and diffing is the whole point of the run.
 
-A source can be **pinned** for one run: `ARCH_SOURCE_REF_FLEX=604331fe pnpm sync` checks
-FLEX out at that commit instead of the branch its config tracks, and
+A source can be **pinned** for one run: `ARCH_SOURCE_REF_FLEX=<full sha> pnpm sync` checks
+FLEX out at that commit instead of the branch its config tracks — the whole 40-character
+sha, because git fetches a commit by its whole name — and
 `ARCH_SOURCE_REF_APP_IOS` does the same for one of a project's several sources. The config
 still tracks the branch, and CI here never pins, because re-deriving against the moving
 branch is how drift is found. A pin is for a build that has to publish what has been read
