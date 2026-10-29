@@ -10,12 +10,13 @@ model {
     description 'the data subject'
     link https://github.com/govuk-once/user-data-platform/blob/main/libs/utils/schemas/routes/routes.ts 'routes.ts'
     link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/stacks/main-stack.ts 'main-stack.ts'
+    link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/lambda-construct.ts 'lambda-construct.ts'
     metadata {
       type 'Person'
       tech '—'
       role 'The person whose record this is. Never a direct caller: everything reaches UDP through FLEX.'
       facts [
-        'A subject access request and a deletion request are routes on this API — <code>POST /v1/sar</code> and <code>POST /v1/dsar</code> — made on the person\'s behalf by a consumer. Production does not deploy them.'
+        'A subject access request and a deletion request are declared as routes — <code>POST /v1/sar</code> and <code>POST /v1/dsar</code> — but no environment puts them on the API: each is marked <code>disableRoute</code>. Development still deploys their Lambdas, unreachable.'
       ]
       sourceId 'user'
       order '1'
@@ -122,8 +123,8 @@ model {
         tech 'AWS · TypeScript · serverless · one VPC'
         role 'Keeps one record per person — a <code>udpId</code> — the links from each service\'s own identifier to it, the data services store against it, and the requests to export or erase all of it.'
         facts [
-          'Thirteen routes on one private REST API — ten in production, without the SAR and DSAR routes — each an IAM-authorised Lambda in an isolated subnet, over two DynamoDB tables.',
-          'VPC, main, DVLA pilot, monitoring and Macie stacks in every environment; SAR, end-to-end and performance test stacks outside production; backup outside development.',
+          'Ten routes on one private REST API in every environment — the SAR and DSAR routes are declared but never routed — each an IAM-authorised Lambda in an isolated subnet, over two DynamoDB tables.',
+          'VPC, main, SAR, DVLA pilot, monitoring and Macie stacks in every environment; live schema, end-to-end and performance test stacks outside production; backup outside development.',
           'The README says no Cognito or OAuth credentials are involved and access is cross-account IAM. The OpenAPI file still declares a Cognito bearer scheme; nothing enforces one.'
         ]
         sourceId 'udp'
@@ -163,7 +164,7 @@ model {
     metadata {
       protocol 'HTTPS to a private API, through the consumer\'s execute-api endpoint'
       auth 'An assumed consumer role, SigV4; the API\'s resource policy admits only listed endpoints'
-      carries 'Users, identity links and exchanges, data under /v1/{resourcePath+}, and outside production SAR and DSAR requests'
+      carries 'Users, identity links and exchanges, and data under /v1/{resourcePath+}'
       facts [
         'The consumer role may invoke <code>GET</code> for <code>read</code>, <code>POST</code>, <code>PUT</code> and <code>PATCH</code> for <code>write</code>, <code>DELETE</code> for <code>delete</code> — on every path. Nothing scopes a consumer to a resource.',
         'FLEX\'s udp gateway also calls <code>/v1/notifications</code> and <code>/v1/groups</code>, which are not routes here: they are resource paths on the generic data API.'

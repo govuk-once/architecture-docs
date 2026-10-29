@@ -8,7 +8,7 @@
   "inventoryLabel": "AWS resources",
   "iconLabel": "AWS icons",
   "filterHint": "Filter — try KMS, alarm, SAR, production",
-  "placementBudget": 1,
+  "placementBudget": 0,
   "kinds": [
     {
       "id": "person",
@@ -86,7 +86,7 @@
       },
       "functions": {
         "type": "AWS::Lambda::Function",
-        "perTemplate": "^{stage}-(?<name>main|sar|dvla-pilot|vpc|macie)$",
+        "perTemplate": "^{stage}-(?<name>main|sar|dvla-pilot|vpc|macie|live-schema)$",
         "hasProperty": "FunctionName"
       },
       "functionsTotal": {
@@ -194,6 +194,12 @@
       "alarmsApi": {
         "type": "AWS::CloudWatch::Alarm",
         "logicalId": "^ApiGateway"
+      },
+      "dsqlClusters": {
+        "type": "AWS::DSQL::Cluster"
+      },
+      "eventSourceMappings": {
+        "type": "AWS::Lambda::EventSourceMapping"
       }
     }
   }

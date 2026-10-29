@@ -26,10 +26,11 @@ model {
       link https://github.com/govuk-once/user-data-platform/blob/main/.pre-commit-config.yaml '.pre-commit-config.yaml'
       link https://github.com/govuk-once/user-data-platform/blob/main/git-hooks/pre-push 'git-hooks/pre-push'
       link https://github.com/govuk-once/user-data-platform/blob/main/git-hooks/commit-msg 'git-hooks/commit-msg'
+      link https://github.com/govuk-once/user-data-platform/blob/main/scripts/check-commit-signatures.sh 'check-commit-signatures.sh'
       metadata {
         type 'Local'
         tech 'pre-commit framework · core.hooksPath git-hooks'
-        role 'Before a commit: secrets scan, type check, OpenAPI regeneration, format, lint. Before a push: full build, Checkov, unit tests, Semgrep. Commit messages must be conventional.'
+        role 'Before a commit: secrets scan, type check, OpenAPI regeneration, format, lint. Before a push: every commit ahead of <code>origin/main</code> must carry a signature, then full build, Checkov, unit tests, Semgrep. Commit messages must be conventional.'
         facts [
           'The hooks exit at once under <code>CI</code> or CodeBuild; the same checks run again in the workflow.'
         ]
@@ -94,7 +95,7 @@ model {
       metadata {
         type 'Reusable workflow'
         tech 'runs the unit tests again for coverage'
-        role 'Needs only validate-pr. Uploads lcov from every project, excludes <code>cdk/**</code> from coverage, and fails if the server\'s gate does within two minutes.'
+        role 'Needs only validate-pr. Uploads the one lcov report <code>test:all</code> writes to <code>coverage/unit</code>, excludes <code>cdk/**</code> from coverage, and fails if the server\'s gate does within two minutes.'
         sourceId 'sonarpr'
         order '4'
         x '350'
@@ -110,10 +111,11 @@ model {
       description 'pr-{n}-dev-* stacks'
       link https://github.com/govuk-once/user-data-platform/blob/main/.github/workflows/pr-deploy.yml 'pr-deploy.yml'
       link https://github.com/govuk-once/user-data-platform/blob/main/cdk/bin/app.ts 'cdk/bin/app.ts'
+      link https://github.com/govuk-once/user-data-platform/blob/main/.github/workflows/__deploy-env.yml '__deploy-env.yml'
       metadata {
-        type 'GitHub Actions job'
+        type 'Reusable workflow · no GitHub environment'
         tech 'OIDC to DEV_DEPLOYMENT_ROLE · pnpm cdk:deploy:dev'
-        role 'A full copy of every stack except the VPC, prefixed <code>pr-{n}-dev</code>, in the development account. Needs validate-pr, not ci: the deploy does not wait for the checks.'
+        role 'A full copy of every stack except the VPC, prefixed <code>pr-{n}-dev</code>, in the development account. Needs validate-pr, not ci: the deploy does not wait for the checks. No GitHub environment is passed, so no environment protection applies.'
         sourceId 'prdeploy'
         order '5'
         x '64'
@@ -129,6 +131,8 @@ model {
       description 'CodeBuild · commented on the PR'
       link https://github.com/govuk-once/user-data-platform/blob/main/.github/workflows/pr-deploy.yml 'pr-deploy.yml'
       link https://github.com/govuk-once/user-data-platform/blob/main/e2e/package.json 'e2e/package.json'
+      link https://github.com/govuk-once/user-data-platform/blob/main/.github/workflows/__e2e.yml '__e2e.yml'
+      link https://github.com/govuk-once/user-data-platform/blob/main/.github/actions/run-codebuild/action.yml 'run-codebuild/action.yml'
       metadata {
         type 'GitHub Actions job'
         tech 'zips the checkout to S3 · polls CodeBuild every 30 s'
@@ -154,11 +158,8 @@ model {
       link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/macie/index.ts 'cdk/lib/macie/index.ts'
       metadata {
         type 'GitHub Actions job'
-        tech 'cdk destroy --exclusively, by name'
-        role 'Destroys the PR\'s stacks in a fixed order. The list names a <code>-dsar</code> stack the app never creates.'
-        facts [
-          'The list does not name the PR\'s <code>-macie</code> stack, which a PR deploy creates, so that one is left behind when the PR closes.'
-        ]
+        tech 'cdk destroy --exclusively "pr-{n}-dev-*"'
+        role 'Destroys every stack named <code>pr-{n}-dev-*</code>, after a full <code>build:all</code> — type check, unit tests, Lambda build. A failing type check or unit test leaves the stacks up.'
         sourceId 'cleanup'
         order '7'
         x '64'
@@ -210,7 +211,7 @@ model {
       metadata {
         type 'Reusable workflow'
         tech 'conventional commits · GitHub App token'
-        role 'Works out the next version from the commits since the last tag — <code>chore</code> and <code>revert</code> count as patches — tags it, and writes release notes. Nothing is committed back: <code>package.json</code> stays at 1.25.1 while the tag is v1.56.2.'
+        role 'Works out the next version from the commits since the last tag — <code>chore</code>, <code>test</code>, <code>refactor</code>, <code>docs</code>, <code>style</code>, <code>ci</code> and <code>revert</code> count as patches — tags it, and writes release notes. Nothing is committed back: <code>package.json</code> stays at 1.25.1; the version lives only in the tag.'
         sourceId 'version'
         order '2'
         x '724'
@@ -248,9 +249,6 @@ model {
         type 'Reusable workflow · GitHub environment'
         tech 'OIDC to DEV_DEPLOYMENT_ROLE · pnpm cdk:deploy:dev'
         role 'Writes the release-candidate version into <code>package.json</code> so it lands as the <code>Version</code> tag on every stack, deploys all stacks, and reads the e2e project name back from the stack outputs.'
-        facts [
-          'Broken as committed since Nx was removed (udp-420, #361, 20 October 2026): the reusable workflow declares its input as <code>deploy-script</code> but reads <code>inputs.deploy-target</code>, so <code>DEPLOY_SCRIPT</code> is empty and the deploy step runs <code>pnpm run</code> with no script name. Staging and production go through the same workflow.'
-        ]
         sourceId 'dev'
         order '4'
         x '724'
@@ -287,7 +285,7 @@ model {
       metadata {
         type 'Reusable workflow'
         tech 'polls until the build ends'
-        role 'The gate to staging: 49 Cucumber scenarios against the deployed development API, the one <code>@kms</code> scenario excluded.'
+        role 'The gate to staging: 29 Cucumber scenarios against the deployed development API, the one <code>@kms</code> scenario excluded.'
         facts [
           'The two consumer-config scenarios report themselves skipped because the stack passes no secret ARN into the build.'
         ]
@@ -416,12 +414,14 @@ model {
       link https://github.com/govuk-once/user-data-platform/blob/main/cdk/buildspec-perf.yml 'buildspec-perf.yml'
       link https://github.com/govuk-once/user-data-platform/blob/main/performance/scripts/build.mjs 'performance/scripts/build.mjs'
       link https://github.com/govuk-once/user-data-platform/blob/main/performance/src/config.ts 'performance/src/config.ts'
+      link https://github.com/govuk-once/user-data-platform/blob/main/performance/package.json 'performance/package.json'
       metadata {
         type 'AWS::CodeBuild::Project'
         tech 'signs SigV4 with its own role · metrics to UDP/PerformanceTests'
         role 'Smoke, baseline, spike, three stress scenarios, write burst and cold start. Spike and stress run by hand against staging from their own workflows.'
         facts [
-          'Only six scenarios write the summary the metrics step reads, and neither smoke nor baseline — the two the pipeline runs — is among them.'
+          'Only six scenarios write the summary the metrics step reads, and neither smoke nor baseline — the two the pipeline runs — is among them.',
+          'Fails at its build step since Nx was removed: the buildspec runs <code>npm --prefix performance run ${PERF_TARGET}</code>, and <code>performance/package.json</code> has no scripts. Every perf run, the pipeline\'s and the by-hand spike and stress runs alike, ends in "missing script".'
         ]
         sourceId 'perfbuild'
         order '1'
@@ -435,7 +435,7 @@ model {
 
     delivery_e2ebuild = platform 'CodeBuild · e2e' {
       #off-request-path
-      description 'Cucumber · 51 scenarios'
+      description 'Cucumber · 30 scenarios'
       link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/codebuild-e2e-construct.ts 'codebuild-e2e-construct.ts'
       link https://github.com/govuk-once/user-data-platform/blob/main/e2e/cucumber.cjs 'e2e/cucumber.cjs'
       link https://github.com/govuk-once/user-data-platform/blob/main/e2e/src/helpers/sigv4-signer.ts 'sigv4-signer.ts'

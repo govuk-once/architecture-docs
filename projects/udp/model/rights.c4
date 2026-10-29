@@ -12,8 +12,8 @@ model {
     link https://github.com/govuk-once/user-data-platform/blob/main/libs/utils/schemas/routes/routes.ts 'routes.ts'
     metadata {
       type 'Flow'
-      tech 'main stack → sar stack · not in production'
-      role 'One export object, one download link good for seven days, one record of it. Development and staging only: production has neither the routes nor the sar stack.'
+      tech 'main stack → sar stack · not routed anywhere'
+      role 'One export object, one download link good for seven days, one record of it. No environment routes it: development builds both halves but leaves the routes off the API; staging and production deploy the sar stack with nothing feeding it.'
       sourceId 'sar'
       order '0'
       x '40'
@@ -85,9 +85,9 @@ model {
       metadata {
         type 'AWS::Lambda::Function'
         tech 'sar stack · batch 1'
-        role 'Resolves the identity, collects every data record under the <code>udpId</code>, drops <code>pk</code>, <code>sk</code> and <code>ttl</code> from each, and writes one object.'
+        role 'Resolves the identity, collects every data record under the <code>udpId</code>, drops <code>pk</code> and <code>ttl</code> from each, keeps <code>sk</code> as <code>resourcePath</code>, and writes one object, keyed <code>{sarID}.json</code>.'
         facts [
-          'An export that fails is sent to the file dead-letter queue by the function itself, with the error.'
+          'An export that fails is logged, and its original message sent to the file dead-letter queue by the function itself.'
         ]
         sourceId 'createsar'
         order '4'
@@ -220,8 +220,8 @@ model {
     link https://github.com/govuk-once/user-data-platform/blob/main/libs/utils/schemas/routes/routes.ts 'routes.ts'
     metadata {
       type 'Flow'
-      tech 'main stack → sar stack · not in production'
-      role 'Paged deletion of the person\'s records, then of the links that identify them. Development and staging only: production has neither the route nor the sar stack.'
+      tech 'main stack → sar stack · not routed anywhere'
+      role 'Paged deletion of the person\'s records, then of the links that identify them. No environment routes it: development wires the queues but leaves <code>POST /v1/dsar</code> off the API; staging and production deploy the sar stack with no event sources.'
       sourceId 'dsar'
       order '0'
       x '730'
@@ -392,13 +392,13 @@ model {
     metadata { protocol 'Private API · Lambda proxy' auth 'IAM · write permission' carries 'The two headers' order '1' }
   }
   rights_startsar -> rights_sarqueue 'SendMessage' {
-    metadata { protocol 'SQS' auth 'Function role' carries '{ sarID, requestingService, requestingServiceUserId }' order '2' }
+    metadata { protocol 'SQS' auth 'Function role' carries '{ sarID, serviceName, serviceUserId }' order '2' }
   }
   rights_sarqueue -> rights_createsar 'event source' {
     metadata { protocol 'SQS event source · batch 1' auth 'Function role' carries 'One request' order '3' }
   }
   rights_createsar -> rights_sardlq 'on failure' {
-    metadata { protocol 'SQS' auth 'Function role: SendMessage' carries 'The request and the error' edgeStyle 'dash' order '4' }
+    metadata { protocol 'SQS' auth 'Function role: SendMessage' carries 'The original request message' edgeStyle 'dash' order '4' }
   }
   rights_createsar -> rights_bucket 'PutObject' {
     link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/vpc-construct.ts 'vpc-construct.ts'
@@ -420,7 +420,7 @@ model {
     metadata { protocol 'Private API · Lambda proxy' auth 'IAM · write permission' carries 'The two headers' order '10' }
   }
   rights_startdsar -> rights_dsarqueue 'SendMessage' {
-    metadata { protocol 'SQS' auth 'Function role' carries '{ dsarID, requestingService, requestingServiceUserId }' order '11' }
+    metadata { protocol 'SQS' auth 'Function role' carries '{ dsarID, serviceName, serviceUserId }' order '11' }
   }
   rights_dsarqueue -> rights_dsarrequest 'event source' {
     metadata { protocol 'SQS event source · batch 1' auth 'Function role' carries 'One request' order '12' }

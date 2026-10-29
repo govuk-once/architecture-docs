@@ -129,7 +129,7 @@ model {
     metadata {
       type 'Controls'
       tech 'KMS · node:crypto'
-      role 'Customer-managed keys everywhere at rest, and a second layer in code for the fields that matter most.'
+      role 'Customer-managed keys for the tables, queues, topics and function logs, and a second layer in code for the fields that matter most. The DSQL cluster, the SAR access-log bucket and the end-to-end source bucket are on AWS-managed encryption.'
       sourceId 'encryption'
       order '0'
       x '362'
@@ -141,13 +141,13 @@ model {
 
     security_dbkey = platform 'DB key' {
       #off-request-path
-      description 'tables · field encryption'
+      description 'field encryption only'
       link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/kms-construct.ts 'kms-construct.ts'
       link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/stacks/main-stack.ts 'main-stack.ts'
       metadata {
         type 'AWS::KMS::Key'
         tech 'rotation every 90 days'
-        role 'Encrypts both tables and is <code>KMS_KEY_ID</code> in every function, so it also wraps each item\'s data key.'
+        role '<code>KMS_KEY_ID</code> in every route function, so it wraps each item\'s data key. Neither table is on it: both use the main key.'
         facts [
           'Its policy admits the account, the Lambda service, CloudWatch Logs, CloudWatch alarms and SNS.'
         ]
@@ -187,14 +187,14 @@ model {
 
     security_mainkey = platform 'Main key' {
       #off-request-path
-      description 'queues · bucket · logs'
+      description 'tables · queues · logs · topics'
       link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/kms-construct.ts 'kms-construct.ts'
       link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/stacks/sar-stack.ts 'sar-stack.ts'
       link https://github.com/govuk-once/user-data-platform/blob/main/cdk/bin/app.ts 'cdk/bin/app.ts'
       metadata {
         type 'AWS::KMS::Key'
         tech 'rotation every 90 days'
-        role 'The log groups, and outside production the SAR and DSAR queues, their dead-letter queues and the SAR bucket.'
+        role 'Both tables, the function, API and WAF log groups, the alarm and release topics, the SAR bucket and sar-stack queues in every environment, the SAR and DSAR intake queues in development only, and the live-schema failure queue.'
         facts [
           'Marked for Macie: an aspect adds Macie\'s service-linked role to its policy with decrypt, so Macie can read the SAR bucket wherever there is one.'
         ]
@@ -291,7 +291,7 @@ model {
       metadata {
         type 'Custom resource · macie2:UpdateMacieSession'
         tech 'results bucket macie-results-{account}-{region}'
-        role 'Turned on for the account by a custom resource, with a results bucket and key. An aspect grants Macie\'s service-linked role decrypt on every key marked for it, so it can read the SAR bucket outside production; production has none.'
+        role 'Turned on for the account by a custom resource, with a results bucket and key. An aspect grants Macie\'s service-linked role decrypt on every key marked for it, so it can read the SAR bucket, which now exists in every environment.'
         facts [
           'No classification job is defined in the repository: what Macie scans, and when, is set outside it.'
         ]
@@ -373,7 +373,7 @@ model {
     metadata {
       type 'Controls'
       tech 'monitoring stack · {env}-monitoring'
-      role 'Fifty-seven alarms in development and staging, thirty-six in production, and where they go. Every one is against the same NFR constants the performance tests use.'
+      role 'Fifty-one alarms in development, thirty-nine in staging, thirty-six in production, and where they go. Thresholds come from the CDK NFR constants, now thirty times the 200 ms the performance tests still hold to.'
       sourceId 'alerting'
       order '0'
       x '1006'
@@ -390,11 +390,11 @@ model {
       link https://github.com/govuk-once/user-data-platform/blob/main/cdk/constants/nfr.ts 'nfr.ts'
       link https://github.com/govuk-once/user-data-platform/blob/main/cdk/bin/app.ts 'cdk/bin/app.ts'
       metadata {
-        type 'AWS::CloudWatch::Alarm ×51 · ×30 in production'
+        type 'AWS::CloudWatch::Alarm ×45 · ×33 staging · ×30 production'
         tech '1-minute periods'
-        role 'Errors ≥ 2 in two periods; p95 duration over 150 ms in three; any throttle in three. All critical.'
+        role 'Errors ≥ 2 in two periods; p95 duration ≥ 5,000 ms in three; any throttle in three. All critical.'
         facts [
-          'Seventeen functions are covered outside production: the thirteen routes and the four in the sar stack. Ten in production, which has neither the three rights routes nor the sar stack. The DVLA purge function has none.'
+          'Fifteen functions in development: the ten data and identity routes, the four sar-stack functions and the live-schema extractor. Eleven in staging, the routes and the extractor; ten in production. The three rights functions are filtered out everywhere; the sar-stack functions are deployed in all three but monitored only in development; the live-schema migration and DVLA purge functions have none.'
         ]
         sourceId 'fnalarms'
         order '1'
@@ -415,7 +415,7 @@ model {
       link https://github.com/govuk-once/user-data-platform/blob/main/cdk/constants/nfr.ts 'nfr.ts'
       metadata {
         type 'AWS::CloudWatch::Alarm ×3'
-        tech '5xx over 0.1% · 4xx ≥ 50 · p95 over 200 ms'
+        tech '5xx ≥ 0.1% · 4xx ≥ 50 · p95 ≥ 6,000 ms'
         role '5xx and latency are critical; the 4xx count is a warning, which is the only alarm that goes to the warning topic.'
         sourceId 'apialarms'
         order '2'
@@ -457,7 +457,7 @@ model {
       metadata {
         type 'AWS::SNS::Topic ×2 · AWS::Chatbot::SlackChannelConfiguration'
         tech 'workspace and channel from SSM …/udp/monitoring'
-        role 'The critical topic is subscribed by a Chatbot Slack channel when the SSM parameter names one. Nothing in the repository subscribes the warning topic — 4xx bursts and failed performance builds land there.'
+        role 'The critical topic is subscribed by a Chatbot Slack channel, and by PagerDuty over HTTPS, when the SSM parameter names them. Nothing in the repository subscribes the warning topic — 4xx bursts and failed performance builds land there.'
         sourceId 'topics'
         order '4'
         x '1030'
@@ -580,7 +580,7 @@ model {
         tech 'PITR or a recovery point, to {table}-restored'
         role 'Restores a table beside the live one under the environment\'s deployment role; the swap is a manual step the script prints.'
         facts [
-          'As committed the DynamoDB steps call <code>scripts/dynamodb-restore.ts</code>, which does not exist — the file is <code>dynamo-restore.ts</code> — and the S3 steps have shell errors. Neither can run as written.'
+          'As committed the DynamoDB steps call <code>scripts/dynamodb-restore.ts</code>, which does not exist — the file is <code>dynamo-restore.ts</code> — and the S3 steps were fixed and can run.'
         ]
         sourceId 'restore'
         order '4'

@@ -133,7 +133,7 @@ model {
         tech 'nodejs24.x · reserved concurrency 2 (dev) or 50'
         role 'Validates the headers and query against the route\'s zod schema, resolves the caller\'s user, then looks the wanted service up.'
         facts [
-          'The middleware chain is the same on all thirteen route Lambdas — see Components. A schema failure is a 400 before the handler runs.',
+          'The middleware chain is the same on every route Lambda — see Components. A schema failure is a 400 before the handler runs.',
           'Two table reads: the requester\'s identity by <code>{service}#{id}</code>, then the <code>sk-index</code> query <code>sk = udpId and begins_with(pk, "{requiredService}#")</code>.'
         ]
         sourceId 'fn'

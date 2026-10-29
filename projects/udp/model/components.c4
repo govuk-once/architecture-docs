@@ -33,7 +33,7 @@ model {
         'The order in the file is logger, tracer, a stack annotation, response serialiser, sanitiser, error handling, then the validator — so validation is the last <code>before</code> and runs just ahead of the handler.',
         'Nine of the thirteen routes run the sanitiser. createIdentity, createUser, deleteData and deleteIdentity do not — each returns a message, not a record.',
         'The four routes with a body — createUser, createIdentity, postData, patchData — add <code>@middy/http-json-body-parser</code> between the error handler and the validator. It is not drawn.',
-        'The five queue- and event-driven functions run the logger, the tracer and the annotation only: no serialiser, no sanitiser, no error handler, no validator.',
+        'The five queue- and event-driven functions, and the live-schema migration, run the logger, the tracer and the annotation only: no serialiser, no sanitiser, no error handler, no validator. The live-schema extractor is a stub with no middleware.',
         'An <code>envValidator</code> middleware exists in libs/utils, with a test; nothing uses it. <code>requireEnvVars</code> at cold start does that job.'
       ]
       sourceId 'chain'
@@ -107,7 +107,7 @@ model {
       metadata {
         type 'Middleware · after'
         tech 'libs/utils/middleware'
-        role 'Removes <code>pk</code>, <code>sk</code>, <code>udpId</code>, <code>ttl</code>, <code>lsi</code>, <code>lsi_1</code> and <code>__dataKey</code> from whatever the handler returns, at every depth, so no table key or wrapped data key reaches a consumer.'
+        role 'Removes <code>pk</code>, <code>sk</code>, <code>udpId</code>, <code>ttl</code>, <code>lsi</code>, <code>lsi_1</code> and <code>__dataKey</code> from the top level of whatever the handler returns: every caller passes <code>{}</code>, so <code>deep</code> is false. A nested <code>ttl</code> — each linked service\'s — passes through.'
         sourceId 'sanitiser'
         order '4'
         x '64'
@@ -125,7 +125,7 @@ model {
       metadata {
         type 'Middleware · onError'
         tech 'libs/utils/middleware'
-        role 'Maps a thrown error to a status and a body, and logs it. A not-found from the data layer becomes a 404 here.'
+        role 'Maps a thrown error to a status and a body. Only an error that is not a <code>BaseUDPError</code> is logged here; the validator logs its own. A not-found from the data layer becomes a 404 here.'
         sourceId 'errors'
         order '5'
         x '64'
@@ -144,7 +144,7 @@ model {
       metadata {
         type 'Middleware · before'
         tech 'zod · one schema per route'
-        role 'Parses the event against the route\'s schema from <code>routes.ts</code>; a failure is a 400 before the handler runs. The same schemas generate <code>docs/openapi.yml</code>.'
+        role 'Parses the event against the route\'s schema from <code>routes.ts</code>; a failure is a 400 before the handler runs. Its <code>after</code> checks the response against the route\'s response schemas; a mismatch is logged, not returned. The same schemas generate <code>docs/openapi.yml</code>.'
         sourceId 'validator'
         order '6'
         x '64'
@@ -216,10 +216,10 @@ model {
       link https://github.com/govuk-once/user-data-platform/blob/main/libs/data-access/services/DynamoDbIdentityService.ts 'DynamoDbIdentityService.ts'
       metadata {
         type 'Code'
-        tech 'GetItem · PutItem · DeleteItem · Query'
+        tech 'Query · PutItem · DeleteItem'
         role '<code>getByServiceId</code> is the first call every route makes; <code>deleteAllByUdpId</code> is what a DSAR ends with.'
         facts [
-          'A record whose <code>ttl</code> has passed is treated as absent.'
+          'A record whose <code>ttl</code> has passed is treated as absent by <code>getByServiceId</code> and the linked-services list; <code>getLinkedIdentity</code>, which <code>exchangeIdentity</code> uses, does not check it.'
         ]
         sourceId 'identitysvc'
         order '2'
