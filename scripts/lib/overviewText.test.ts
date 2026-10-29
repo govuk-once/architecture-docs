@@ -5,7 +5,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { View } from "../buildArchitectureExplorer.js";
-import { overviewPage, overviewPicture } from "./overviewText.js";
+import { indexPage, overviewPage, overviewPicture } from "./overviewText.js";
 import type { Project } from "./projects.js";
 
 const project = {
@@ -86,5 +86,51 @@ describe("overviewPage", () => {
       "r",
     );
     expect(none).not.toContain("Planned states");
+  });
+});
+
+describe("indexPage", () => {
+  const site = {
+    tagline: "How they fit",
+    blurb: "Pick one.",
+    footer: "Every claim names its code.",
+    fit: {
+      title: "Overall",
+      note: "Each line is proven on a tab.",
+      nodes: [],
+      edges: [],
+    },
+  };
+  const entries = [
+    {
+      name: "FLEX",
+      tagline: "Fast",
+      blurb: "The API layer.",
+      url: "https://x/flex/",
+      pageTitle: "FLEX — architecture",
+    },
+  ];
+  const html = indexPage(site, entries, "https://x/", (f) => `[${f}]`);
+
+  it("says what the site is, draws the fit and lists each architecture with its pages", () => {
+    expect(html).toContain("<strong>How they fit.</strong> Pick one.");
+    expect(html).toContain("<h2>Overall</h2>");
+    expect(html).toContain("[index-fit.png]");
+    expect(html).toContain("Each line is proven on a tab.");
+    expect(html).toContain("<h3>FLEX</h3>");
+    expect(html).toContain("<em>FLEX — architecture</em>");
+    expect(html).toContain('href="https://x/flex/"');
+    expect(html).toContain("Every claim names its code.");
+  });
+
+  it("draws no fit when the site has none", () => {
+    const none = indexPage(
+      { ...site, fit: undefined },
+      entries,
+      "https://x/",
+      (f) => f,
+    );
+    expect(none).not.toContain("index-fit.png");
+    expect(none).toContain("<h3>FLEX</h3>");
   });
 });

@@ -7,6 +7,7 @@
  * Pure, so it can be tested on a fixture and built without a browser.
  */
 import type { View } from "../buildArchitectureExplorer.js";
+import type { SiteConfig } from "./paths.js";
 import type { Project } from "./projects.js";
 import type { States } from "./states.js";
 
@@ -74,4 +75,52 @@ export function overviewPage(
   ]
     .filter(Boolean)
     .join("\n");
+}
+
+/** One documented architecture, as the index describes it. */
+export interface IndexEntry {
+  name: string;
+  tagline: string;
+  blurb: string;
+  /** The live explorer page. */
+  url: string;
+  /** The title of its own page in Confluence. */
+  pageTitle: string;
+}
+
+/** The index's picture: how the documented systems call one another. */
+export const indexPicture = "index-fit.png";
+
+/**
+ * The index over the projects, as one page: what the site is, the sketch of how the
+ * systems fit together, and one entry per architecture pointing at its explorer and at
+ * its own page. The parent of the overview pages, when they are published by hand.
+ */
+export function indexPage(
+  site: Pick<SiteConfig, "tagline" | "blurb" | "footer" | "fit">,
+  entries: IndexEntry[],
+  liveUrl: string,
+  image: (file: string) => string,
+): string {
+  return [
+    `<p><strong>${esc(site.tagline)}.</strong> ${esc(site.blurb)}</p>`,
+    `<p>This page is generated from the architecture explorer at ` +
+      `<a href="${esc(liveUrl)}">${esc(liveUrl)}</a>, which is derived from the code and rebuilt ` +
+      `against it on every merge. Do not edit this page — edit the model and it is rewritten.</p>`,
+    ...(site.fit
+      ? [
+          `<h2>${esc(site.fit.title)}</h2>`,
+          image(indexPicture),
+          `<p>${esc(site.fit.note)}</p>`,
+        ]
+      : []),
+    `<h2>The architectures</h2>`,
+    ...entries.flatMap((e) => [
+      `<h3>${esc(e.name)}</h3>`,
+      `<p><em>${esc(e.tagline)}.</em> ${esc(e.blurb)}</p>`,
+      `<p>Its page here is <em>${esc(e.pageTitle)}</em>; the explorer is at ` +
+        `<a href="${esc(e.url)}">${esc(e.url)}</a>.</p>`,
+    ]),
+    `<p>${esc(site.footer)}</p>`,
+  ].join("\n");
 }

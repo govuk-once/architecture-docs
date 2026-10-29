@@ -31,8 +31,8 @@ pnpm sync      # clone or fetch each source into .sources/, and install what nee
 pnpm synth     # run each CDK app per stage: the CloudFormation the counts are read from
 pnpm build     # derive the facts, validate the models, assemble every page and the index
 pnpm check     # render every page in a browser and measure what only rendering can see
-pnpm overview  # export the architecture overview page, one per project
-pnpm confluence  # put the overview in Confluence; CI runs it after each build of main
+pnpm overview  # export the architecture overview page, one per project, and a copy to paste into Confluence by hand
+pnpm confluence  # put the overview in Confluence through its API; parked, so run by hand until it has credentials
 pnpm encrypt-site  # seal site/ behind SITE_PASSWORD; the deploy job runs it when the secret is set
 ```
 
