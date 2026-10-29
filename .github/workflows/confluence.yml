@@ -18,11 +18,15 @@ name: Publish to Confluence
 #                         one space and nothing else, because this repository is public
 #   CONFLUENCE_TOKEN      an API token for that account
 # Which space and where: `confluence` in each project's config.
+#
+# Parked: until those secrets exist the pages are pasted in by hand from
+# export/<id>/overview-paste.html, so this runs only when started. To resume publishing
+# after each build of main, restore the trigger:
+#   workflow_run:
+#     workflows: ["Build and publish"]
+#     types: [completed]
+#     branches: [main]
 on:
-  workflow_run:
-    workflows: ["Build and publish"]
-    types: [completed]
-    branches: [main]
   workflow_dispatch:
     inputs:
       dry_run:
