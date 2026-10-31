@@ -1,0 +1,222 @@
+{
+  "name": "GOV.UK App",
+  "title": "GOV.UK App Architecture Explorer",
+  "tagline": "GOV.UK Once · mobile app",
+  "blurb": "The GOV.UK App on iOS and Android, and the backend built for it: Cognito sign-in federated to GOV.UK One Login, the token proxy that can demand proof a request comes from the real app, the chat proxy, and the signed remote config that decides, among other things, whether the app talks to FLEX at all.",
+  "inventoryView": "resources",
+  "inventoryLabel": "AWS resources",
+  "iconLabel": "AWS icons",
+  "filterHint": "Filter — try Cognito, alarm, KMS, production",
+  "placementBudget": 13,
+  "kinds": [
+    {
+      "id": "person",
+      "label": "Person",
+      "colour": "purple"
+    },
+    {
+      "id": "app",
+      "label": "GOV.UK App",
+      "colour": "blue"
+    },
+    {
+      "id": "govuk",
+      "label": "GOV.UK Once",
+      "colour": "teal"
+    },
+    {
+      "id": "third",
+      "label": "Outside GOV.UK Once",
+      "colour": "amber"
+    },
+    {
+      "id": "vendor",
+      "label": "Commercial third party",
+      "colour": "coral"
+    },
+    {
+      "id": "unstated",
+      "label": "Owner not stated in these repositories",
+      "colour": "slate"
+    }
+  ],
+  "stages": [
+    {
+      "id": "dev",
+      "label": "Development",
+      "facts": "dev",
+      "parameters": {
+        "Environment": "dev"
+      }
+    },
+    {
+      "id": "stg",
+      "label": "Staging",
+      "facts": "staging",
+      "parameters": {
+        "Environment": "staging"
+      }
+    },
+    {
+      "id": "int",
+      "label": "Integration",
+      "facts": "integration",
+      "parameters": {
+        "Environment": "integration"
+      }
+    },
+    {
+      "id": "prod",
+      "label": "Production",
+      "facts": "production",
+      "parameters": {
+        "Environment": "production"
+      }
+    }
+  ],
+  "sources": {
+    "ios": {
+      "repo": "git@github.com:govuk-once/govuk-mobile-ios-app.git",
+      "ref": "main",
+      "root": ".sources/app/ios",
+      "url": "https://github.com/govuk-once/govuk-mobile-ios-app/blob/main/"
+    },
+    "android": {
+      "repo": "git@github.com:govuk-once/govuk-mobile-android-app.git",
+      "ref": "main",
+      "root": ".sources/app/android",
+      "url": "https://github.com/govuk-once/govuk-mobile-android-app/blob/main/"
+    },
+    "backend": {
+      "repo": "git@github.com:alphagov/govuk-mobile-backend.git",
+      "ref": "main",
+      "root": ".sources/app/backend",
+      "url": "https://github.com/alphagov/govuk-mobile-backend/blob/main/"
+    },
+    "config": {
+      "repo": "git@github.com:alphagov/govuk-mobile-backend-config.git",
+      "ref": "main",
+      "root": ".sources/app/config",
+      "url": "https://github.com/alphagov/govuk-mobile-backend-config/blob/main/"
+    },
+    "govkit": {
+      "repo": "https://github.com/govuk-once/govuk-mobile-ios-gov-kit.git",
+      "ref": "main",
+      "root": ".sources/app/govkit",
+      "url": "https://github.com/govuk-once/govuk-mobile-ios-gov-kit/blob/main/"
+    }
+  },
+  "derive": {
+    "module": "cloudformation",
+    "inputs": {
+      "templates": "backend:services/*/template.yaml"
+    },
+    "counts": {
+      "fnAuthProxy": {
+        "type": "AWS::Serverless::Function",
+        "logicalId": "^AuthProxyFunction$"
+      },
+      "fnRevoke": {
+        "type": "AWS::Serverless::Function",
+        "logicalId": "^RevokeRefreshTokenFunction$"
+      },
+      "fnLinking": {
+        "type": "AWS::Serverless::Function",
+        "logicalId": "^LinkingVerificationFunction$"
+      },
+      "fnSsAuthorizer": {
+        "type": "AWS::Serverless::Function",
+        "logicalId": "^SharedSignalAuthorizer$"
+      },
+      "fnSsReceiver": {
+        "type": "AWS::Serverless::Function",
+        "logicalId": "^SharedSignalReceiverFunction$"
+      },
+      "fnSsHealth": {
+        "type": "AWS::Serverless::Function",
+        "logicalId": "^SharedSignalHealthCheckFunction$"
+      },
+      "fnPagerDutyTest": {
+        "type": "AWS::Serverless::Function",
+        "logicalId": "^PagerDutyTestFunction$"
+      },
+      "fnSmokeTest": {
+        "type": "AWS::Serverless::Function",
+        "logicalId": "^SmokeTestFunction$"
+      },
+      "fnAcceptance": {
+        "type": "AWS::Serverless::Function",
+        "logicalId": "^AcceptanceTestingFunction$"
+      },
+      "fnMockTransmitter": {
+        "type": "AWS::Serverless::Function",
+        "logicalId": "^MockSharedSignalsTransmitterFunction$"
+      },
+      "fnChatAuthorizer": {
+        "type": "AWS::Serverless::Function",
+        "logicalId": "^ChatAuthorizerFunction$"
+      },
+      "apiTokenProxy": {
+        "type": "AWS::Serverless::Api",
+        "logicalId": "^AttestationProxyApi$"
+      },
+      "apiSharedSignals": {
+        "type": "AWS::Serverless::Api",
+        "logicalId": "^SharedSignalApi$"
+      },
+      "apiMockTransmitter": {
+        "type": "AWS::Serverless::Api",
+        "logicalId": "^MockSharedSignalsTransmitterApi$"
+      },
+      "apiChat": {
+        "type": "AWS::ApiGateway::RestApi"
+      },
+      "alarmCount": {
+        "type": "AWS::CloudWatch::Alarm"
+      },
+      "userPools": {
+        "type": "AWS::Cognito::UserPool"
+      },
+      "userPoolClients": {
+        "type": "AWS::Cognito::UserPoolClient"
+      },
+      "identityProviders": {
+        "type": "AWS::Cognito::UserPoolIdentityProvider"
+      },
+      "webAcls": {
+        "type": "AWS::WAFv2::WebACL"
+      },
+      "kmsKeys": {
+        "type": "AWS::KMS::Key"
+      },
+      "logGroups": {
+        "type": "AWS::Logs::LogGroup"
+      },
+      "metricFilters": {
+        "type": "AWS::Logs::MetricFilter"
+      },
+      "iamRoles": {
+        "type": "AWS::IAM::Role"
+      },
+      "snsTopics": {
+        "type": "AWS::SNS::Topic"
+      },
+      "dashboards": {
+        "type": "AWS::CloudWatch::Dashboard"
+      },
+      "alarms": {
+        "type": "AWS::CloudWatch::Alarm",
+        "distinctBy": "construct",
+        "capture": [
+          "Namespace",
+          "MetricName",
+          "Threshold",
+          "ComparisonOperator",
+          "EvaluationPeriods",
+          "ActionsEnabled",
+          "AlarmActions"
+        ]
+      }
+    }
+  }
+}

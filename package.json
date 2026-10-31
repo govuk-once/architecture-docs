@@ -13,6 +13,9 @@
     "drift": "tsx scripts/sourceDrift.ts",
     "build": "pnpm facts && tsx scripts/buildArchitectureExplorer.ts",
     "check": "tsx scripts/checkArchitectureExplorer.ts",
+    "overview": "tsx scripts/exportOverview.ts",
+    "confluence": "tsx scripts/publishConfluence.ts",
+    "encrypt-site": "tsx scripts/encryptSite.ts",
     "serve": "pnpm build && tsx scripts/serveArchitectureDocs.ts",
     "tsc": "tsc --noEmit",
     "lint": "eslint --max-warnings=0 .",
@@ -40,6 +43,7 @@
     "tsx": "4.23.1",
     "typescript": "6.0.3",
     "typescript-eslint": "8.65.0",
-    "vitest": "4.1.10"
+    "vitest": "4.1.10",
+    "yaml": "2.9.0"
   }
 }

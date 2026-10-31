@@ -36,8 +36,13 @@ permissions:
   contents: read
 
 env:
-  # Each project's ref, matching the `source.ref` in its project.config.json.
+  # Each project's ref, matching the `ref` of each source in its project.config.json.
   FLEX_REF: main
+  # All four of the GOV.UK App's sources track main.
+  APP_REF: main
+  UDP_REF: main
+  UNS_REF: main
+  CHAT_REF: main
 
 jobs:
   build:
@@ -66,6 +71,82 @@ jobs:
           path: .sources/flex
           persist-credentials: false
 
+      # The GOV.UK App is read from four repositories, one step each, to the roots its
+      # `sources` name. All four are public. None is installed: nothing synthesises from
+      # them — two are Swift and Kotlin, and the backend's SAM templates are read as written.
+      - name: Checkout the GOV.UK App · iOS
+        uses: actions/checkout@v5
+        with:
+          repository: govuk-once/govuk-mobile-ios-app
+          ref: ${{ env.APP_REF }}
+          path: .sources/app/ios
+          persist-credentials: false
+
+      - name: Checkout the GOV.UK App · Android
+        uses: actions/checkout@v5
+        with:
+          repository: govuk-once/govuk-mobile-android-app
+          ref: ${{ env.APP_REF }}
+          path: .sources/app/android
+          persist-credentials: false
+
+      - name: Checkout the GOV.UK App · backend
+        uses: actions/checkout@v5
+        with:
+          repository: alphagov/govuk-mobile-backend
+          ref: ${{ env.APP_REF }}
+          path: .sources/app/backend
+          persist-credentials: false
+
+      - name: Checkout the GOV.UK App · remote config
+        uses: actions/checkout@v5
+        with:
+          repository: alphagov/govuk-mobile-backend-config
+          ref: ${{ env.APP_REF }}
+          path: .sources/app/config
+          persist-credentials: false
+
+      # GovKit is the shared Swift library the iOS app depends on, so a change there can
+      # falsify a claim this page makes about iOS. Read, never installed.
+      - name: Checkout the GOV.UK App · GovKit
+        uses: actions/checkout@v5
+        with:
+          repository: govuk-once/govuk-mobile-ios-gov-kit
+          ref: ${{ env.APP_REF }}
+          path: .sources/app/govkit
+          persist-credentials: false
+
+      - name: Checkout UDP
+        uses: actions/checkout@v5
+        with:
+          repository: govuk-once/user-data-platform
+          ref: ${{ env.UDP_REF }}
+          path: .sources/udp
+          persist-credentials: false
+
+      # UNS is read and never installed or synthesised: its CDK app imports a package
+      # whose source is public and builds cleanly, but which is published only to a
+      # private CodeArtifact registry — so its counts are prose rather than derived.
+      # Publishing that package, or a read role for the registry, is the whole of what a
+      # `synth` block needs: with it resolved, the app synthesises here without credentials.
+      - name: Checkout UNS
+        uses: actions/checkout@v5
+        with:
+          repository: govuk-once/gds-unified-notification-service
+          ref: ${{ env.UNS_REF }}
+          path: .sources/uns
+          persist-credentials: false
+
+      # GOV.UK Chat is read and never installed or synthesised: its CDK app bundles every
+      # Lambda in Docker against a private git dependency, so only its own CI can synth it.
+      - name: Checkout GOV.UK Chat
+        uses: actions/checkout@v5
+        with:
+          repository: govuk-once/govuk-chat-v2
+          ref: ${{ env.CHAT_REF }}
+          path: .sources/chat
+          persist-credentials: false
+
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
 
@@ -80,6 +161,13 @@ jobs:
       # its own dependencies resolvable. A project with no `synth` block needs no step here.
       - name: Install FLEX dependencies
         working-directory: .sources/flex
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      # UDP's CDK app loads every function from a build directory its own script writes,
+      # so `pnpm synth` runs that build first (`synth.prepare` in its config); the install
+      # here is what that build and the app need.
+      - name: Install UDP dependencies
+        working-directory: .sources/udp
         run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Install dependencies
@@ -139,27 +227,26 @@ jobs:
           pnpm tsc
           pnpm test --run
 
-      # A push to main always publishes. Any other run publishes only when asked, and a
-      # scheduled run never does: it is a drift check, and a drifted build fails before it
-      # gets here anyway.
-      - name: Upload Pages artifact
-        if: >-
-          (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
-          (github.event_name == 'workflow_dispatch' && inputs.deploy)
-        uses: actions/upload-pages-artifact@v4
-        with:
-          path: site
-
-      # On a pull request the build is still worth looking at, so it is kept as a plain
-      # artifact: download it, open index.html. Nothing is published.
-      - name: Upload the built site for review
-        if: github.event_name == 'pull_request'
+      # The site as built, plain. The deploy job takes it from here, and so does the
+      # Confluence workflow; on a pull request it is the thing to download and open. What
+      # gets published may be sealed behind a password — that happens in the deploy job,
+      # which is the one bound to the environment holding the password.
+      - name: Upload the built site
         uses: actions/upload-artifact@v4
         with:
-          name: site-${{ github.event.pull_request.number }}
+          name: site
           path: site
           retention-days: 14
 
+  # A push to main always publishes. Any other run publishes only when asked, and a
+  # scheduled run never does: it is a drift check, and a drifted build fails before it
+  # gets here anyway.
+  #
+  # If the github-pages environment holds a SITE_PASSWORD, every page is sealed behind it
+  # before it is uploaded: what Pages serves is a small page that asks for the password
+  # and decrypts the real one in the browser. With no secret set the site publishes as it
+  # is. The secret lives on the environment, which is why the sealing happens here and not
+  # in the build — the build job cannot see it, and should not.
   deploy:
     name: Deploy to Pages
     needs: build
@@ -169,12 +256,47 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
+      contents: read
       pages: write
       id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
+      - name: Checkout the docs
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup node
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Download the built site
+        uses: actions/download-artifact@v4
+        with:
+          name: site
+          path: site
+
+      - name: Seal it behind the password, if one is set
+        env:
+          SITE_PASSWORD: ${{ secrets.SITE_PASSWORD }}
+        run: pnpm encrypt-site
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: site
+
       - name: Deploy
         id: deploy
         uses: actions/deploy-pages@v4
@@ -196,9 +318,13 @@ jobs:
       issues: write
     steps:
       - name: Open, update or close the alarm
-        continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
+          # This job checks nothing out, so gh has no git remote to infer a repository
+          # from and dies on its first call. Naming the repository is the whole fix. It
+          # failed this way silently for two days, behind a continue-on-error that has
+          # been removed: an alarm that cannot raise itself has to fail loudly instead.
+          GH_REPO: ${{ github.repository }}
           OUTCOME: ${{ needs.build.result }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |

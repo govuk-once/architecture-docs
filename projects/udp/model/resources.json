@@ -1,0 +1,802 @@
+{
+  "groups": [
+    {
+      "name": "API · Amazon API Gateway and WAF",
+      "note": null,
+      "table": null,
+      "items": [
+        {
+          "id": "api-routes",
+          "name": "Routes",
+          "n": {
+            "dev": 10,
+            "stg": 10,
+            "prod": 10
+          },
+          "from": "counts.apiRoutes",
+          "meta": ["main stack", "AWS_IAM", "AWS_PROXY"],
+          "d": {
+            "type": "AWS::ApiGateway::Method",
+            "role": "One private REST API; every method is IAM-authorised and proxies to its own Lambda.",
+            "facts": [
+              "Six identity routes and four data routes in every environment. The three rights routes — SAR status, start-SAR and start-DSAR — carry <code>disableRoute</code> in <code>routes.ts</code>, and the Lambda construct gives a disabled route no API method in any environment (f3988d6). Development still builds their functions; staging and production drop them entirely (<code>setRoutes</code>)."
+            ],
+            "code": [
+              ["routes.ts", "libs/utils/schemas/routes/routes.ts"],
+              [
+                "api-gateway-construct.ts",
+                "cdk/lib/constructs/api-gateway-construct.ts"
+              ],
+              ["main-stack.ts", "cdk/lib/stacks/main-stack.ts"],
+              ["lambda-construct.ts", "cdk/lib/constructs/lambda-construct.ts"]
+            ]
+          }
+        },
+        {
+          "id": "web-acl",
+          "name": "Web ACL",
+          "n": {
+            "dev": 1,
+            "stg": 1,
+            "prod": 1
+          },
+          "from": "counts.webAcls",
+          "meta": ["main stack", "REGIONAL"],
+          "d": {
+            "type": "AWS::WAFv2::WebACL",
+            "role": "Associated with the API stage: a 300,000-per-IP rate rule and three managed rule sets, logged to CloudWatch.",
+            "code": [
+              ["waf-construct.ts", "cdk/lib/constructs/waf-construct.ts"]
+            ]
+          }
+        },
+        {
+          "id": "usage-plans",
+          "name": "Usage plans",
+          "n": {
+            "dev": 1,
+            "stg": 1,
+            "prod": 1
+          },
+          "from": "counts.usagePlans",
+          "meta": ["main stack", "test consumer only here"],
+          "d": {
+            "type": "AWS::ApiGateway::UsagePlan",
+            "role": "One per consumer; none is enforced, because no method requires a key.",
+            "code": [
+              [
+                "consumer-usage-plan-construct.ts",
+                "cdk/lib/constructs/consumer-usage-plan-construct.ts"
+              ]
+            ]
+          }
+        },
+        {
+          "id": "api-keys",
+          "name": "API keys",
+          "n": {
+            "dev": 1,
+            "stg": 1,
+            "prod": 1
+          },
+          "from": "counts.apiKeys",
+          "meta": ["main stack", "test consumer only here"],
+          "d": {
+            "type": "AWS::ApiGateway::ApiKey",
+            "role": "One per consumer, read back by a custom resource and written into the consumer's secret.",
+            "code": [
+              [
+                "consumer-usage-plan-construct.ts",
+                "cdk/lib/constructs/consumer-usage-plan-construct.ts"
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Compute · AWS Lambda",
+      "note": null,
+      "table": null,
+      "items": [
+        {
+          "id": "fn-main",
+          "name": "Route functions",
+          "n": {
+            "dev": 13,
+            "stg": 10,
+            "prod": 10
+          },
+          "from": "counts.functions.main",
+          "meta": ["main stack", "isolated subnets", "nodejs24.x"],
+          "d": {
+            "type": "AWS::Lambda::Function",
+            "role": "One per route in <code>routes.ts</code>: 512 MB, 30 s, X-Ray on, reserved concurrency 2 in development or 50 elsewhere. Ten outside development. The SAR status, start-SAR and start-DSAR routes carry <code>disableRoute</code>: in development their three functions are built but have no API method and nothing invokes them (f3988d6, <code>lambda-construct.ts</code>); in staging and production <code>setRoutes</code> drops them, so neither the function, its log group, its role nor its queue is created there (a9f97ed).",
+            "code": [
+              ["lambda-construct.ts", "cdk/lib/constructs/lambda-construct.ts"],
+              ["main-stack.ts", "cdk/lib/stacks/main-stack.ts"],
+              ["routes.ts", "libs/utils/schemas/routes/routes.ts"]
+            ]
+          }
+        },
+        {
+          "id": "fn-sar",
+          "name": "Rights pipeline functions",
+          "n": {
+            "dev": 4,
+            "stg": 4,
+            "prod": 4
+          },
+          "from": "counts.functions.sar",
+          "meta": ["sar stack", "SQS and S3 triggered", "every environment"],
+          "d": {
+            "type": "AWS::Lambda::Function",
+            "role": "createSarFile, generateSarPresignedUrl, dsarRequest, dsarDelete. In every environment; in staging and production main passes no SAR or DSAR queue, so createSarFile, dsarRequest and dsarDelete have no event source, and only generateSarPresignedUrl, on S3 <code>ObjectCreated</code>, has a trigger.",
+            "code": [
+              ["sar-stack.ts", "cdk/lib/stacks/sar-stack.ts"],
+              ["cdk/bin/app.ts", "cdk/bin/app.ts"]
+            ]
+          }
+        },
+        {
+          "id": "fn-dvla",
+          "name": "DVLA pilot purge",
+          "n": {
+            "dev": 1,
+            "stg": 1,
+            "prod": 1
+          },
+          "from": "counts.functions.dvla-pilot",
+          "meta": ["dvla-pilot stack", "no trigger"],
+          "d": {
+            "type": "AWS::Lambda::Function",
+            "role": "Deletes every DVLA link when invoked with the purge key. Not alarmed.",
+            "code": [
+              ["dvla-pilot-stack.ts", "cdk/lib/stacks/dvla-pilot-stack.ts"],
+              [
+                "dvlaPilotPurgeLambda/handler.ts",
+                "src/dvlaPilotPurgeLambda/handler.ts"
+              ]
+            ]
+          }
+        },
+        {
+          "id": "fn-live-schema",
+          "name": "Live-schema functions",
+          "n": {
+            "dev": 2,
+            "stg": 2,
+            "prod": 0
+          },
+          "from": "counts.functions.live-schema",
+          "meta": [
+            "live-schema stack",
+            "isolated subnets",
+            "not in production"
+          ],
+          "d": {
+            "type": "AWS::Lambda::Function",
+            "role": "liveSchemaExtractor (512 MB, 60 s) reads the data-table stream, filtered to INSERT and MODIFY, in batches of 100, bisecting on error, failures to SQS; its handler is a stub. liveSchemaMigration (512 MB, 300 s) is run by a CDK Trigger when the stack is created and whenever the function changes.",
+            "code": [
+              ["live-schema-stack.ts", "cdk/lib/stacks/live-schema-stack.ts"],
+              ["cdk/bin/app.ts", "cdk/bin/app.ts"]
+            ]
+          }
+        },
+        {
+          "id": "fn-total",
+          "name": "All named functions",
+          "n": {
+            "dev": 20,
+            "stg": 17,
+            "prod": 15
+          },
+          "from": "counts.functionsTotal",
+          "meta": ["every stack"],
+          "d": {
+            "type": "AWS::Lambda::Function",
+            "role": "The twenty <code>build-lambdas.mjs</code> builds, one per <code>src/*/handler.ts</code>: thirteen main functions — ten behind API methods and, in development only, the three disabled SAR and DSAR route functions, which have no method — four in the sar stack, the DVLA pilot purge, and the live-schema extractor and migration. Seventeen in staging, without the three disabled route functions; fifteen in production, which also has no live-schema stack. Custom-resource providers CDK adds — the live-schema Trigger's among them — have no FunctionName and are not counted.",
+            "code": [
+              ["build-lambdas.mjs", "scripts/build-lambdas.mjs"],
+              ["cdk/bin/app.ts", "cdk/bin/app.ts"],
+              ["main-stack.ts", "cdk/lib/stacks/main-stack.ts"],
+              ["live-schema-stack.ts", "cdk/lib/stacks/live-schema-stack.ts"]
+            ]
+          }
+        },
+        {
+          "id": "event-source-mappings",
+          "name": "Event source mappings",
+          "n": {
+            "dev": 4,
+            "stg": 1,
+            "prod": 0
+          },
+          "from": "counts.eventSourceMappings",
+          "meta": ["sar and live-schema stacks"],
+          "d": {
+            "type": "AWS::Lambda::EventSourceMapping",
+            "role": "In development, the three SAR and DSAR queue triggers and the data-table stream; in staging only the stream; none in production.",
+            "code": [
+              ["sar-stack.ts", "cdk/lib/stacks/sar-stack.ts"],
+              ["live-schema-stack.ts", "cdk/lib/stacks/live-schema-stack.ts"]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Data · DynamoDB, SQS, S3, KMS",
+      "note": null,
+      "table": null,
+      "items": [
+        {
+          "id": "tables",
+          "name": "Tables",
+          "n": {
+            "dev": 2,
+            "stg": 2,
+            "prod": 2
+          },
+          "from": "counts.tables",
+          "meta": ["main stack", "on demand", "CMK", "PITR"],
+          "d": {
+            "type": "AWS::DynamoDB::Table",
+            "role": "udp-data and udp-identity, the latter with the sk-index GSI. udp-data has a <code>NEW_IMAGE</code> stream, read by the live-schema extractor outside production.",
+            "code": [
+              [
+                "dynamodb-construct.ts",
+                "cdk/lib/constructs/dynamodb-construct.ts"
+              ],
+              ["main-stack.ts", "cdk/lib/stacks/main-stack.ts"],
+              ["live-schema-stack.ts", "cdk/lib/stacks/live-schema-stack.ts"]
+            ]
+          }
+        },
+        {
+          "id": "dsql-clusters",
+          "name": "Aurora DSQL clusters",
+          "n": {
+            "dev": 1,
+            "stg": 1,
+            "prod": 0
+          },
+          "from": "counts.dsqlClusters",
+          "meta": ["live-schema stack", "not in production"],
+          "d": {
+            "type": "AWS::DSQL::Cluster",
+            "role": "<code>live-schema-{env}</code>, for the schemas the extractor will write; deletion protection off in development and on in staging, and no customer-managed key.",
+            "code": [
+              ["live-schema-stack.ts", "cdk/lib/stacks/live-schema-stack.ts"],
+              ["tables.ts", "libs/live-schema/tables.ts"]
+            ]
+          }
+        },
+        {
+          "id": "queues",
+          "name": "Queues",
+          "n": {
+            "dev": 6,
+            "stg": 4,
+            "prod": 3
+          },
+          "from": "counts.queues",
+          "meta": ["main, sar and live-schema stacks", "KMS"],
+          "d": {
+            "type": "AWS::SQS::Queue",
+            "role": "The SAR and DSAR queues in main, only in development, where their producer functions exist but no API method reaches them; the delete queue, its dead-letter queue and the SAR file dead-letter queue in sar, in every environment; and outside production the live-schema stream-failure queue (<code>live-schema-stream-failures-{env}</code>, 14-day retention, the main KMS key read from SSM).",
+            "code": [
+              ["main-stack.ts", "cdk/lib/stacks/main-stack.ts"],
+              ["sar-stack.ts", "cdk/lib/stacks/sar-stack.ts"],
+              ["routes.ts", "libs/utils/schemas/routes/routes.ts"],
+              ["cdk/bin/app.ts", "cdk/bin/app.ts"],
+              ["live-schema-stack.ts", "cdk/lib/stacks/live-schema-stack.ts"]
+            ]
+          }
+        },
+        {
+          "id": "buckets",
+          "name": "Buckets",
+          "n": {
+            "dev": 4,
+            "stg": 4,
+            "prod": 3
+          },
+          "from": "counts.buckets",
+          "meta": ["sar, macie and e2e stacks"],
+          "d": {
+            "type": "AWS::S3::Bucket",
+            "role": "Macie's results bucket, the SAR bucket and its access-logs bucket in every environment; outside production, the test source bucket.",
+            "code": [
+              ["s3-construct.ts", "cdk/lib/constructs/s3-construct.ts"],
+              ["e2e-stack.ts", "cdk/lib/stacks/e2e-stack.ts"],
+              ["macie-stack.ts", "cdk/lib/macie/macie-stack.ts"],
+              ["cdk/bin/app.ts", "cdk/bin/app.ts"],
+              ["sar-stack.ts", "cdk/lib/stacks/sar-stack.ts"]
+            ]
+          }
+        },
+        {
+          "id": "kms-keys",
+          "name": "KMS keys",
+          "n": {
+            "dev": 4,
+            "stg": 5,
+            "prod": 5
+          },
+          "from": "counts.kmsKeys",
+          "meta": ["90-day rotation", "+1 per real consumer config"],
+          "d": {
+            "type": "AWS::KMS::Key",
+            "role": "The VPC stack's key, the main and DB keys, Macie's results key, and outside development the backup vault's. The consumer-config key exists only when the SSM config names a consumer.",
+            "code": [
+              ["kms-construct.ts", "cdk/lib/constructs/kms-construct.ts"],
+              [
+                "consumer-config-construct.ts",
+                "cdk/lib/constructs/consumer-config-construct.ts"
+              ],
+              ["backup-stack.ts", "cdk/lib/stacks/backup-stack.ts"]
+            ]
+          }
+        },
+        {
+          "id": "appconfig",
+          "name": "AppConfig applications",
+          "n": {
+            "dev": 1,
+            "stg": 1,
+            "prod": 1
+          },
+          "from": "counts.appConfigApplications",
+          "meta": ["main stack", "one flag", "unread"],
+          "d": {
+            "type": "AWS::AppConfig::Application",
+            "role": "Declares enableNewIdentityFlow. No code reads it.",
+            "code": [
+              [
+                "appconfig-feature-flags.ts",
+                "cdk/constants/appconfig-feature-flags.ts"
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Network · Amazon VPC",
+      "note": null,
+      "table": null,
+      "items": [
+        {
+          "id": "subnets",
+          "name": "Subnets",
+          "n": {
+            "dev": 6,
+            "stg": 6,
+            "prod": 6
+          },
+          "from": "counts.subnets",
+          "meta": ["vpc stack", "2 AZs", "/24"],
+          "d": {
+            "type": "AWS::EC2::Subnet",
+            "role": "Three /24 tiers across two availability zones: public, whose route tables point at an internet gateway; private-with-egress, which has no route out because there is no NAT gateway; and isolated, which holds every Lambda, CodeBuild project and endpoint. Only the isolated pair is used.",
+            "code": [
+              ["vpc-construct.ts", "cdk/lib/constructs/vpc-construct.ts"]
+            ]
+          }
+        },
+        {
+          "id": "vpc-endpoints",
+          "name": "VPC endpoints",
+          "n": {
+            "dev": 13,
+            "stg": 13,
+            "prod": 12
+          },
+          "from": "counts.vpcEndpoints",
+          "meta": ["vpc stack", "12 interface", "+1 DSQL outside production"],
+          "d": {
+            "type": "AWS::EC2::VPCEndpoint",
+            "role": "The isolated tier's only way out — twelve in the vpc stack, and outside production the live-schema stack's DSQL endpoint, skipped for a pull-request deployment; the list is on Network.",
+            "code": [
+              ["vpc-construct.ts", "cdk/lib/constructs/vpc-construct.ts"],
+              ["live-schema-stack.ts", "cdk/lib/stacks/live-schema-stack.ts"]
+            ]
+          }
+        },
+        {
+          "id": "sgs",
+          "name": "Security groups",
+          "n": {
+            "dev": 5,
+            "stg": 5,
+            "prod": 3
+          },
+          "from": "counts.securityGroups",
+          "meta": ["vpc and live-schema stacks"],
+          "d": {
+            "type": "AWS::EC2::SecurityGroup",
+            "role": "Lambda, endpoint and CodeBuild in the vpc stack; outside production also the live-schema functions' group and the DSQL endpoint's.",
+            "code": [
+              ["vpc-construct.ts", "cdk/lib/constructs/vpc-construct.ts"],
+              ["live-schema-stack.ts", "cdk/lib/stacks/live-schema-stack.ts"]
+            ]
+          }
+        },
+        {
+          "id": "nacls",
+          "name": "Network ACLs",
+          "n": {
+            "dev": 1,
+            "stg": 1,
+            "prod": 1
+          },
+          "from": "counts.networkAcls",
+          "meta": ["vpc stack"],
+          "d": {
+            "type": "AWS::EC2::NetworkAcl",
+            "role": "One, on both isolated subnets.",
+            "code": [
+              ["vpc-construct.ts", "cdk/lib/constructs/vpc-construct.ts"]
+            ]
+          }
+        },
+        {
+          "id": "nacl-entries",
+          "name": "Network ACL entries",
+          "n": {
+            "dev": 4,
+            "stg": 4,
+            "prod": 4
+          },
+          "from": "counts.networkAclEntries",
+          "meta": ["vpc stack"],
+          "d": {
+            "type": "AWS::EC2::NetworkAclEntry",
+            "role": "Deny SSH and RDP inbound from anywhere; allow all traffic in from, and out to, the VPC CIDR.",
+            "code": [
+              ["vpc-construct.ts", "cdk/lib/constructs/vpc-construct.ts"]
+            ]
+          }
+        },
+        {
+          "id": "flow-logs",
+          "name": "Flow logs",
+          "n": {
+            "dev": 1,
+            "stg": 1,
+            "prod": 1
+          },
+          "from": "counts.flowLogs",
+          "meta": ["vpc stack", "ALL", "CloudWatch Logs"],
+          "d": {
+            "type": "AWS::EC2::FlowLog",
+            "code": [
+              ["vpc-construct.ts", "cdk/lib/constructs/vpc-construct.ts"]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Observability · CloudWatch and SNS",
+      "note": null,
+      "table": null,
+      "items": [
+        {
+          "id": "alarms",
+          "name": "Alarms",
+          "n": {
+            "dev": 51,
+            "stg": 39,
+            "prod": 36
+          },
+          "from": "counts.alarmsTotal",
+          "meta": ["monitoring stack"],
+          "d": {
+            "type": "AWS::CloudWatch::Alarm",
+            "role": "Three per function for fifteen functions in development — the ten main route functions that are not SAR or DSAR, the four sar-stack functions and the live-schema extractor — eleven in staging, with no sar-stack functions, and ten in production; three for DynamoDB, three for the API. The three SAR and DSAR route functions and the live-schema migration are never alarmed.",
+            "code": [
+              ["monitoring-stack.ts", "cdk/lib/stacks/monitoring-stack.ts"],
+              ["cdk/bin/app.ts", "cdk/bin/app.ts"],
+              ["live-schema-stack.ts", "cdk/lib/stacks/live-schema-stack.ts"]
+            ]
+          }
+        },
+        {
+          "id": "alarms-fn-errors",
+          "name": "Lambda error alarms",
+          "n": {
+            "dev": 15,
+            "stg": 11,
+            "prod": 10
+          },
+          "from": "counts.alarmsLambdaErrors",
+          "meta": ["critical", "≥ 2 in two 1-min periods"],
+          "d": {
+            "type": "AWS::CloudWatch::Alarm",
+            "code": [
+              ["monitoring-stack.ts", "cdk/lib/stacks/monitoring-stack.ts"]
+            ]
+          }
+        },
+        {
+          "id": "alarms-fn-duration",
+          "name": "Lambda duration alarms",
+          "n": {
+            "dev": 15,
+            "stg": 11,
+            "prod": 10
+          },
+          "from": "counts.alarmsLambdaDuration",
+          "meta": ["critical", "p95 ≥ 5,000 ms"],
+          "d": {
+            "type": "AWS::CloudWatch::Alarm",
+            "code": [
+              ["monitoring-stack.ts", "cdk/lib/stacks/monitoring-stack.ts"],
+              ["nfr.ts", "cdk/constants/nfr.ts"]
+            ]
+          }
+        },
+        {
+          "id": "alarms-fn-throttles",
+          "name": "Lambda throttle alarms",
+          "n": {
+            "dev": 15,
+            "stg": 11,
+            "prod": 10
+          },
+          "from": "counts.alarmsLambdaThrottles",
+          "meta": ["critical", "any throttle"],
+          "d": {
+            "type": "AWS::CloudWatch::Alarm",
+            "code": [
+              ["monitoring-stack.ts", "cdk/lib/stacks/monitoring-stack.ts"]
+            ]
+          }
+        },
+        {
+          "id": "alarms-dynamo",
+          "name": "DynamoDB alarms",
+          "n": {
+            "dev": 3,
+            "stg": 3,
+            "prod": 3
+          },
+          "from": "counts.alarmsDynamo",
+          "meta": ["critical"],
+          "d": {
+            "type": "AWS::CloudWatch::Alarm",
+            "role": "Read throttled, write throttled, system errors.",
+            "code": [
+              ["monitoring-stack.ts", "cdk/lib/stacks/monitoring-stack.ts"]
+            ]
+          }
+        },
+        {
+          "id": "alarms-api",
+          "name": "API alarms",
+          "n": {
+            "dev": 3,
+            "stg": 3,
+            "prod": 3
+          },
+          "from": "counts.alarmsApi",
+          "meta": ["5xx and latency critical", "4xx warning"],
+          "d": {
+            "type": "AWS::CloudWatch::Alarm",
+            "code": [
+              ["monitoring-stack.ts", "cdk/lib/stacks/monitoring-stack.ts"]
+            ]
+          }
+        },
+        {
+          "id": "log-groups",
+          "name": "Log groups",
+          "n": {
+            "dev": 27,
+            "stg": 24,
+            "prod": 20
+          },
+          "from": "counts.logGroups",
+          "meta": ["1 year · 1 month in dev", "KMS"],
+          "d": {
+            "type": "AWS::Logs::LogGroup",
+            "role": "One per named function, plus the API access log, the WAF, the flow log, two custom-resource providers, and the two test builds outside production. Three fewer in staging, with the SAR and DSAR route functions; production also loses the two live-schema functions and the test builds.",
+            "code": [
+              ["lambda-construct.ts", "cdk/lib/constructs/lambda-construct.ts"],
+              ["environment.ts", "cdk/constants/environment.ts"],
+              ["live-schema-stack.ts", "cdk/lib/stacks/live-schema-stack.ts"]
+            ]
+          }
+        },
+        {
+          "id": "sns-topics",
+          "name": "SNS topics",
+          "n": {
+            "dev": 3,
+            "stg": 4,
+            "prod": 4
+          },
+          "from": "counts.snsTopics",
+          "meta": ["critical", "warning", "release", "backup outside dev"],
+          "d": {
+            "type": "AWS::SNS::Topic",
+            "role": "Only the critical topic has subscribers in the repository: a Chatbot Slack channel, and PagerDuty over HTTPS, when the SSM monitoring parameter names them.",
+            "code": [
+              ["monitoring-stack.ts", "cdk/lib/stacks/monitoring-stack.ts"],
+              ["main-stack.ts", "cdk/lib/stacks/main-stack.ts"],
+              ["backup-stack.ts", "cdk/lib/stacks/backup-stack.ts"]
+            ]
+          }
+        },
+        {
+          "id": "dashboards",
+          "name": "Dashboards",
+          "n": {
+            "dev": 2,
+            "stg": 2,
+            "prod": 2
+          },
+          "from": "counts.dashboards",
+          "meta": ["monitoring stack"],
+          "d": {
+            "type": "AWS::CloudWatch::Dashboard",
+            "role": "Operational, and performance-test metrics.",
+            "code": [
+              ["monitoring-stack.ts", "cdk/lib/stacks/monitoring-stack.ts"]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Access · IAM",
+      "note": null,
+      "table": null,
+      "items": [
+        {
+          "id": "iam-roles",
+          "name": "IAM roles",
+          "n": {
+            "dev": 32,
+            "stg": 28,
+            "prod": 23
+          },
+          "from": "counts.iamRoles",
+          "meta": ["every stack", "+1 per real consumer"],
+          "d": {
+            "type": "AWS::IAM::Role",
+            "role": "A role per named function, the API's CloudWatch role, the test consumer role, the flow-log role, custom-resource roles (the live-schema Trigger's among them), the backup role outside development, and the CodeBuild roles outside production. Staging drops the three SAR and DSAR route roles and two S3 auto-delete provider roles, and adds the backup role.",
+            "code": [
+              ["lambda-construct.ts", "cdk/lib/constructs/lambda-construct.ts"],
+              [
+                "iam-consumer-construct.ts",
+                "cdk/lib/constructs/iam-consumer-construct.ts"
+              ],
+              ["live-schema-stack.ts", "cdk/lib/stacks/live-schema-stack.ts"]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Backup · AWS Backup",
+      "note": "The backup stack deploys to staging and production only.",
+      "table": null,
+      "items": [
+        {
+          "id": "backup-vaults",
+          "name": "Backup vaults",
+          "n": {
+            "dev": 0,
+            "stg": 1,
+            "prod": 1
+          },
+          "from": "counts.backupVaults",
+          "meta": ["backup stack", "own key"],
+          "d": {
+            "type": "AWS::Backup::BackupVault",
+            "role": "The lock the code intends is set on the KMS key's resource, not the vault's, so none is rendered.",
+            "code": [["backup-stack.ts", "cdk/lib/stacks/backup-stack.ts"]]
+          }
+        },
+        {
+          "id": "backup-plans",
+          "name": "Backup plans",
+          "n": {
+            "dev": 0,
+            "stg": 3,
+            "prod": 3
+          },
+          "from": "counts.backupPlans",
+          "meta": ["daily 35 d", "monthly 1 y", "monthly 5 y"],
+          "d": {
+            "type": "AWS::Backup::BackupPlan",
+            "code": [["backup-stack.ts", "cdk/lib/stacks/backup-stack.ts"]]
+          }
+        },
+        {
+          "id": "backup-selections",
+          "name": "Backup selections",
+          "n": {
+            "dev": 0,
+            "stg": 4,
+            "prod": 4
+          },
+          "from": "counts.backupSelections",
+          "meta": ["DynamoDB and RDS by ARN", "backup-plan tag"],
+          "d": {
+            "type": "AWS::Backup::BackupSelection",
+            "role": "The tag selections match nothing the repository tags; the S3 bucket is in none.",
+            "code": [["backup-stack.ts", "cdk/lib/stacks/backup-stack.ts"]]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Testing and scanning · CodeBuild and Macie",
+      "note": null,
+      "table": null,
+      "items": [
+        {
+          "id": "codebuild",
+          "name": "CodeBuild projects",
+          "n": {
+            "dev": 2,
+            "stg": 2,
+            "prod": 0
+          },
+          "from": "counts.codeBuildProjects",
+          "meta": ["e2e and perf stacks", "not in production"],
+          "d": {
+            "type": "AWS::CodeBuild::Project",
+            "role": "Cucumber end-to-end, and k6 performance, in the isolated subnets.",
+            "code": [
+              [
+                "codebuild-e2e-construct.ts",
+                "cdk/lib/constructs/codebuild-e2e-construct.ts"
+              ],
+              [
+                "codebuild-perf-construct.ts",
+                "cdk/lib/constructs/codebuild-perf-construct.ts"
+              ]
+            ]
+          }
+        },
+        {
+          "id": "e2e-stacks",
+          "name": "e2e stacks",
+          "n": {
+            "dev": 1,
+            "stg": 1,
+            "prod": 0
+          },
+          "from": "counts.e2eStacks",
+          "meta": ["isNotProd"],
+          "d": {
+            "type": "CloudFormation stack",
+            "role": "Counted by the presence of the {env}-e2e template.",
+            "code": [["cdk/bin/app.ts", "cdk/bin/app.ts"]]
+          }
+        },
+        {
+          "id": "macie-stacks",
+          "name": "Macie stacks",
+          "n": {
+            "dev": 1,
+            "stg": 1,
+            "prod": 1
+          },
+          "from": "counts.macieStacks",
+          "meta": ["every environment"],
+          "d": {
+            "type": "CloudFormation stack",
+            "role": "Enables Macie for the account, with a results bucket and key.",
+            "code": [["macie-stack.ts", "cdk/lib/macie/macie-stack.ts"]]
+          }
+        }
+      ]
+    }
+  ]
+}

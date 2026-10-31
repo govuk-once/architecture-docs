@@ -14,6 +14,11 @@ import path from "node:path";
 
 import { LikeC4 } from "likec4";
 
+import { citationFor, type Project } from "./projects.js";
+
+/** What the loader needs of a project: where its model is, and which repositories it cites. */
+type Cites = Pick<Project, "modelDir" | "sources" | "qualified">;
+
 interface Meta {
   name: string;
   order: number;
@@ -43,27 +48,31 @@ function arr(v: unknown): string[] | undefined {
 
 /** metadata carries our data; everything here is optional by construction. */
 function detail(
+  project: Cites,
   md: Record<string, unknown>,
   links: { url: string; title?: string }[],
 ) {
   const d: Record<string, unknown> = {};
   for (const k of ["type", "tech", "role", "protocol", "auth", "carries"])
     if (str(md[k])) d[k] = md[k];
-  const facts = arr(md.facts);
-  if (facts) d.facts = facts;
-  // a link is stored as the repo URL plus the label the explorer shows
+  // Always present, even empty: a state may add facts to a box the model gave none.
+  d.facts = arr(md.facts) ?? [];
+  // A proposed architecture cites the decision register where a documented one cites code.
+  const why = arr(md.why);
+  if (why) d.why = why;
+  // A link is stored as the path it cites plus the label the explorer shows — named by
+  // its source when the project reads several. A link into a repository the project does
+  // not read stays absolute, and the build refuses it.
   if (links.length)
-    d.code = links.map((l) => [
-      l.title ?? l.url,
-      l.url.replace(/^https:\/\/github\.com\/[^/]+\/[^/]+\/blob\/[^/]+\//, ""),
-    ]);
+    d.code = links.map((l) => [l.title ?? l.url, citationFor(project, l.url)]);
   return d;
 }
 
 const srcId = (el: { $element?: { metadata?: Record<string, unknown> } }) =>
   str(el.$element?.metadata?.sourceId);
 
-export async function loadLikeC4Views(modelDir: string) {
+export async function loadLikeC4Views(project: Cites) {
+  const { modelDir } = project;
   const likec4 = await LikeC4.fromWorkspace(modelDir, { logger: false });
   if (likec4.hasErrors()) {
     likec4.printErrors();
@@ -102,7 +111,7 @@ export async function loadLikeC4Views(modelDir: string) {
         w: num(md.w),
         h: num(md.h),
         order: num(md.order, 0),
-        d: detail(md, links),
+        d: detail(project, md, links),
       };
       if (el.kind === "boundary")
         zones.push({ ...base, label: el.title, hard: md.boundary === "hard" });
@@ -145,7 +154,7 @@ export async function loadLikeC4Views(modelDir: string) {
         dir: str(md.edgeDir) ?? null,
         style: str(md.edgeStyle) ?? null,
         order: num(md.order, 0),
-        d: detail(md, links),
+        d: detail(project, md, links),
       });
     }
     const byOrder = (a: { order?: number }, b: { order?: number }) =>

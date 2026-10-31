@@ -6,13 +6,21 @@
  * things fails nothing and looks exactly like a gate that has nothing to catch, so each
  * rule here is given something it must reject and something it must not.
  */
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import {
   checkGeometry,
+  checkProposedCitations,
+  checkSourceCitations,
+  checkStatePlacement,
   type View,
   type ViewNode,
 } from "./buildArchitectureExplorer.js";
+import type { Source } from "./lib/projects.js";
 
 const KINDS = new Set(["flex", "aws"]);
 
@@ -162,5 +170,185 @@ describe("checkGeometry", () => {
     expect(
       checkGeometry([view(), bad], KINDS).some((p) => p.startsWith("second/")),
     ).toBe(true);
+  });
+});
+
+/**
+ * Every citation has to land on a file that exists, in a repository the project reads.
+ * The checkouts are real directories, because existence on disk is the whole claim.
+ */
+describe("checkSourceCitations", () => {
+  function checkouts(ids: string[]): Source[] {
+    const root = mkdtempSync(path.join(tmpdir(), "cite-"));
+    return ids.map((id) => {
+      const dir = path.join(root, id);
+      mkdirSync(path.join(dir, ".git"), { recursive: true });
+      mkdirSync(path.join(dir, "src"));
+      writeFileSync(path.join(dir, "src", "real.ts"), "");
+      return {
+        id,
+        repo: `git@github.com:org/${id}.git`,
+        ref: "main",
+        root: `.sources/${id}`,
+        url: `https://github.com/org/${id}/blob/main/`,
+        dir,
+      };
+    });
+  }
+  const one = { id: "one", qualified: false, sources: checkouts(["one"]) };
+  const several = {
+    id: "app",
+    qualified: true,
+    sources: checkouts(["ios", "android"]),
+  };
+  /** A view whose one box cites `rel`, the way the loader hands a link over. */
+  const citing = (rel: string) => [
+    { id: "v", nodes: [{ id: "n", d: { code: [["label", rel]] } }] },
+  ];
+  const problems = (p: typeof one, rel: string) =>
+    checkSourceCitations(p, citing(rel));
+
+  it("passes a citation to a file that exists, with one source or several", () => {
+    expect(problems(one, "src/real.ts")).toEqual([]);
+    expect(problems(several, "ios:src/real.ts")).toEqual([]);
+  });
+
+  it("refuses a citation to a file that does not exist", () => {
+    expect(problems(one, "src/gone.ts")).toEqual([
+      "v/n: cites src/gone.ts, which does not exist",
+    ]);
+  });
+
+  it("refuses a path that names no source, when the project reads several", () => {
+    expect(problems(several, "src/real.ts")[0]).toMatch(/names no source/);
+    expect(problems(several, "web:src/real.ts")[0]).toMatch(/names no source/);
+  });
+
+  /* The case the old loader let through: this path exists in the checkout it would have
+     been checked against, and says nothing about the repository it links to. */
+  it("refuses a link into a repository the project does not read", () => {
+    expect(
+      problems(one, "https://github.com/org/other/blob/main/src/real.ts")[0],
+    ).toMatch(/no repository this project reads/);
+  });
+
+  it("refuses a path that climbs out of its checkout into another", () => {
+    expect(problems(several, "android:../ios/src/real.ts")[0]).toMatch(
+      /outside its checkout/,
+    );
+  });
+
+  it("reports a missing checkout once, rather than every path in it", () => {
+    const gone = { id: "gone", qualified: false, sources: checkouts(["gone"]) };
+    const [s] = gone.sources;
+    if (s) rmSync(path.join(s.dir, ".git"), { recursive: true });
+    const found = checkSourceCitations(gone, [
+      ...citing("src/real.ts"),
+      ...citing("src/other.ts"),
+    ]);
+    expect(found).toHaveLength(1);
+    expect(found[0]).toMatch(/pnpm sync gone/);
+  });
+});
+
+/**
+ * A proposed architecture has no code, so its claims cite the decision register instead.
+ * Every box, line, table and inventory row must name an entry, and every entry it names
+ * must be one the register holds.
+ */
+describe("checkProposedCitations", () => {
+  const REGISTER = { "adr-1": {}, "q-open": {} };
+  const cited = (why?: string[]) =>
+    view({
+      nodes: [box({ id: "a", d: { facts: [], why } }), box({ id: "b" })],
+      edges: [],
+    });
+
+  it("passes a proposal whose every claim cites the register", () => {
+    const v = view({
+      nodes: [box({ id: "a", d: { facts: [], why: ["adr-1"] } })],
+      edges: [
+        {
+          from: "a",
+          to: "a",
+          label: "x",
+          d: { facts: [], why: ["q-open"] },
+        } as never,
+      ],
+      tables: [{ name: "T", cols: ["c"], rows: [["r"]], why: ["adr-1"] }],
+    });
+    expect(checkProposedCitations([v], REGISTER)).toEqual([]);
+  });
+
+  it("refuses a box, a line or a table that cites nothing", () => {
+    expect(checkProposedCitations([cited(["adr-1"])], REGISTER)).toEqual([
+      "v/b: cites no decision — a proposed architecture rests on the register, " +
+        "so every claim names the entry it comes from",
+    ]);
+    const table = view({ tables: [{ name: "T", cols: ["c"], rows: [] }] });
+    expect(checkProposedCitations([table], REGISTER)).toHaveLength(1);
+  });
+
+  it("refuses a citation the register does not hold", () => {
+    const v = view({
+      nodes: [box({ id: "a", d: { facts: [], why: ["adr-9"] } })],
+    });
+    expect(checkProposedCitations([v], REGISTER)).toEqual([
+      'v/a: cites "adr-9", which is not in the decision register',
+    ]);
+  });
+
+  it("refuses an inventory row that cites nothing", () => {
+    const inv = {
+      id: "resources",
+      name: "R",
+      type: "doc",
+      groups: [
+        {
+          name: "G",
+          note: null,
+          table: null,
+          items: [{ id: "i", name: "I", n: 1, meta: [], d: { facts: [] } }],
+        },
+      ],
+    } as unknown as View;
+    expect(checkProposedCitations([inv], REGISTER)).toHaveLength(1);
+  });
+
+  it("leaves the decisions tab alone — it is the register", () => {
+    const decisions = { ...cited(), id: "decisions" };
+    expect(checkProposedCitations([decisions], REGISTER)).toEqual([]);
+  });
+
+  it("refuses code citations in a proposal, which has no code", () => {
+    const found = checkSourceCitations(
+      { id: "idx", qualified: false, sources: [], proposed: true },
+      [{ id: "v", nodes: [{ id: "n", d: { code: [["l", "src/a.ts"]] } }] }],
+    );
+    expect(found).toEqual([
+      "v/n: cites src/a.ts — idx is proposed and has no code; cite the decision " +
+        "register with why",
+    ]);
+  });
+});
+
+/** A state naming an inventory row the project does not have would draw a badge to nowhere. */
+describe("checkStatePlacement", () => {
+  const inventory = {
+    id: "resources",
+    groups: [{ items: [{ id: "fn" }] }],
+  } as unknown as View;
+  const composed = (ids: string[]) => [
+    view({ id: "containers@s1·future", placement: { box: ids } }),
+  ];
+
+  it("passes a row the inventory holds", () => {
+    expect(checkStatePlacement(inventory, composed(["fn"]))).toEqual([]);
+  });
+
+  it("refuses one it does not", () => {
+    expect(checkStatePlacement(inventory, composed(["gone"]))).toEqual([
+      'containers@s1/box: unknown resource id "gone"',
+    ]);
   });
 });

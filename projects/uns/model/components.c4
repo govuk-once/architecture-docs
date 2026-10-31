@@ -1,0 +1,361 @@
+// UNS architecture — Components.
+//
+// Inside one HTTP Lambda: the four middleware groups every handler runs through, in
+// order, and the services the handler is handed. Queue and schedule handlers are drawn
+// as single boxes beside the chain, because their chains are shorter. C4 level 3.
+
+model {
+
+  components_event = internal 'API Gateway event' {
+    #request-path
+    description 'proxy integration'
+    link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/constructs/bases/UNSLambdaConstruct.ts 'UNSLambdaConstruct.ts'
+    metadata {
+      type 'Input'
+      tech 'APIGatewayProxyEvent'
+      role 'The request, with the authorizer\'s context on it for a PSO route.'
+      sourceId 'event'
+      order '1'
+      x '64'
+      y '30'
+      w '262'
+      h '62'
+      ownership 'uns'
+    }
+  }
+
+  components_chain = boundary 'APIHandler · every HTTP Lambda' {
+    metadata {
+      type 'Code · middy'
+      tech 'src/common/operations/httpOperation.ts'
+      role 'Four groups, applied in this order. A handler class names its request, authorizer and response schemas; the base class does the rest.'
+      facts [
+        'The revocation authorizer overrides sanitisation and validation to no-ops: it reads the raw event.'
+      ]
+      sourceId 'chain'
+      order '0'
+      x '40'
+      y '150'
+      w '310'
+      h '534'
+      boundary 'hard'
+    }
+
+    components_sanitise = internal '1. Sanitisation' {
+      #request-path
+      description 'headers · JSON body · event shape'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/common/operations/httpOperation.ts 'httpOperation.ts'
+      metadata {
+        type 'Middleware group'
+        tech 'httpHeaderNormalizer · httpJsonBodyParser · httpEventNormalizer'
+        role 'Normalises headers and the event, parses a JSON body without failing on content type, serialises the response body, and installs middy\'s own HTTP error handler.'
+        sourceId 'sanitise'
+        order '1'
+        x '64'
+        y '200'
+        w '262'
+        h '62'
+        ownership 'uns'
+      }
+    }
+
+    components_observe = internal '2. Observability' {
+      #request-path
+      description 'logger · tracer · metrics'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/common/operations/httpOperation.ts 'httpOperation.ts'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/common/ioc.ts 'ioc.ts'
+      metadata {
+        type 'Middleware group'
+        tech 'correlation id from requestContext.requestId'
+        role 'Injects the Lambda context into the logger, opens the X-Ray segment, and flushes metrics with a cold-start metric.'
+        facts [
+          'The logger masks titles, bodies, the client certificate PEM, tokens, keys and <code>Authorization</code> to <code>******</code> before a line is written.'
+        ]
+        sourceId 'observe'
+        order '2'
+        x '64'
+        y '330'
+        w '262'
+        h '62'
+        ownership 'uns'
+      }
+    }
+
+    components_validate = internal '3. Validation' {
+      #request-path
+      description 'request · authorizer · response'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/common/middlewares/requestValidatorMiddleware.ts 'requestValidatorMiddleware.ts'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/common/middlewares/authorizerValidatorMiddleware.ts 'authorizerValidatorMiddleware.ts'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/common/middlewares/responseValidatorMiddleware.ts 'responseValidatorMiddleware.ts'
+      metadata {
+        type 'Middleware group'
+        tech 'zod · three schemas per handler'
+        role 'The body against the request schema (400 on failure), the authorizer context against its schema (400), and on the way out the response against its schema (417).'
+        facts [
+          'Only zod runs. The OpenAPI files under <code>docs/</code> are documentation; nothing loads them, and they disagree with the code in places.'
+        ]
+        sourceId 'validate'
+        order '3'
+        x '64'
+        y '460'
+        w '262'
+        h '62'
+        ownership 'uns'
+      }
+    }
+
+    components_errors = internal '4. Error handling' {
+      #request-path
+      description 'BaseError → status · else 500'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/common/middlewares/httpErrorHandlerMiddleware.ts 'httpErrorHandlerMiddleware.ts'
+      metadata {
+        type 'Middleware · onError'
+        tech '{ Status, HttpError, Errors }'
+        role 'A known error becomes its status and a structured body; anything else is a generic 500, and either is counted as an HTTP error metric for the function.'
+        sourceId 'errors'
+        order '4'
+        x '64'
+        y '590'
+        w '262'
+        h '62'
+        ownership 'uns'
+      }
+    }
+  }
+
+  components_queue = internal 'QueueHandler · every SQS Lambda' {
+    #request-path
+    description 'BatchProcessor · partial failures'
+    link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/common/operations/queueOperation.ts 'queueOperation.ts'
+    link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/common/operations/batchQueueOperation.ts 'batchQueueOperation.ts'
+    metadata {
+      type 'Code · middy'
+      tech 'observability, then JSON-deserialised bodies'
+      role 'Records are processed individually and in parallel; the failed ones are reported back so only they return to the queue, and after three receives go to the dead-letter queue.'
+      facts [
+        'A retry is logged and counted as <code>QUEUE_MESSAGE_RETRY_ATTEMPT</code>.',
+        'A message whose title is <code>FAIL_AT_{VALIDATION,PROCESSING,DISPATCH,ANALYTICS}</code> throws a <code>SimulatedError</code> at that step. The comment says to remove it before production; nothing guards it by environment.'
+      ]
+      sourceId 'queue'
+      order '2'
+      x '450'
+      y '200'
+      w '262'
+      h '62'
+      ownership 'uns'
+    }
+  }
+
+  components_schedule = internal 'ScheduleOperation' {
+    #off-request-path
+    description 'observability only'
+    link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/common/operations/scheduleOperation.ts 'scheduleOperation.ts'
+    metadata {
+      type 'Code · middy'
+      tech 'one handler: analyticsExport'
+      role 'The EventBridge handler gets the logger, tracer and metrics and nothing else.'
+      sourceId 'schedule'
+      order '3'
+      x '450'
+      y '330'
+      w '262'
+      h '62'
+      ownership 'uns'
+    }
+  }
+
+  components_handler = internal 'implementation()' {
+    #request-path
+    description 'the handler\'s own logic'
+    link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/common/operations/httpOperation.ts 'httpOperation.ts'
+    link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/lambdas/pso/http.postMessage/handler.ts 'http.postMessage/handler.ts'
+    metadata {
+      type 'Code'
+      tech 'src/lambdas/{pso,flex}/{trigger}.{operation}/handler.ts'
+      role 'Runs after the chain, with its dependencies resolved on every invocation — the container is initialised inside the handler, not at cold start.'
+      sourceId 'handler'
+      order '5'
+      x '450'
+      y '590'
+      w '262'
+      h '62'
+      ownership 'uns'
+    }
+  }
+
+  components_services = boundary 'Services · src/common' {
+    metadata {
+      type 'Code · shared library'
+      tech 'ioc.ts · services · repositories · adapters'
+      role 'What a handler asks the container for. Every configuration value comes from SSM at runtime, under the environment\'s prefix.'
+      sourceId 'services'
+      order '0'
+      x '790'
+      y '540'
+      w '650'
+      h '526'
+      boundary 'hard'
+    }
+
+    components_ioc = internal 'initializeDependencies' {
+      #request-path
+      description 'per invocation'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/common/ioc.ts 'ioc.ts'
+      metadata {
+        type 'Code'
+        tech 'Powertools clients captured for X-Ray'
+        role 'Builds the observability trio and hands each handler the services it declared.'
+        sourceId 'ioc'
+        order '1'
+        x '814'
+        y '590'
+        w '262'
+        h '62'
+        ownership 'uns'
+      }
+    }
+
+    components_adapters = internal 'Adapters · VOID or real' {
+      #request-path
+      description 'UDP · OneSignal · or VOID'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/common/services/notificationService.ts 'notificationService.ts'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/common/services/adapters/processingAdapterVoid.ts 'processingAdapterVoid.ts'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/common/services/adapters/notificationAdapterVoid.ts 'notificationAdapterVoid.ts'
+      metadata {
+        type 'Code'
+        tech 'chosen by config/{processing,dispatch}/adapter'
+        role 'The two calls that leave UNS, each behind an interface with a <code>VOID</code> implementation that maps the input to itself. A fresh environment deploys with both set to <code>VOID</code>.'
+        sourceId 'adapters'
+        order '2'
+        x '1154'
+        y '590'
+        w '262'
+        h '62'
+        ownership 'uns'
+      }
+    }
+
+    components_config = internal 'ConfigurationService' {
+      #request-path
+      description 'GetParametersByPath · 60 s cache'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/common/services/configurationService.ts 'configurationService.ts'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/shared/ssmParameter.ts 'ssmParameter.ts'
+      metadata {
+        type 'Code'
+        tech 'SSM · WithDecryption · Secrets Manager beside it'
+        role 'Reads the whole <code>/{prefix}/</code> tree at once and keeps it a minute: queue URLs, table attributes, enable flags, adapters, breaker thresholds, the deeplink template. Secrets — the OneSignal key, UDP\'s bundle — come from Secrets Manager.'
+        sourceId 'config'
+        order '3'
+        x '814'
+        y '720'
+        w '262'
+        h '62'
+        ownership 'uns'
+      }
+    }
+
+    components_breaker = internal 'CircuitBreaker · rate limit' {
+      #request-path
+      description 'state in ElastiCache'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/common/services/circuitBreakerService.ts 'circuitBreakerService.ts'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/common/services/cacheService.ts 'cacheService.ts'
+      metadata {
+        type 'Code'
+        tech 'threshold, half-open and window from SSM'
+        role 'Wraps the provider call in dispatch; opens on failures, and a per-minute counter refuses sends past <code>notificationsProviderRateLimitPerMinute</code>.'
+        sourceId 'breaker'
+        order '4'
+        x '1154'
+        y '720'
+        w '262'
+        h '62'
+        ownership 'uns'
+      }
+    }
+
+    components_repos = internal 'DynamodbRepository' {
+      #request-path
+      description 'one subclass per table'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/common/repositories/dynamodbRepository.ts 'dynamodbRepository.ts'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/common/repositories/notificationsDynamoRepository.ts 'notificationsDynamoRepository.ts'
+      metadata {
+        type 'Code'
+        tech 'table name and keys from SSM attributes'
+        role 'Put, batch put of at most 25, get, query on a named index, update with <code>list_append</code> and <code>if_not_exists + 1</code>, delete. No application-level encryption.'
+        facts [
+          'The expiry attribute is written as an ISO string; DynamoDB TTL wants epoch seconds. The FLEX handlers filter expired items themselves, which is why nothing has noticed.'
+        ]
+        sourceId 'repos'
+        order '5'
+        x '814'
+        y '850'
+        w '262'
+        h '62'
+        ownership 'uns'
+      }
+    }
+
+    components_queues = internal 'QueueService · AnalyticsService' {
+      #request-path
+      description 'SendMessageBatch of 10'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/common/services/queueService.ts 'queueService.ts'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/common/services/analyticsService.ts 'analyticsService.ts'
+      metadata {
+        type 'Code'
+        tech 'one subclass per queue, URL from SSM'
+        role 'Publishes to the next queue in chunks of ten, and publishes the lifecycle event — <code>VALIDATING</code>, <code>PROCESSED</code>, <code>DISPATCHING_FAILED</code>, <code>READ</code>, <code>HIDDEN</code> … — for every state change.'
+        sourceId 'queues'
+        order '6'
+        x '814'
+        y '980'
+        w '262'
+        h '62'
+        ownership 'uns'
+      }
+    }
+  }
+
+  components_event -> components_sanitise 'invoke' {
+    metadata { protocol 'Lambda invocation' auth '—' carries 'The event' order '1' }
+  }
+  components_sanitise -> components_observe 'next' {
+    metadata { protocol 'in-process' auth '—' carries 'A normalised event' order '2' }
+  }
+  components_observe -> components_validate 'next' {
+    metadata { protocol 'in-process' auth '—' carries 'The event, with context' order '3' }
+  }
+  components_validate -> components_errors 'next' {
+    metadata { protocol 'in-process' auth 'All three schemas pass' carries 'A typed body' order '4' }
+  }
+  components_errors -> components_handler 'handler' {
+    metadata { protocol 'in-process' auth '—' carries 'The validated event' order '5' }
+  }
+  components_handler -> components_ioc 'initializeDependencies' {
+    metadata { protocol 'in-process' auth '—' carries 'The handler\'s dependency list' order '6' }
+  }
+  components_ioc -> components_adapters 'builds' {
+    metadata { protocol 'in-process' auth '—' carries 'The adapter the SSM value names' order '7' }
+  }
+  components_ioc -> components_config 'builds' {
+    metadata { protocol 'in-process' auth '—' carries 'A parameter tree' order '8' }
+  }
+  components_config -> components_repos 'table attributes' {
+    metadata { protocol 'in-process' auth '—' carries 'Name, keys and TTL attribute per table' order '9' }
+  }
+  components_repos -> components_queues 'then' {
+    metadata { protocol 'in-process' auth '—' carries 'The record to publish an event for' edgeStyle 'dash' order '10' }
+  }
+  components_adapters -> components_breaker 'wrapped by' {
+    metadata { protocol 'in-process' auth '—' carries 'The provider call' order '11' }
+  }
+}
+
+views {
+  view components {
+    title 'Components'
+    include components_event
+    include components_chain, components_chain.**
+    include components_queue, components_schedule, components_handler
+    include components_services, components_services.**
+  }
+}

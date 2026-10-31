@@ -1,0 +1,352 @@
+{
+  "context": {
+    "name": "Context",
+    "order": 1,
+    "group": "Architecture",
+    "audience": "Anyone new to GOV.UK Chat, including non-engineers",
+    "blurb": "GOV.UK Chat among the systems around it: the app a question is typed into, the AWS services that answer it, and the private repository that holds every prompt. C4 level 1 — runtime only.",
+    "note": "Which caller reaches this system is not provable from either repository: the app backend forwards to whatever an SSM parameter names. Everything else here is read from this repository's own code.",
+    "dashMeans": "a dependency resolved when the agent is built, not a call it makes",
+    "tables": [
+      {
+        "name": "The three stacks, and what each one is for",
+        "code": [
+          ["cdk/bin/app.ts", "cdk/bin/app.ts"],
+          ["chat-api-stack.ts", "cdk/src/stacks/chat-api-stack.ts"],
+          ["chat-ui-stack.ts", "cdk/src/stacks/chat-ui-stack.ts"],
+          ["agui-agent/main.py", "services/agui-agent/src/agui_agent/main.py"]
+        ],
+        "cols": [
+          "Stack",
+          "How a caller authenticates",
+          "Its agent",
+          "The model that answers"
+        ],
+        "rows": [
+          [
+            "ChatApiStack — TypeScript, two routes",
+            "Cognito, client credentials, scope chat-api/invoke",
+            "AguiAgentStack",
+            "eu.anthropic.claude-sonnet-5, 4,000 tokens"
+          ],
+          [
+            "AguiAgentStack — Python, Strands",
+            "Only the invoke function's role may invoke it",
+            "—",
+            "The same"
+          ],
+          [
+            "ChatUiStack — TypeScript, Next.js on ECS Express",
+            "Cognito Hosted UI, code flow with PKCE, scope openid",
+            "None: it calls ChatApiStack as that stack's app client",
+            "—"
+          ]
+        ]
+      }
+    ],
+    "w": 800,
+    "h": 740
+  },
+  "request": {
+    "name": "Request path",
+    "order": 2,
+    "group": "Architecture",
+    "audience": "On-call, and anyone tracing a question through the system",
+    "blurb": "Every hop one question takes, numbered in reading order. The invoke route is the worked example: the other route only reads a conversation back, so this is the whole path that matters end to end.",
+    "note": "Three gates before the agent runs: the Cognito scope, the schema, and the run claim that stops two answers being generated on one thread at once. The answer streams back along the same hops, so no return line is drawn.",
+    "tables": [
+      {
+        "name": "Every route, and what authorises it",
+        "code": [
+          ["chat-api-stack.ts", "cdk/src/stacks/chat-api-stack.ts"],
+          [
+            "threads/invoke.ts",
+            "services/chat-api/src/handlers/threads/invoke.ts"
+          ],
+          [
+            "threads/messages.ts",
+            "services/chat-api/src/handlers/threads/messages.ts"
+          ]
+        ],
+        "cols": ["Method and path", "Authorised by", "Does"],
+        "rows": [
+          [
+            "POST /v1/threads/invoke",
+            "Cognito scope, then the Web ACL's per-person rate limit",
+            "Asks the agent and streams the answer back"
+          ],
+          [
+            "GET /v1/threads/{threadId}/messages",
+            "Cognito scope",
+            "Reads a page of the conversation back; 404 for a thread the caller does not own"
+          ]
+        ]
+      },
+      {
+        "name": "What the handler does before the agent is invoked",
+        "code": [
+          [
+            "threads/invoke.ts",
+            "services/chat-api/src/handlers/threads/invoke.ts"
+          ],
+          ["zod-validator.ts", "services/chat-api/src/http/zod-validator.ts"],
+          ["persistence/runs.ts", "services/chat-api/src/persistence/runs.ts"],
+          [
+            "persistence/threads.ts",
+            "services/chat-api/src/persistence/threads.ts"
+          ]
+        ],
+        "cols": [
+          "Step",
+          "What it checks",
+          "What the caller gets when it fails"
+        ],
+        "rows": [
+          [
+            "Headers",
+            "<code>end-user-id</code> must be present",
+            "A JSON error saying only <code>Agent invocation error</code>"
+          ],
+          [
+            "Body",
+            "A thread id, a run id and the messages, against a schema",
+            "The same message, so nothing about the shape leaks"
+          ],
+          [
+            "Thread",
+            "The caller's thread id resolves to a system thread id",
+            "<code>500</code>, with the failure logged"
+          ],
+          [
+            "Claim · thread busy",
+            "No other run holds this thread",
+            "<code>409</code> — a run is already in progress on this thread"
+          ],
+          [
+            "Claim · duplicate run",
+            "This run id has not been used on this thread",
+            "<code>409</code> — this run id has already been used"
+          ],
+          [
+            "Claim · duplicate message",
+            "This message id has not been used on this thread",
+            "<code>409</code> — this message id has already been used"
+          ],
+          [
+            "Invoke",
+            "The agent returns a body at all",
+            "<code>500</code>, and the claim is released again"
+          ]
+        ]
+      }
+    ],
+    "w": 700,
+    "h": 680
+  },
+  "containers": {
+    "name": "Containers",
+    "order": 3,
+    "group": "Architecture",
+    "audience": "Chat engineers, and anyone reviewing a change to a stack",
+    "blurb": "Every separately deployable part the CDK app creates per environment, grouped by the stack that owns it, and the traffic between them. C4 level 2.",
+    "note": "The only network is the UI's: a VPC of two public subnets and no NAT, for the ECS service that runs the web app. The API and the agent create no VPC, subnet, security group or endpoint, so every other call here is one AWS service reaching another over its public endpoint, authorised by IAM. Bedrock and the private prompts package are on Context, where the calls to them are drawn.",
+    "tables": [
+      {
+        "name": "What differs by environment",
+        "code": [
+          ["environment.ts", "cdk/src/constants/environment.ts"],
+          ["chat-api-stack.ts", "cdk/src/stacks/chat-api-stack.ts"],
+          ["chat-ui-stack.ts", "cdk/src/stacks/chat-ui-stack.ts"],
+          ["cdk/bin/app.ts", "cdk/bin/app.ts"]
+        ],
+        "cols": ["Setting", "Ephemeral", "Staging and production"],
+        "rows": [
+          [
+            "Which names count as which",
+            "Anything that is not <code>stag</code> or <code>prod</code>, including a developer's own <code>$USER</code>",
+            "<code>stag</code> and <code>prod</code> only"
+          ],
+          [
+            "Removal policy on the table, the user pool, the UI log group and session secret",
+            "<code>DESTROY</code>",
+            "<code>RETAIN</code>"
+          ],
+          ["Cognito access token validity", "24 hours", "1 hour"],
+          [
+            "Resource and stack name prefix",
+            "<code>{environment}-govuk-chat</code>, truncated to 40 characters",
+            "<code>stag-govuk-chat</code>, <code>prod-govuk-chat</code>"
+          ],
+          [
+            "Region",
+            "<code>eu-west-1</code> unless <code>CDK_DEFAULT_REGION</code> says otherwise",
+            "The same"
+          ]
+        ]
+      }
+    ],
+    "w": 1260,
+    "h": 680
+  },
+  "security": {
+    "name": "Security",
+    "order": 4,
+    "group": "Cross-cutting",
+    "audience": "Anyone reviewing what a caller, a function or an agent is allowed to do",
+    "blurb": "The chain of authority on the API and on the web app: what admits a caller, what the code then runs as, and what that identity may reach. Two chains, because a machine client and a person are admitted in different ways — and the person's chain ends by becoming the machine's.",
+    "note": "What is absent matters as much as what is present here, so the absences are listed rather than drawn. Nothing in this repository creates a customer-managed key, point-in-time recovery, deletion protection or a tracing configuration. A Web ACL, a Secrets Manager secret and a log retention period — all absent when this model was first written — arrived with the rate limit and the UI stack in September 2026.",
+    "tables": [
+      {
+        "name": "Controls: what is set, and what is not",
+        "code": [
+          ["chat-api-stack.ts", "cdk/src/stacks/chat-api-stack.ts"],
+          ["chat-ui-stack.ts", "cdk/src/stacks/chat-ui-stack.ts"],
+          ["agui-agent-stack.ts", "cdk/src/stacks/agui-agent-stack.ts"],
+          ["cdk/bin/app.ts", "cdk/bin/app.ts"]
+        ],
+        "cols": ["Control", "Where it would be set", "What the code does"],
+        "rows": [
+          [
+            "Customer-managed encryption key",
+            "Table properties",
+            "Not set. The table takes the AWS-owned default key"
+          ],
+          ["Point-in-time recovery", "Table properties", "Not set"],
+          [
+            "Deletion protection",
+            "Table properties",
+            "Not set. Outside ephemeral environments a RETAIN removal policy is all that keeps the table"
+          ],
+          [
+            "Web ACL, rate limit or usage plan",
+            "API properties",
+            "A REGIONAL Web ACL with one rule: more than 15 invokes a minute per end-user-id is a 429. The stage throttles at 15 a second, burst 30. No usage plan"
+          ],
+          [
+            "Log retention",
+            "Function and service properties",
+            "A month on the UI's log group; not set on either function, whose groups keep everything indefinitely"
+          ],
+          ["Tracing", "Function properties", "Not set on either function"],
+          [
+            "Secrets Manager or SSM",
+            "Anywhere",
+            "One secret, the UI's session key, generated by the stack. Nothing in SSM. The API app client's secret lives in Cognito and is read from there"
+          ],
+          [
+            "VPC, subnet or security group",
+            "Anywhere",
+            "Only the UI stack: a VPC of two public subnets, no NAT, for its ECS service. The API and the agent run in none"
+          ]
+        ]
+      },
+      {
+        "name": "What each identity may do",
+        "code": [
+          ["chat-api-stack.ts", "cdk/src/stacks/chat-api-stack.ts"],
+          ["agui-agent-stack.ts", "cdk/src/stacks/agui-agent-stack.ts"],
+          ["chat-ui-stack.ts", "cdk/src/stacks/chat-ui-stack.ts"]
+        ],
+        "cols": ["Identity", "May do", "On what"],
+        "rows": [
+          [
+            "Invoke function role",
+            "Read and write; invoke an agent runtime",
+            "Its own table; its own runtime and the paths beneath it"
+          ],
+          ["Messages function role", "Read", "Its own table, and nothing else"],
+          [
+            "AG-UI runtime role",
+            "Invoke models; create, get and list events",
+            "Every inference profile in the account and every foundation model in every region; its own memory"
+          ],
+          [
+            "UI task role",
+            "Describe a user pool client",
+            "The API's pool — how the app client's secret is read"
+          ],
+          [
+            "UI execution role",
+            "Read a secret; the managed ECS task execution policy",
+            "The session secret"
+          ]
+        ]
+      }
+    ],
+    "w": 1060,
+    "h": 600
+  },
+  "delivery": {
+    "name": "Delivery",
+    "order": 5,
+    "group": "Cross-cutting",
+    "audience": "Anyone asking how a change reaches an environment",
+    "blurb": "How a change gets deployed. Continuous integration checks and synthesises; it never deploys. The only thing in this repository that deploys is a script a person runs on their own machine.",
+    "note": "No workflow here holds an AWS credential: there is no role to assume, no credential step and no OIDC token request anywhere in the workflows. The only secret any of them uses is the token for the private prompts repository. How staging and production are deployed is not visible in this repository.",
+    "tables": [
+      {
+        "name": "What runs where",
+        "code": [
+          ["cdk-ci.yaml", ".github/workflows/cdk-ci.yaml"],
+          ["cdk-synth.sh", "cdk/scripts/cdk-synth.sh"],
+          ["dev-cdk-deploy.sh", "scripts/dev-cdk-deploy.sh"],
+          [
+            "check-dev-aws-credentials.sh",
+            "scripts/check-dev-aws-credentials.sh"
+          ]
+        ],
+        "cols": ["Step", "Where it runs", "What it needs"],
+        "rows": [
+          [
+            "Tests, lint, format, type checks",
+            "GitHub Actions, one workflow per package",
+            "Nothing but the checkout"
+          ],
+          [
+            "<code>cdk synth</code>",
+            "GitHub Actions",
+            "The private repository token, and Docker to bundle each agent"
+          ],
+          [
+            "<code>cdk deploy</code>",
+            "A developer's own machine",
+            "Credentials for the role the guard expects"
+          ],
+          [
+            "Anything that deploys automatically",
+            "Nowhere",
+            "There is no deployment workflow in this repository"
+          ]
+        ]
+      },
+      {
+        "name": "The three deploy commands, one per stack",
+        "code": [
+          [
+            "agui-agent/cdk-deploy.sh",
+            "services/agui-agent/scripts/cdk-deploy.sh"
+          ],
+          ["chat-api/cdk-deploy.sh", "services/chat-api/scripts/cdk-deploy.sh"],
+          ["chat-ui/cdk-deploy.sh", "services/chat-ui/scripts/cdk-deploy.sh"]
+        ],
+        "cols": ["Run this", "Deploys"],
+        "rows": [
+          ["services/agui-agent/scripts/cdk-deploy.sh", "AguiAgentStack"],
+          ["services/chat-api/scripts/cdk-deploy.sh", "ChatApiStack"],
+          ["services/chat-ui/scripts/cdk-deploy.sh", "ChatUiStack"]
+        ]
+      }
+    ],
+    "w": 940,
+    "h": 540
+  },
+  "resources": {
+    "name": "Resources",
+    "order": 6,
+    "group": "Reference",
+    "audience": "Cost, audit and incident scoping — the detail behind every badge",
+    "blurb": "Every AWS resource the CDK app declares, counted per environment by reading the constructs.",
+    "note": "Counts are read from the source, not synthesised. This repository's CDK app bundles every agent in Docker against a private git dependency, so nothing outside its own CI can synthesise it — which is also why no count here is gated by a build. Environments are ephemeral by default: only <code>stag</code> and <code>prod</code> are durable, and every other name, including a developer's own, gets its own copy of all four stacks.",
+    "inventory": "resources.json"
+  }
+}

@@ -5,10 +5,13 @@
 The architectures of the GOV.UK Once platforms, each documented as one interactive page and
 derived from that platform's own code rather than from prior design documents.
 
-| Architecture        | State                                                |
-| ------------------- | ---------------------------------------------------- |
-| **FLEX** — `/flex/` | Documented, eight tabs, rebuilt on every merge       |
-| **UDP**, **UNS**    | Planned. Listed on the index, nothing read from them |
+| Architecture               | State                                                           |
+| -------------------------- | --------------------------------------------------------------- |
+| **FLEX** — `/flex/`        | Documented, eight tabs, rebuilt on every merge                  |
+| **GOV.UK App** — `/app/`   | Documented, nine tabs, read from five repositories              |
+| **UDP** — `/udp/`          | Documented, nine tabs, synthesised from its CDK app             |
+| **UNS** — `/uns/`          | Documented, read from its CDK source; not synthesised           |
+| **GOV.UK Chat** — `/chat/` | Context and resources so far; read from source, not synthesised |
 
 Each lives in a separate repository. This one holds the models, the pipeline that renders
 them, and the checks that keep them honest; it reads those repositories and never writes to
@@ -29,6 +32,26 @@ when you switch stage.
 | **Security**     | Cross-cutting | Security review, assurance and threat modelling                  |
 | **Delivery**     | Cross-cutting | Platform engineers and on-call                                   |
 | **Resources**    | Reference     | Cost, audit and incident scoping — the detail behind every badge |
+
+## GOV.UK App
+
+Nine tabs, read from four repositories: the iOS and Android apps in `govuk-once`, and the
+backend and the remote config in `alphagov`. Every citation names the repository it is from —
+`ios:`, `android:`, `backend:` or `config:` — and the build refuses one that names none, or
+that links into any other repository. The backend's two SAM templates are counted per
+environment by evaluating their Conditions, so the resource counts change with the stage.
+
+| Tab                 | Group         | Who it is for                                                    |
+| ------------------- | ------------- | ---------------------------------------------------------------- |
+| **Context**         | Architecture  | Anyone new to the GOV.UK App, including non-engineers            |
+| **Sign-in path**    | Architecture  | On-call, and anyone tracing a sign-in                            |
+| **Account linking** | Architecture  | Anyone tracing a DVLA link, and anyone reviewing it              |
+| **Containers**      | Architecture  | Backend engineers, and anyone reviewing a change to the backend  |
+| **Components**      | Architecture  | Backend and app engineers — the code, not the infrastructure     |
+| **Inside the app**  | Architecture  | App engineers, and anyone asking what the app calls and when     |
+| **Security**        | Cross-cutting | Security review, assurance and threat modelling                  |
+| **Delivery**        | Cross-cutting | Anyone shipping a change, and on-call                            |
+| **Resources**       | Reference     | Cost, audit and incident scoping — the detail behind every badge |
 
 ## How the documentation is kept true
 
@@ -84,9 +107,44 @@ The agent cannot take these off you:
 - **Say when the reading is done.** `pnpm drift <id>` lists what to re-read;
   `pnpm drift <id> --mark-read` records that it has been. Nothing else advances that
   record — not a build, not a sync — so run it only when the reading has actually happened.
-- **For a new project**: a checkout step in `.github/workflows/build.yml`, a token if the
-  repository is private, and Pages set to the GitHub Actions source. Everything else is
+- **Decide the architecture.** The as-is is derived from code; a **planned state** is not
+  derived from anything, and the agent may not invent one. A state is somebody's proposal,
+  every change in it cites an entry in the decision register, and the build refuses a
+  citation the register does not hold. What the agent can do is write one down, lay it out
+  and check it.
+- **For a new project**: a checkout step per repository in `.github/workflows/build.yml`, a
+  token for any that is private, and Pages set to the GitHub Actions source. Everything else is
   config the agent writes.
+
+## Proposing a change to an architecture
+
+Planned states — proposed architectures laid over the as-is, each citing the decision it
+rests on — are not kept or published here. They live in
+[`govuk-once/architecture-docs-states`](https://github.com/govuk-once/architecture-docs-states), which is private, with the editor that writes
+them and the review page that takes comments on them in Confluence. That repository builds
+its own copy of this site with the states in it — using the renderer and the gates here —
+and publishes it to its own Pages site, which only people with access to it can open.
+
+This repository reads no states. The build takes them from `ARCH_STATES_DIR` when it is set
+and has none when it is not, which is how this site is built; a `states/` directory beside a
+model stops the build rather than being published.
+
+## Not for indexing
+
+The pages are public because GitHub Pages is, not because they are meant to be found: they
+describe a live system in detail. Every page carries a `robots` meta tag asking not to be
+indexed, archived or quoted, and `robots.txt` at the site root disallows every crawler, with
+the ones that feed models named individually since not all of them honour the wildcard. The
+render check fails a build that drops either. These are requests, not walls — a public URL
+is public — so the link is shared, not published.
+
+The wall, when one is wanted, is a password. Set `SITE_PASSWORD` on the `github-pages`
+environment and the deploy job seals every page behind it before uploading: what Pages
+serves is a small page that asks for the password and decrypts the real one in the browser
+(AES-256-GCM, key from PBKDF2). A crawler, a cache or anyone without the password gets the
+form and an opaque blob. Remove the secret and the next deploy publishes plainly. It is one
+shared password, remembered per browser tab, changed only by deploying again — it keeps the
+content from the public, not from a colleague who has moved on.
 
 ## What it costs to keep up to date
 
@@ -124,4 +182,8 @@ measured, and the script that measured them is a `git log` away from being run a
 - [`projects/README.md`](projects/README.md) — the model contract: what a project directory
   holds, the metadata every node carries, tab order, scope rules, every gate the build
   enforces, and how to start a model from nothing.
+- [`projects/CANVAS.md`](projects/CANVAS.md) — the canvas design rules: how to lay out a
+  view so it reads, and every geometry number the build and the render check enforce.
+- [`architecture-docs-states`](https://github.com/govuk-once/architecture-docs-states) — private: the planned states, the
+  decision register, the state editor and the review loop through Confluence.
 - [`explorer/README.md`](explorer/README.md) — the renderer, which knows about no project.

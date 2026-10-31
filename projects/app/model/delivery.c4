@@ -1,0 +1,873 @@
+// GOV.UK App architecture — Delivery.
+//
+// Four repositories, each in its own zone: what runs on a pull request, what ships a
+// release, and where it lands. The last step each repository takes is here; anything
+// after it happens somewhere these repositories do not show. Alerting is in the last zone,
+// because that is where production reaches a person. Nothing here is on the request path.
+
+model {
+
+  delivery_ioszone = boundary 'govuk-mobile-ios-app · govuk-once' {
+    metadata {
+      type 'Repository'
+      tech 'Xcode · Swift Package Manager · fastlane'
+      role 'The iOS app, and everything that builds and ships it.'
+      facts [
+        'Moved from <code>alphagov</code>, where the old repository is archived and points here.'
+      ]
+      sourceId 'ioszone'
+      order '0'
+      x '40'
+      y '30'
+      w '676'
+      h '400'
+      boundary 'soft'
+    }
+
+    delivery_iosrepo = internal 'iOS source' {
+      #off-request-path
+      description 'main · release/** · PRs'
+      link https://github.com/govuk-once/govuk-mobile-ios-app/blob/main/README.md 'ios · README.md'
+      link https://github.com/govuk-once/govuk-mobile-ios-app/blob/main/.github/workflows/pull_request.yml 'ios · pull_request.yml'
+      metadata {
+        type 'Git repository'
+        tech 'GitHub'
+        role 'Three triggers: a pull request, a push to main, a push to a release branch.'
+        facts [
+          'Pull requests may target <code>develop</code>, <code>release/*</code>, <code>feature/*</code> or <code>main</code>.'
+        ]
+        sourceId 'iosrepo'
+        order '1'
+        x '278'
+        y '80'
+        w '200'
+        h '62'
+        ownership 'app'
+      }
+    }
+
+    delivery_iospr = internal 'PR checks' {
+      #off-request-path
+      description 'pull_request.yml'
+      link https://github.com/govuk-once/govuk-mobile-ios-app/blob/main/.github/workflows/pull_request.yml 'ios · pull_request.yml'
+      metadata {
+        type 'GitHub Actions workflow'
+        tech 'three reusable workflows'
+        role 'Gates a pull request.'
+        facts [
+          'Calls <code>lint.yml</code>, <code>unit_test.yml</code> and <code>sonar_scan_pr.yml</code>.'
+        ]
+        sourceId 'iospr'
+        order '2'
+        x '64'
+        y '210'
+        w '200'
+        h '62'
+        ownership 'app'
+      }
+    }
+
+    delivery_iosalpha = internal 'alpha.yml' {
+      #off-request-path
+      description 'push to main · by hand'
+      link https://github.com/govuk-once/govuk-mobile-ios-app/blob/main/.github/workflows/alpha.yml 'ios · alpha.yml'
+      link https://github.com/govuk-once/govuk-mobile-ios-app/blob/main/Fastlane/Fastfile 'ios · Fastfile'
+      metadata {
+        type 'GitHub Actions workflow'
+        tech 'macos-15 · fastlane alpha'
+        role 'Every merge to main becomes an ad-hoc build for testers.'
+        facts [
+          'Lint, unit tests and Sonar first, then <code>fastlane alpha</code> in the Staging environment by default, or Integration when chosen by hand.',
+          'The backend URLs are GitHub environment variables set at this step — the repository holds only the staging values.'
+        ]
+        sourceId 'iosalpha'
+        order '3'
+        x '278'
+        y '210'
+        w '200'
+        h '62'
+        ownership 'app'
+      }
+    }
+
+    delivery_iosbeta = internal 'beta.yml' {
+      #off-request-path
+      description 'release/** · Fridays 15:00'
+      link https://github.com/govuk-once/govuk-mobile-ios-app/blob/main/.github/workflows/beta.yml 'ios · beta.yml'
+      link https://github.com/govuk-once/govuk-mobile-ios-app/blob/main/.github/workflows/schedule.yml 'ios · schedule.yml'
+      link https://github.com/govuk-once/govuk-mobile-ios-app/blob/main/Fastlane/Matchfile 'ios · Matchfile'
+      metadata {
+        type 'GitHub Actions workflow'
+        tech 'macos-15 · fastlane beta · Production environment'
+        role 'A release build, signed for the App Store and sent to TestFlight.'
+        facts [
+          'Runs on a push to <code>release/**</code>, and every Friday at 15:00 through <code>schedule.yml</code>, whose branch check does not gate it.',
+          'Certificates come from <code>govuk-once/govuk-mobile-ios-certificates</code> through fastlane match; the match password, the App Store Connect key and the Firebase account come from Bitwarden.'
+        ]
+        sourceId 'iosbeta'
+        order '4'
+        x '492'
+        y '210'
+        w '200'
+        h '62'
+        ownership 'app'
+      }
+    }
+
+    delivery_ioschecks = internal 'SwiftLint · unit · Sonar' {
+      #off-request-path
+      description 'lint.yml · unit_test.yml'
+      link https://github.com/govuk-once/govuk-mobile-ios-app/blob/main/.github/workflows/lint.yml 'ios · lint.yml'
+      link https://github.com/govuk-once/govuk-mobile-ios-app/blob/main/.github/workflows/unit_test.yml 'ios · unit_test.yml'
+      metadata {
+        type 'Reusable workflows'
+        tech 'swiftlint --strict · fastlane unit · SonarQube'
+        role 'What a pull request has to pass.'
+        facts [
+          'The unit lane runs <code>scan</code> and converts coverage with <code>slather</code> for Sonar.'
+        ]
+        sourceId 'ioschecks'
+        order '5'
+        x '64'
+        y '340'
+        w '200'
+        h '62'
+        ownership 'app'
+      }
+    }
+
+    delivery_iosfad = external 'Firebase App Distribution' {
+      #off-request-path
+      description 'ios-alpha-testers'
+      link https://github.com/govuk-once/govuk-mobile-ios-app/blob/main/Fastlane/Fastfile 'ios · Fastfile'
+      metadata {
+        type 'Third party · Google'
+        tech 'firebase_app_distribution'
+        role 'Where every merge to main goes.'
+        facts [
+          'The build number is the latest Firebase build plus one.'
+        ]
+        sourceId 'iosfad'
+        order '6'
+        x '278'
+        y '340'
+        w '200'
+        h '62'
+        ownership 'vendor'
+      }
+    }
+
+    delivery_testflight = external 'TestFlight' {
+      #off-request-path
+      description 'external group GOV.UK APP'
+      link https://github.com/govuk-once/govuk-mobile-ios-app/blob/main/Fastlane/Fastfile 'ios · Fastfile'
+      metadata {
+        type 'Third party · Apple'
+        tech 'fastlane pilot · App Store Connect API key'
+        role 'Where a release build goes. The repository stops here.'
+        facts [
+          'No lane submits to the App Store: there is no <code>deliver</code> and no <code>upload_to_app_store</code>.'
+        ]
+        sourceId 'testflight'
+        order '7'
+        x '492'
+        y '340'
+        w '200'
+        h '62'
+        ownership 'vendor'
+      }
+    }
+  }
+
+  delivery_androidzone = boundary 'govuk-mobile-android-app · govuk-once' {
+    metadata {
+      type 'Repository'
+      tech 'Gradle · fastlane'
+      role 'The Android app, and everything that builds and ships it.'
+      facts [
+        'One Gradle module per feature, plus <code>data</code>, <code>config</code>, <code>analytics</code>, <code>notifications</code>, <code>design</code> and <code>govkit</code>.'
+      ]
+      sourceId 'androidzone'
+      order '0'
+      x '40'
+      y '460'
+      w '676'
+      h '530'
+      boundary 'soft'
+    }
+
+    delivery_androidrepo = internal 'Android source' {
+      #off-request-path
+      description 'main · release/* · PRs'
+      link https://github.com/govuk-once/govuk-mobile-android-app/blob/main/settings.gradle.kts 'android · settings.gradle.kts'
+      link https://github.com/govuk-once/govuk-mobile-android-app/blob/main/.github/workflows/pull_request.yml 'android · pull_request.yml'
+      metadata {
+        type 'Git repository'
+        tech 'GitHub'
+        role 'Three triggers: a pull request, a push to main, a push to a release branch.'
+        facts [
+          'Pull requests may target <code>main</code>, <code>release/*</code> or <code>feature/*</code>.'
+        ]
+        sourceId 'androidrepo'
+        order '8'
+        x '278'
+        y '510'
+        w '200'
+        h '62'
+        ownership 'app'
+      }
+    }
+
+    delivery_androidpr = internal 'PR checks' {
+      #off-request-path
+      description 'pull_request.yml'
+      link https://github.com/govuk-once/govuk-mobile-android-app/blob/main/.github/workflows/pull_request.yml 'android · pull_request.yml'
+      metadata {
+        type 'GitHub Actions workflow'
+        tech 'one job'
+        role 'Gates a pull request.'
+        facts [
+          'Fetches its secrets from Bitwarden first, then lints, tests and analyses in one job.'
+        ]
+        sourceId 'androidpr'
+        order '9'
+        x '64'
+        y '640'
+        w '200'
+        h '62'
+        ownership 'app'
+      }
+    }
+
+    delivery_androidalpha = internal 'alpha.yml' {
+      #off-request-path
+      description 'push to main · by hand'
+      link https://github.com/govuk-once/govuk-mobile-android-app/blob/main/.github/workflows/alpha.yml 'android · alpha.yml'
+      link https://github.com/govuk-once/govuk-mobile-android-app/blob/main/app/build.gradle.kts 'android · app/build.gradle.kts'
+      metadata {
+        type 'GitHub Actions workflow'
+        tech 'assembleAlpha appDistributionAlpha'
+        role 'Every merge to main becomes an APK for testers.'
+        facts [
+          'The <code>alpha</code> build type takes the <code>.dev</code> application id and staging values, and signs with an alpha keystore decoded from Bitwarden.'
+        ]
+        sourceId 'androidalpha'
+        order '10'
+        x '278'
+        y '640'
+        w '200'
+        h '62'
+        ownership 'app'
+      }
+    }
+
+    delivery_androidrelease = internal 'release.yml' {
+      #off-request-path
+      description 'push to release/*'
+      link https://github.com/govuk-once/govuk-mobile-android-app/blob/main/.github/workflows/release.yml 'android · release.yml'
+      link https://github.com/govuk-once/govuk-mobile-android-app/blob/main/fastlane/Fastfile 'android · Fastfile'
+      link https://github.com/govuk-once/govuk-mobile-android-app/blob/main/app/build.gradle.kts 'android · app/build.gradle.kts'
+      metadata {
+        type 'GitHub Actions workflow'
+        tech 'fastlane android deploy'
+        role 'A release bundle, signed and uploaded to Google Play.'
+        facts [
+          'The release keystore and the Google service account come from Bitwarden.',
+          'A release build signs with the release key only when <code>RELEASE_KEYSTORE</code> is set, and falls back to the debug key when it is not.'
+        ]
+        sourceId 'androidrelease'
+        order '11'
+        x '492'
+        y '640'
+        w '200'
+        h '62'
+        ownership 'app'
+      }
+    }
+
+    delivery_androidchecks = internal 'lint · Kover · Sonar' {
+      #off-request-path
+      description 'lint · koverXmlReportDebug'
+      link https://github.com/govuk-once/govuk-mobile-android-app/blob/main/.github/workflows/pull_request.yml 'android · pull_request.yml'
+      link https://github.com/govuk-once/govuk-mobile-android-app/blob/main/.github/workflows/instrumented_test.yml 'android · instrumented_test.yml'
+      metadata {
+        type 'Gradle tasks'
+        tech 'Android lint · Kover coverage · SonarQube'
+        role 'What a pull request has to pass.'
+        facts [
+          'Kover writes the coverage report Sonar reads.'
+        ]
+        sourceId 'androidchecks'
+        order '12'
+        x '64'
+        y '770'
+        w '200'
+        h '62'
+        ownership 'app'
+      }
+    }
+
+    delivery_androidfad = external 'Firebase App Distribution' {
+      #off-request-path
+      description 'android-alpha-testers'
+      link https://github.com/govuk-once/govuk-mobile-android-app/blob/main/app/build.gradle.kts 'android · app/build.gradle.kts'
+      metadata {
+        type 'Third party · Google'
+        tech 'Gradle App Distribution plugin'
+        role 'Where every merge to main goes.'
+        facts [
+          'Distributed as an APK to the group <code>android-alpha-testers</code>.'
+        ]
+        sourceId 'androidfad'
+        order '13'
+        x '278'
+        y '770'
+        w '200'
+        h '62'
+        ownership 'vendor'
+      }
+    }
+
+    delivery_play = external 'Google Play' {
+      #off-request-path
+      description 'internal track, as a draft'
+      link https://github.com/govuk-once/govuk-mobile-android-app/blob/main/fastlane/Fastfile 'android · Fastfile'
+      link https://github.com/govuk-once/govuk-mobile-android-app/blob/main/fastlane/Appfile 'android · Appfile'
+      metadata {
+        type 'Third party · Google'
+        tech 'fastlane supply · service account JSON'
+        role 'Where a release build goes. The repository stops here.'
+        facts [
+          'The version code is the internal track\'s last one plus one; nothing promotes beyond the internal track.'
+        ]
+        sourceId 'play'
+        order '14'
+        x '492'
+        y '770'
+        w '200'
+        h '62'
+        ownership 'vendor'
+      }
+    }
+
+    delivery_androidinstr = internal 'Instrumented tests' {
+      #off-request-path
+      description 'written · never run in CI'
+      link https://github.com/govuk-once/govuk-mobile-android-app/blob/main/.github/workflows/instrumented_test.yml 'android · instrumented_test.yml'
+      metadata {
+        type 'Gradle managed device'
+        tech 'pixel3api33DebugAndroidTest'
+        role 'On-device tests that exist in the modules and have no workflow that runs them.'
+        facts [
+          'Nineteen test files across the modules; <code>instrumented_test.yml</code> is call-only, and nothing calls it.'
+        ]
+        sourceId 'androidinstr'
+        order '33'
+        x '64'
+        y '900'
+        w '200'
+        h '62'
+        ownership 'app'
+      }
+    }
+  }
+
+  delivery_backendzone = boundary 'govuk-mobile-backend · alphagov' {
+    metadata {
+      type 'Repository'
+      tech 'Nx · npm · AWS SAM'
+      role 'The auth and chat stacks, and the two environments this repository can reach.'
+      facts [
+        'Still in <code>alphagov</code>; no copy in <code>govuk-once</code> could be found.'
+      ]
+      sourceId 'backendzone'
+      order '0'
+      x '746'
+      y '30'
+      w '676'
+      h '530'
+      boundary 'soft'
+    }
+
+    delivery_backendrepo = internal 'Backend source' {
+      #off-request-path
+      description 'push · main · production'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/README.md 'backend · README.md'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/.pre-commit-config.yaml 'backend · .pre-commit-config.yaml'
+      metadata {
+        type 'Git repository'
+        tech 'GitHub · pre-commit'
+        role 'Two triggers: any push, and a push to main or production.'
+        facts [
+          'Pre-commit hooks run detect-secrets, format, lint, unit tests and checkov on commit, and the acceptance and integration tests on push.'
+        ]
+        sourceId 'backendrepo'
+        order '15'
+        x '984'
+        y '80'
+        w '200'
+        h '62'
+        ownership 'app'
+      }
+    }
+
+    delivery_backendci = internal 'ci.yaml' {
+      #off-request-path
+      description 'every push, any branch'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/.github/workflows/ci.yaml 'backend · ci.yaml'
+      metadata {
+        type 'GitHub Actions workflow'
+        tech 'nx affected'
+        role 'Builds, validates, tests and scans. Deploys nothing.'
+        facts [
+          'Runs on every push, not on pull requests, so its pull-request Sonar branch is never taken.',
+          'The second Semgrep step points at <code>.semgrep/lambda-rules.yml</code>, which does not exist in the repository.'
+        ]
+        sourceId 'backendci'
+        order '16'
+        x '770'
+        y '210'
+        w '200'
+        h '62'
+        ownership 'app'
+      }
+    }
+
+    delivery_backendpublish = internal 'publish.yaml' {
+      #off-request-path
+      description 'push to main or production'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/.github/workflows/publish.yaml 'backend · publish.yaml'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/.github/workflows/auth-post-merge.yaml 'backend · auth-post-merge.yaml'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/.github/workflows/chat-post-merge.yaml 'backend · chat-post-merge.yaml'
+      metadata {
+        type 'GitHub Actions workflow'
+        tech 'OIDC to AWS · devplatform-upload-action'
+        role 'Validates, builds and uploads each stack, per environment.'
+        facts [
+          'Assumes a role in AWS through GitHub OIDC, builds with SAM, and uploads the build to an artifact bucket with a code-signing profile. The upload action, not this repository, turns that into a deployment.',
+          'Also builds a test image per stack and pushes it to ECR, signed with a KMS key.'
+        ]
+        sourceId 'backendpublish'
+        order '17'
+        x '984'
+        y '210'
+        w '200'
+        h '62'
+        ownership 'app'
+      }
+    }
+
+    delivery_backendscans = internal 'checkov · Semgrep · Sonar' {
+      #off-request-path
+      description 'plus lint and unit tests'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/.github/workflows/ci.yaml 'backend · ci.yaml'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/chat/project.json 'backend · services/chat/project.json'
+      metadata {
+        type 'CI steps'
+        tech 'sam validate · checkov · SonarQube quality gate · Semgrep'
+        role 'What every push is held to.'
+        facts [
+          'Checkov runs on the CloudFormation framework with five custom checks — a permissions boundary, throttling, WAF rate limits, execution logging — and skips five AWS ones.',
+          'Sonar waits for its quality gate.'
+        ]
+        sourceId 'backendscans'
+        order '18'
+        x '770'
+        y '340'
+        w '200'
+        h '62'
+        ownership 'app'
+      }
+    }
+
+    delivery_devbuild = internal 'dev and build' {
+      #off-request-path
+      description 'the only deploys here'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/.github/workflows/publish.yaml 'backend · publish.yaml'
+      metadata {
+        type 'AWS environments'
+        tech 'GitHub environments dev · build'
+        role 'Where a push puts both stacks. Staging, integration and production are reached from somewhere else.'
+        facts [
+          '<code>dev</code> on every run; <code>build</code> only from <code>main</code> or <code>production</code>.',
+          'Which AWS accounts these are, and what promotes a build onward, is not in the repository.'
+        ]
+        sourceId 'devbuild'
+        order '19'
+        x '984'
+        y '340'
+        w '200'
+        h '62'
+        ownership 'app'
+      }
+    }
+
+    delivery_testimage = internal 'Test image · ECR' {
+      #off-request-path
+      description 'acceptance + integration'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/Dockerfile.auth 'backend · Dockerfile.auth'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/run-tests.sh 'backend · services/auth/run-tests.sh'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/.github/workflows/auth-post-merge.yaml 'backend · auth-post-merge.yaml'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/vitest.config.ts 'backend · vitest.config.ts'
+      metadata {
+        type 'Container image'
+        tech 'amazonlinux · Node 22 · nx'
+        role 'The tests that need a deployed stack, packaged to run beside one.'
+        facts [
+          'Its entrypoint runs the <code>acc</code> and <code>int</code> vitest projects against <code>TEST_ENVIRONMENT</code>: sign-in and sign-out journeys, the OIDC client, attestation, and whether each WAF, log group and alarm exists.',
+          'Built and pushed by the post-merge workflows, signed with a KMS key. What pulls and runs it is not in this repository.'
+        ]
+        sourceId 'testimage'
+        order '30'
+        x '1198'
+        y '340'
+        w '200'
+        h '62'
+        ownership 'app'
+      }
+    }
+
+    delivery_precommit = internal 'Pre-commit hooks' {
+      #off-request-path
+      description 'on commit · on push'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/.pre-commit-config.yaml 'backend · .pre-commit-config.yaml'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/.cz.toml 'backend · .cz.toml'
+      metadata {
+        type 'Developer machine'
+        tech 'pre-commit · commitizen · detect-secrets'
+        role 'What a change is held to before it leaves the laptop.'
+        facts [
+          'On commit: merge-conflict markers, detect-secrets against a baseline, format, lint, unit tests and checkov. On push: the acceptance and integration tests.',
+          'Commits are written by commitizen: a type from a fixed list, a scope, a GOV.UK App Jira id, and a GPG signature.'
+        ]
+        sourceId 'precommit'
+        order '31'
+        x '770'
+        y '470'
+        w '200'
+        h '62'
+        ownership 'app'
+      }
+    }
+
+    delivery_k6 = internal 'Load test · by hand' {
+      #off-request-path
+      description 'k6 · shared signals'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/tests/performance/Makefile 'backend · tests/performance/Makefile'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/tests/performance/README.md 'backend · tests/performance/README.md'
+      metadata {
+        type 'Performance test'
+        tech 'k6 · loadTest.js'
+        role 'Drives the shared-signals receiver at a rate, from a laptop, against a stack somebody has deployed.'
+        facts [
+          'Runs only from the Makefile; no workflow calls it. The larger scenario holds 150 virtual users.'
+        ]
+        sourceId 'k6'
+        order '32'
+        x '984'
+        y '470'
+        w '200'
+        h '62'
+        ownership 'app'
+      }
+    }
+  }
+
+  delivery_configzone = boundary 'govuk-mobile-backend-config · alphagov' {
+    metadata {
+      type 'Repository'
+      tech 'Node · TOML → signed JSON'
+      role 'The remote config and the topic pages, and the two buckets they are served from.'
+      facts [
+        'A new config is a copy of the newest version file with its number bumped; the build takes the highest version.'
+      ]
+      sourceId 'configzone'
+      order '0'
+      x '746'
+      y '590'
+      w '462'
+      h '530'
+      boundary 'soft'
+    }
+
+    delivery_configrepo = internal 'Config source' {
+      #off-request-path
+      description 'push · main · by hand'
+      link https://github.com/alphagov/govuk-mobile-backend-config/blob/main/README.md 'config · README.md'
+      link https://github.com/alphagov/govuk-mobile-backend-config/blob/main/versions/appinfo/0.0.85.toml 'config · versions/appinfo/0.0.85.toml'
+      metadata {
+        type 'Git repository'
+        tech 'GitHub'
+        role 'Version files under <code>versions/appinfo/</code>, and the static topic pages.'
+        facts [
+          'A pull request that touches a topic page regenerates the URL-to-topic mapping and pushes it back to the branch.'
+        ]
+        sourceId 'configrepo'
+        order '20'
+        x '877'
+        y '640'
+        w '200'
+        h '62'
+        ownership 'app'
+      }
+    }
+
+    delivery_configvalidate = internal 'validate.yaml · tests' {
+      #off-request-path
+      description 'every push'
+      link https://github.com/alphagov/govuk-mobile-backend-config/blob/main/.github/workflows/validate.yaml 'config · validate.yaml'
+      link https://github.com/alphagov/govuk-mobile-backend-config/blob/main/.github/workflows/tests.yaml 'config · tests.yaml'
+      metadata {
+        type 'GitHub Actions workflows'
+        tech 'ajv schema · JSON check · Jest'
+        role 'Every version file against its schema, every static file as JSON, and the unit tests.'
+        facts [
+          'A file\'s version number must match the <code>configVersion</code> inside it.'
+        ]
+        sourceId 'configvalidate'
+        order '21'
+        x '770'
+        y '770'
+        w '200'
+        h '62'
+        ownership 'app'
+      }
+    }
+
+    delivery_configdeploy = internal 'deploy-*.yaml' {
+      #off-request-path
+      description 'integration · prod by hand'
+      link https://github.com/alphagov/govuk-mobile-backend-config/blob/main/.github/workflows/deploy-integration.yaml 'config · deploy-integration.yaml'
+      link https://github.com/alphagov/govuk-mobile-backend-config/blob/main/.github/workflows/deploy-production.yaml 'config · deploy-production.yaml'
+      metadata {
+        type 'GitHub Actions workflows'
+        tech 'OIDC to AWS · aws s3 sync --delete'
+        role 'Builds, signs and uploads every file, then purges the CDN.'
+        facts [
+          'Integration runs on every push to <code>main</code>; production only when somebody runs it by hand, with no environment approval in between.',
+          'Signing assumes a role in one AWS account and the integration upload another; production uses one role for both.'
+        ]
+        sourceId 'configdeploy'
+        order '22'
+        x '984'
+        y '770'
+        w '200'
+        h '62'
+        ownership 'app'
+      }
+    }
+
+    delivery_signingkey = internal 'Config signing key' {
+      #off-request-path
+      description 'KMS · ECDSA_SHA_256'
+      link https://github.com/alphagov/govuk-mobile-backend-config/blob/main/tools/create-signature.sh 'config · create-signature.sh'
+      link https://github.com/alphagov/govuk-mobile-backend-config/blob/main/tools/minify-json.sh 'config · minify-json.sh'
+      metadata {
+        type 'AWS::KMS::Key · outside these repositories'
+        tech 'alias/config-signing-key'
+        role 'Signs a SHA-256 digest of every minified file.'
+        facts [
+          'Nothing here creates the key; the workflow only calls <code>kms sign</code> with its alias.'
+        ]
+        sourceId 'signingkey'
+        order '23'
+        x '770'
+        y '900'
+        w '200'
+        h '62'
+        ownership 'app'
+      }
+    }
+
+    delivery_buckets = internal 'Config buckets' {
+      #off-request-path
+      description 'integration · production'
+      link https://github.com/alphagov/govuk-mobile-backend-config/blob/main/tools/deploy-signed-json.sh 'config · deploy-signed-json.sh'
+      metadata {
+        type 'S3 · outside these repositories'
+        tech 'govuk-app-remote-config-{integration,production}'
+        role 'What the app reads config from, through the CDN.'
+        facts [
+          'Each object is uploaded as <code>application/json</code> with its signature in the metadata <code>govuk-sig</code>; a file removed from the repository is removed from the bucket.'
+        ]
+        sourceId 'buckets'
+        order '24'
+        x '984'
+        y '900'
+        w '200'
+        h '62'
+        ownership 'app'
+      }
+    }
+
+    delivery_fastly = external 'Fastly' {
+      #off-request-path
+      description 'purged after each deploy'
+      link https://github.com/alphagov/govuk-mobile-backend-config/blob/main/.github/workflows/fastly-purge-production.yaml 'config · fastly-purge-production.yaml'
+      link https://github.com/alphagov/govuk-mobile-backend-config/blob/main/.github/workflows/fastly-purge-integration.yaml 'config · fastly-purge-integration.yaml'
+      metadata {
+        type 'Third party'
+        tech 'Fastly API · token from Bitwarden'
+        role 'Caches the config; every deploy empties it.'
+        facts [
+          'One service per environment. That these services front the buckets is inferred from the app\'s URLs, not stated here.'
+        ]
+        sourceId 'fastly'
+        order '25'
+        x '984'
+        y '1030'
+        w '200'
+        h '62'
+        ownership 'vendor'
+      }
+    }
+  }
+
+  delivery_operate = boundary 'Operate · both stacks' {
+    metadata {
+      type 'Alerting'
+      tech 'CloudWatch · SNS · AWS Chatbot'
+      role 'How the deployed backend reaches a person when it goes wrong.'
+      facts [
+        'The chat stack creates no topic; its alarms name the auth stack\'s by name.'
+      ]
+      sourceId 'operate'
+      order '0'
+      x '1452'
+      y '30'
+      w '248'
+      h '530'
+      boundary 'soft'
+    }
+
+    delivery_canary = internal 'Smoke test' {
+      #off-request-path
+      description 'weekdays, every 5 minutes'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/smoke-test/app.ts 'backend · smoke-test/app.ts'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/template.yaml 'backend · services/auth/template.yaml'
+      metadata {
+        type 'AWS::Serverless::Function'
+        tech 'cron · Europe/London, 9 to 5'
+        role 'Signs a test user in through the proxy and reports success as a metric.'
+        facts [
+          'Emits <code>GOVUKMobileAuth/SmokeTestSuccess</code>, shown on the one dashboard the templates create.',
+          'Development and production mint a real App Check token for it; staging runs without.'
+        ]
+        sourceId 'canary'
+        order '26'
+        x '1476'
+        y '80'
+        w '200'
+        h '62'
+        ownership 'app'
+        resources [ 'dashboards' ]
+      }
+    }
+
+    delivery_alarms = internal 'CloudWatch alarms' {
+      #off-request-path
+      description '38 auth · 5 chat'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/template.yaml 'backend · services/auth/template.yaml'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/chat/template.yaml 'backend · services/chat/template.yaml'
+      metadata {
+        type 'AWS::CloudWatch::Alarm'
+        tech 'Every alarm is in the table below'
+        role 'Cognito throttles, API errors and latency, Lambda concurrency, throttles and timeouts, WAF blocks, the health check and the smoke test.'
+        facts [
+          'Two have their actions disabled: the smoke test, and the attestation 200-proportion anomaly.',
+          'Several watch metrics nothing publishes as they expect — the timeout filters emit no dimensions, the 4xx filters emit none the alarms name, and the completion alarm\'s metric has no filter at all.'
+        ]
+        sourceId 'alarms'
+        order '27'
+        x '1476'
+        y '210'
+        w '200'
+        h '62'
+        ownership 'app'
+        resources [ 'alarms', 'metric-filters' ]
+      }
+    }
+
+    delivery_topics = internal 'Alarm topics' {
+      #off-request-path
+      description 'paging · warnings'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/template.yaml 'backend · services/auth/template.yaml'
+      metadata {
+        type 'AWS::SNS::Topic × 2'
+        tech 'KMS-encrypted'
+        role 'Every alarm publishes to one of these, and only CloudWatch alarms may.'
+        facts [
+          'The paging topic calls PagerDuty over HTTPS in production, at a URL from SSM, and a stand-in Lambda that only logs everywhere else.',
+          'The warnings topic has no subscriber of its own; Chatbot is its only reader.'
+        ]
+        sourceId 'topics'
+        order '28'
+        x '1476'
+        y '340'
+        w '200'
+        h '62'
+        ownership 'app'
+        resources [ 'sns-topics' ]
+      }
+    }
+
+    delivery_oncall = external 'PagerDuty · Slack' {
+      #off-request-path
+      description 'on call · out of hours'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/template.yaml 'backend · services/auth/template.yaml'
+      metadata {
+        type 'Third parties'
+        tech 'HTTPS subscription · AWS Chatbot'
+        role 'Where an alarm reaches a person.'
+        facts [
+          'Both topics feed one Slack channel through Chatbot; the channel and workspace IDs and the PagerDuty URL are all SSM parameters.'
+        ]
+        sourceId 'oncall'
+        order '29'
+        x '1476'
+        y '470'
+        w '200'
+        h '62'
+        ownership 'vendor'
+        resources [ 'chatbot' ]
+      }
+    }
+  }
+
+  delivery_iosrepo -> delivery_iospr 'on pull_request' { metadata { protocol 'GitHub Actions' auth '—' carries 'The branch' order '1' } }
+  delivery_iosrepo -> delivery_iosalpha 'on push to main' { metadata { protocol 'GitHub Actions' auth '—' carries 'main' order '2' } }
+  delivery_iosrepo -> delivery_iosbeta 'on push to release/**' { metadata { protocol 'GitHub Actions' auth '—' carries 'A release branch' order '3' } }
+  delivery_iospr -> delivery_ioschecks 'calls' { metadata { protocol 'workflow_call' auth '—' carries 'Three workflows' order '4' } }
+  delivery_iosalpha -> delivery_iosfad 'ad-hoc build' { metadata { protocol 'fastlane' auth 'Firebase service account' carries 'uk.gov.govuk.dev, -DSTAGING' order '5' } }
+  delivery_iosbeta -> delivery_testflight 'app-store build' { metadata { protocol 'fastlane pilot' auth 'App Store Connect API key' carries 'uk.gov.govuk, -DPRODUCTION' order '6' } }
+  delivery_androidrepo -> delivery_androidpr 'on pull_request' { metadata { protocol 'GitHub Actions' auth '—' carries 'The branch' order '7' } }
+  delivery_androidrepo -> delivery_androidalpha 'on push to main' { metadata { protocol 'GitHub Actions' auth '—' carries 'main' order '8' } }
+  delivery_androidrepo -> delivery_androidrelease 'on push to release/*' { metadata { protocol 'GitHub Actions' auth '—' carries 'A release branch' order '9' } }
+  delivery_androidpr -> delivery_androidchecks 'runs' { metadata { protocol 'Gradle' auth '—' carries 'lint, Kover, sonar' order '10' } }
+  delivery_androidalpha -> delivery_androidfad 'APK' { metadata { protocol 'Gradle App Distribution plugin' auth 'Firebase service account' carries 'The alpha build' order '11' } }
+  delivery_androidrelease -> delivery_play 'bundle, draft' { metadata { protocol 'fastlane supply' auth 'Google service account' carries 'The release bundle' order '12' } }
+  delivery_backendrepo -> delivery_backendci 'on every push' { metadata { protocol 'GitHub Actions' auth '—' carries 'Any branch' order '13' } }
+  delivery_backendrepo -> delivery_backendpublish 'on push to main · production' { metadata { protocol 'GitHub Actions' auth '—' carries 'main or production' order '14' } }
+  delivery_backendci -> delivery_backendscans 'runs' { metadata { protocol 'nx affected' auth '—' carries 'Build, validate, lint, test, scan' order '15' } }
+  delivery_backendpublish -> delivery_testimage 'builds, pushes' { metadata { protocol 'devplatform-upload-action-ecr' auth 'OIDC-assumed role · container signing key' carries 'The test image, tagged latest' order '25' } }
+  delivery_backendpublish -> delivery_devbuild 'uploads' { metadata { protocol 'OIDC-assumed role · devplatform-upload-action' auth 'GitHub OIDC' carries 'Both stacks, signed' order '16' } }
+  delivery_configrepo -> delivery_configvalidate 'on every push' { metadata { protocol 'GitHub Actions' auth '—' carries 'Any branch' order '17' } }
+  delivery_configrepo -> delivery_configdeploy 'on push to main · by hand' { metadata { protocol 'GitHub Actions' auth '—' carries 'main' order '18' } }
+  delivery_configdeploy -> delivery_signingkey 'kms sign' { metadata { protocol 'AWS KMS' auth 'OIDC-assumed role' carries 'A SHA-256 digest per file' edgeStyle 'dash' order '19' } }
+  delivery_configdeploy -> delivery_buckets 's3 sync --delete' { metadata { protocol 'AWS S3' auth 'OIDC-assumed role' carries 'Every signed file' order '20' } }
+  delivery_buckets -> delivery_fastly 'served through · purged' { metadata { protocol 'HTTPS POST purge_all' auth 'Fastly API token' carries 'A purge, after every deploy' order '21' } }
+  delivery_canary -> delivery_alarms 'SmokeTestSuccess' { metadata { protocol 'CloudWatch metric' auth 'IAM role' carries '1 or 0, every five minutes' order '22' } }
+  delivery_alarms -> delivery_topics 'ALARM · OK' { metadata { protocol 'SNS publish' auth 'Topic policy: CloudWatch alarms only' carries 'State changes' order '23' } }
+  delivery_topics -> delivery_oncall 'notifies' { metadata { protocol 'HTTPS · Chatbot' auth 'SSM-held URL and channel' carries 'Alarm and OK notifications' order '24' } }
+}
+
+views {
+  view delivery {
+    title 'Delivery'
+    include delivery_ioszone, delivery_ioszone.**
+    include delivery_androidzone, delivery_androidzone.**
+    include delivery_backendzone, delivery_backendzone.**
+    include delivery_configzone, delivery_configzone.**
+    include delivery_operate, delivery_operate.**
+  }
+}

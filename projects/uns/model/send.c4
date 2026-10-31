@@ -1,0 +1,523 @@
+// UNS architecture — Send path.
+//
+// A message from a department to a phone, hop by hop, and beside it the group form of
+// the same thing. Both share the dispatch queue and everything after it; the group path
+// never asks UDP, because a group is already a list of push ids.
+
+model {
+
+  send_single = boundary 'A message · POST /send' {
+    metadata {
+      type 'Flow'
+      tech 'PSO API → processing → dispatch'
+      role 'One request, up to ten messages, each for one <code>UserID</code> the department knows the person by.'
+      sourceId 'single'
+      order '0'
+      x '40'
+      y '30'
+      w '620'
+      h '1044'
+      boundary 'soft'
+    }
+
+    send_client = external '1. A department' {
+      #request-path
+      description 'DVLA, say'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/docs/pso/openapi.yml 'pso/openapi.yml'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/lambdas/interfaces/IMessage.ts 'IMessage.ts'
+      metadata {
+        type 'Consumer organisation'
+        tech 'client certificate · x-api-key'
+        role 'Sends an array of messages: <code>UserID</code>, <code>NotificationTitle</code>, <code>NotificationBody</code>, optionally a message title and body, a deeplink, a channel, days to expire, and its own <code>NotificationID</code> for idempotency.'
+        facts [
+          'The OpenAPI caps the array at ten; the zod schema enforces only a minimum of one.'
+        ]
+        sourceId 'client'
+        order '1'
+        x '64'
+        y '80'
+        w '262'
+        h '62'
+        ownership 'third'
+      }
+    }
+
+    send_gateway = platform '2. PSO API · mTLS' {
+      #request-path
+      description 'public REST API · truststore'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/constructs/UNSPSOResources.ts 'UNSPSOResources.ts'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/constructs/bases/UNSApiGatewayConstruct.ts 'UNSApiGatewayConstruct.ts'
+      metadata {
+        type 'AWS::ApiGateway::RestApi'
+        tech 'custom domain pso.{zone} · usage plan per organisation'
+        role 'Rejects any connection without a certificate the truststore signed, then requires an API key on every method because usage plans are configured.'
+        sourceId 'gateway'
+        order '2'
+        x '64'
+        y '210'
+        w '262'
+        h '62'
+        ownership 'uns'
+        awsIcon 'apigateway'
+      }
+    }
+
+    send_authorizer = platform '3. Revocation authorizer' {
+      #request-path
+      description 'REQUEST · no result cache'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/lambdas/pso/http.mtlsCertificateRevocationAuthorizer/handler.ts 'mtlsCertificateRevocationAuthorizer/handler.ts'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/common/repositories/interfaces/MTLSRevocationTable.ts 'MTLSRevocationTable.ts'
+      metadata {
+        type 'AWS::Lambda::Function · authorizer'
+        tech 'identity source: the client certificate PEM'
+        role 'Hashes the certificate, looks it up in the revocation table, and denies if it is missing, revoked or has no organisation. Allows with the organisation and its config in the context.'
+        facts [
+          'Every outcome is its own metric, <code>MTLS_AUTH_REQUESTS_*</code>.'
+        ]
+        sourceId 'authorizer'
+        order '3'
+        x '350'
+        y '210'
+        w '262'
+        h '62'
+        ownership 'uns'
+        awsIcon 'lambda'
+      }
+    }
+
+    send_post = platform '4. postMessage' {
+      #request-path
+      description '202 · [{ NotificationID }]'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/lambdas/pso/http.postMessage/handler.ts 'http.postMessage/handler.ts'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/common/services/validationService.ts 'validationService.ts'
+      metadata {
+        type 'AWS::Lambda::Function'
+        tech 'nodejs22 · 512 MB · 30 s'
+        role 'Reads the organisation from the authorizer context, validates each message against the organisation\'s config, publishes <code>VALIDATED_API_CALL</code>, puts the batch on the processing queue, and writes one record per message.'
+        facts [
+          'It goes straight to the processing queue. The incoming queue and its validation function are a second door nothing in this repository publishes to.'
+        ]
+        sourceId 'post'
+        order '4'
+        x '64'
+        y '340'
+        w '262'
+        h '62'
+        ownership 'uns'
+        awsIcon 'lambda'
+      }
+    }
+
+    send_analytics = platform 'Analytics queue · sqs.analytics' {
+      #request-path
+      description 'every step publishes here'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/lambdas/pso/sqs.analytics/handler.ts 'sqs.analytics/handler.ts'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/common/services/analyticsService.ts 'analyticsService.ts'
+      metadata {
+        type 'AWS::SQS::Queue → AWS::Lambda::Function'
+        tech 'batch of 10 · partial failures reported'
+        role 'For each event: append it to the message record\'s <code>Events</code>, add one to the campaign\'s counter for that state, write a CSV line to a log stream, cache the latest status.'
+        facts [
+          'This is how FLEX\'s reads see a status, and how the status routes answer: nothing writes a status directly.',
+          'The only function without an enable flag.'
+        ]
+        sourceId 'analytics'
+        order '5'
+        x '350'
+        y '340'
+        w '262'
+        h '62'
+        ownership 'uns'
+      }
+    }
+
+    send_procq = platform '5. Processing queue' {
+      #request-path
+      description 'KMS · DLQ after 3'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/constructs/UNSPSOResources.ts 'UNSPSOResources.ts'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/common/services/queueService.ts 'queueService.ts'
+      metadata {
+        type 'AWS::SQS::Queue'
+        tech 'retention 7 days'
+        role 'Published in batches of ten. A message the consumer fails three times lands in the dead-letter queue.'
+        sourceId 'procq'
+        order '6'
+        x '64'
+        y '470'
+        w '262'
+        h '62'
+        ownership 'uns'
+      }
+    }
+
+    send_export = platform 'Hourly export · S3 · BigQuery' {
+      #off-request-path
+      description 'schedule.analyticsExport · :30'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/lambdas/pso/schedule.analyticsExport/handler.ts 'schedule.analyticsExport/handler.ts'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/common/services/analyticsExportService.ts 'analyticsExportService.ts'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/constructs/UNSPSOResources.ts 'UNSPSOResources.ts'
+      metadata {
+        type 'EventBridge schedule → CloudWatch Logs export task'
+        tech 'one log stream per hour · CSV'
+        role 'Exports the previous two hours of the analytics log group to the analytics bucket, where an IAM user created for BigQuery reads it.'
+        facts [
+          'Objects expire after seven days in development, staging and production, one in a developer sandbox.'
+        ]
+        sourceId 'export'
+        order '7'
+        x '350'
+        y '470'
+        w '262'
+        h '62'
+        ownership 'uns'
+        resources [ 'iam-user' ]
+        awsIcon 's3'
+      }
+    }
+
+    send_processing = platform '6. sqs.processing' {
+      #request-path
+      description 'who is this user?'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/lambdas/pso/sqs.processing/handler.ts 'sqs.processing/handler.ts'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/common/services/adapters/processingAdapterUDP.ts 'processingAdapterUDP.ts'
+      metadata {
+        type 'AWS::Lambda::Function'
+        tech 'adapter: UDP or VOID'
+        role 'Asks UDP for the person behind the <code>UserID</code>, stores the <code>ExternalUserID</code> it gets back on the record, and puts the processed message on the dispatch queue.'
+        facts [
+          'Gated by <code>config/processing/enabled</code>; the adapter by <code>config/processing/adapter</code>, whose deploy-time default is <code>VOID</code> — a mapping of the user id to itself.'
+        ]
+        sourceId 'processing'
+        order '8'
+        x '64'
+        y '600'
+        w '262'
+        h '62'
+        ownership 'uns'
+        awsIcon 'lambda'
+      }
+    }
+
+    send_udp = internal 'UDP · GET /v1/notifications' {
+      #request-path
+      description 'requesting-service: dvla'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/common/services/adapters/processingAdapterUDP.ts 'processingAdapterUDP.ts'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/common/services/FetchSigV4Service.ts 'FetchSigV4Service.ts'
+      metadata {
+        type 'GOV.UK Once system'
+        tech 'SigV4 · assumed role with external id UNS · x-api-key'
+        role 'UDP\'s data API, under the <code>notifications</code> resource path FLEX assigned to UNS. The reply\'s <code>pushId</code> is the device.'
+        facts [
+          'UDP\'s URL, role, key and secret come from a secret whose ARN is the SSM parameter <code>udp/config/sm</code>.'
+        ]
+        sourceId 'udp'
+        order '9'
+        x '350'
+        y '600'
+        w '262'
+        h '62'
+        ownership 'govuk'
+      }
+    }
+
+    send_dispq = platform '7. Dispatch queue' {
+      #request-path
+      description 'KMS · DLQ after 3'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/constructs/UNSPSOResources.ts 'UNSPSOResources.ts'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/lambdas/interfaces/IMessage.ts 'IMessage.ts'
+      metadata {
+        type 'AWS::SQS::Queue'
+        tech 'IProcessedMessage: the message plus ExternalUserID'
+        role 'Where the single and the group paths meet.'
+        sourceId 'dispq'
+        order '10'
+        x '64'
+        y '730'
+        w '262'
+        h '62'
+        ownership 'uns'
+      }
+    }
+
+    send_dispatch = platform '8. sqs.dispatch' {
+      #request-path
+      description 'breaker · rate limit · send'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/lambdas/pso/sqs.dispatch/handler.ts 'sqs.dispatch/handler.ts'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/common/services/circuitBreakerService.ts 'circuitBreakerService.ts'
+      metadata {
+        type 'AWS::Lambda::Function'
+        tech 'adapter: OneSignal or VOID'
+        role 'Checks the circuit breaker, then the per-minute provider rate limit, sends, stamps <code>DispatchedDateTime</code> and resets the record\'s expiry, then counts the send against the limit.'
+        facts [
+          'A message whose title is <code>FAIL_AT_DISPATCH</code> — or <code>_VALIDATION</code>, <code>_PROCESSING</code>, <code>_ANALYTICS</code> at those steps — throws on purpose. The comment says to remove it before production; no environment guard does.'
+        ]
+        sourceId 'dispatch'
+        order '11'
+        x '64'
+        y '860'
+        w '262'
+        h '62'
+        ownership 'uns'
+        awsIcon 'lambda'
+      }
+    }
+
+    send_cache = platform 'ElastiCache · Valkey' {
+      #request-path
+      description 'breaker state · rate counter'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/common/services/cacheService.ts 'cacheService.ts'
+      metadata {
+        type 'AWS::ElastiCache::ServerlessCache'
+        tech 'TLS · IAM-presigned password, 15 minutes'
+        role 'Holds the breaker for <code>notification_dispatch</code>, the provider rate counter, the latest status per notification, and the chunks of a group message.'
+        sourceId 'cache'
+        order '12'
+        x '350'
+        y '860'
+        w '262'
+        h '62'
+        ownership 'uns'
+      }
+    }
+
+    send_onesignal = external '9. OneSignal' {
+      #request-path
+      description 'POST /notifications?c=push'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/common/services/adapters/notificationAdapterOneSignal.ts 'notificationAdapterOneSignal.ts'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/shared/secretParameters.ts 'secretParameters.ts'
+      metadata {
+        type 'Push provider'
+        tech 'fetch · 25 s timeout · Authorization: Key'
+        role 'One request per device: headings, contents, the deeplink in <code>data</code>, <code>include_aliases.external_id</code>, and the <code>NotificationID</code> as idempotency key.'
+        facts [
+          'A 200 with an <code>errors</code> array or no <code>id</code> is a failure; a 404 means no dispatch id. <code>MESSAGE_CENTRE_ONLY</code> skips the call.',
+          'The key is the secret <code>config/dispatch/onesignal/apiKey</code>; the app id the SSM parameter beside it.'
+        ]
+        sourceId 'onesignal'
+        order '13'
+        x '64'
+        y '990'
+        w '262'
+        h '62'
+        ownership 'third'
+      }
+    }
+    send_status = platform 'Status routes · 2' {
+      #request-path
+      description 'notification · campaign'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/lambdas/pso/http.getNotificationStatus/handler.ts 'http.getNotificationStatus/handler.ts'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/lambdas/pso/http.getCampaignStatus/handler.ts 'http.getCampaignStatus/handler.ts'
+      metadata {
+        type 'AWS::Lambda::Function ×2'
+        tech 'through the same gateway and authorizer'
+        role 'One reads the record\'s <code>Events</code> list, sorted by time; the other the campaign\'s counters by <code>organisation/department/campaign</code>, with <code>RECEIVED</code> as the sum of the two validated states. Both answer only what the analytics function has already written.'
+        sourceId 'status'
+        order '14'
+        x '350'
+        y '990'
+        w '262'
+        h '62'
+        ownership 'uns'
+        awsIcon 'lambda'
+      }
+    }
+  }
+
+  send_group = boundary 'A group message · POST /v1/send-to-group' {
+    metadata {
+      type 'Flow · feature-flagged off in production'
+      tech 'PSO API → group processing → dispatch'
+      role 'The same message for every device subscribed to a namespace, group and optional subgroup. Chunked across workers, and never through UDP.'
+      sourceId 'group'
+      order '0'
+      x '676'
+      y '30'
+      w '600'
+      h '784'
+      boundary 'soft'
+    }
+
+    send_gclient = external '1. A department' {
+      #request-path
+      description 'through the same gateway'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/lambdas/interfaces/IGroupMessage.ts 'IGroupMessage.ts'
+      metadata {
+        type 'Consumer organisation'
+        tech 'same certificate, authorizer and key'
+        role 'Sends <code>Namespace</code>, <code>Group</code>, an optional <code>Subgroup</code> and <code>CampaignID</code>, and the message content.'
+        sourceId 'gclient'
+        order '1'
+        x '700'
+        y '80'
+        w '262'
+        h '62'
+        ownership 'third'
+      }
+    }
+
+    send_gpost = platform '2. postGroupMessage' {
+      #request-path
+      description '202 · one id per group message'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/lambdas/pso/http.postGroupMessage/handler.ts 'http.postGroupMessage/handler.ts'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/config.ts 'config.ts'
+      metadata {
+        type 'AWS::Lambda::Function'
+        tech 'registered only when the groups flag is on'
+        role 'Resolves the group to push ids, splits them into as many chunks as <code>group/dispatch/workerCount</code> says, caches each chunk, and queues one message per worker.'
+        sourceId 'gpost'
+        order '2'
+        x '700'
+        y '210'
+        w '262'
+        h '62'
+        ownership 'uns'
+        awsIcon 'lambda'
+      }
+    }
+
+    send_gstore = platform '3. Group store table' {
+      #request-path
+      description 'CompositeIDIndex'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/common/repositories/groupStoreDynamoRepository.ts 'groupStoreDynamoRepository.ts'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/common/repositories/interfaces/IGroupStoreRecord.ts 'IGroupStoreRecord.ts'
+      metadata {
+        type 'AWS::DynamoDB::Table'
+        tech 'one row per (group, push id)'
+        role 'A query on <code>namespace/group[/subgroup]</code> returns every subscribed push id. Membership is written by FLEX through the read-back API.'
+        sourceId 'gstore'
+        order '3'
+        x '700'
+        y '340'
+        w '262'
+        h '62'
+        ownership 'uns'
+        awsIcon 'dynamodb'
+      }
+    }
+
+    send_gcache = platform '4. Chunks in the cache' {
+      #request-path
+      description 'one key per worker'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/lambdas/pso/http.postGroupMessage/handler.ts 'http.postGroupMessage/handler.ts'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/common/utils/splitArrayIntoChunks.ts 'splitArrayIntoChunks.ts'
+      metadata {
+        type 'ElastiCache keys'
+        tech 'one key per worker'
+        role 'The push ids each worker owns. The queue message carries the key, not the ids.'
+        sourceId 'gcache'
+        order '4'
+        x '700'
+        y '470'
+        w '262'
+        h '62'
+        ownership 'uns'
+      }
+    }
+
+    send_gqueue = platform '5. Group-processing queue' {
+      #request-path
+      description 'KMS · DLQ after 3'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/constructs/UNSPSOResources.ts 'UNSPSOResources.ts'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/lambdas/interfaces/IGroupMessageMetadata.ts 'IGroupMessageMetadata.ts'
+      metadata {
+        type 'AWS::SQS::Queue'
+        tech 'one message per worker, re-queued while work remains'
+        role 'Carries the group message, the worker id and the cache key.'
+        sourceId 'gqueue'
+        order '5'
+        x '700'
+        y '600'
+        w '262'
+        h '62'
+        ownership 'uns'
+      }
+    }
+
+    send_gworker = platform '6. sqs.groupProcessingWorker' {
+      #request-path
+      description 'a batch of push ids at a time'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/lambdas/pso/sqs.groupProcessingWorker/handler.ts 'sqs.groupProcessingWorker/handler.ts'
+      link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/common/utils/checksumString.ts 'checksumString.ts'
+      metadata {
+        type 'AWS::Lambda::Function'
+        tech 'group/dispatch/workerBatchSize per invocation'
+        role 'Takes the next batch off its chunk, writes the rest back, builds one processed message per push id with a deterministic <code>NotificationID</code>, records them, publishes them to the dispatch queue, and re-queues itself if any remain.'
+        facts [
+          'The push id is already the <code>ExternalUserID</code>, so UDP is never asked.',
+          'The record batch is written in one call, which the repository caps at 25 items; a worker batch larger than that would throw.'
+        ]
+        sourceId 'gworker'
+        order '6'
+        x '700'
+        y '730'
+        w '262'
+        h '62'
+        ownership 'uns'
+        awsIcon 'lambda'
+      }
+    }
+  }
+
+  send_client -> send_gateway 'HTTPS · mTLS' {
+    metadata { protocol 'TLS with a client certificate' auth 'The truststore, then x-api-key' carries 'An array of messages' order '1' }
+  }
+  send_gateway -> send_authorizer 'REQUEST authorizer' {
+    metadata { protocol 'Lambda authorizer invocation' auth 'The certificate PEM as identity source' carries 'The request context; the organisation back' order '2' }
+  }
+  send_gateway -> send_post 'AWS_PROXY' {
+    metadata { protocol 'Lambda proxy integration' auth 'Allowed by the authorizer' carries 'The request, with the organisation in its context' order '3' }
+  }
+  send_post -> send_analytics 'VALIDATED_API_CALL' {
+    metadata { protocol 'SQS' auth 'Function role' carries 'One event per message' order '4' }
+  }
+  send_post -> send_procq 'SendMessageBatch' {
+    metadata { protocol 'SQS · batches of 10' auth 'Function role' carries 'The validated messages' order '5' }
+  }
+  send_analytics -> send_export 'PutLogEvents' {
+    metadata { protocol 'CloudWatch Logs' auth 'Function role' carries 'One CSV line per event' order '6' }
+  }
+  send_procq -> send_processing 'event source' {
+    metadata { protocol 'SQS event source · batch 10 · partial failures' auth 'Function role' carries 'Messages to resolve' order '7' }
+  }
+  send_processing -> send_udp 'SigV4' {
+    metadata { protocol 'HTTPS to UDP\'s private API' auth 'STS AssumeRole with external id UNS, then SigV4; x-api-key' carries 'requesting-service-user-id; pushId back' order '8' }
+  }
+  send_processing -> send_dispq 'SendMessage' {
+    metadata { protocol 'SQS' auth 'Function role' carries 'The processed messages, ExternalUserID set' order '9' }
+  }
+  send_dispq -> send_dispatch 'event source' {
+    metadata { protocol 'SQS event source · batch 10 · partial failures' auth 'Function role' carries 'Messages to send' order '10' }
+  }
+  send_dispatch -> send_cache 'breaker · counter' {
+    metadata { protocol 'RESP over TLS' auth 'IAM-presigned password' carries 'The breaker state and the per-minute count' edgeStyle 'dash' order '11' }
+  }
+  send_dispatch -> send_onesignal 'HTTPS' {
+    metadata { protocol 'HTTPS POST' auth 'Authorization: Key' carries 'One notification for one external id' order '12' }
+  }
+  send_gclient -> send_gpost 'HTTPS · mTLS' {
+    metadata { protocol 'Through the same PSO gateway and authorizer' auth 'Certificate, revocation check, API key' carries 'An array of group messages' order '13' }
+  }
+  send_gpost -> send_gstore 'Query' {
+    metadata { protocol 'DynamoDB' auth 'Function role' carries 'The composite id; every push id back' order '14' }
+  }
+  send_gstore -> send_gcache 'chunks' {
+    metadata { protocol 'RESP over TLS' auth 'IAM-presigned password' carries 'The push ids, split across workers' order '15' }
+  }
+  send_gcache -> send_gqueue 'SendMessageBatch' {
+    metadata { protocol 'SQS' auth 'Function role' carries 'One message per worker with its cache key' order '16' }
+  }
+  send_gqueue -> send_gworker 'event source' {
+    metadata { protocol 'SQS event source' auth 'Function role' carries 'A worker\'s message; itself again while ids remain' order '17' }
+  }
+  send_gworker -> send_dispq 'SendMessageBatch' {
+    metadata { protocol 'SQS · batches of 10' auth 'Function role' carries 'One processed message per push id' order '18' }
+  }
+}
+
+views {
+  view send {
+    title 'Send path'
+    include send_single, send_single.**
+    include send_group, send_group.**
+  }
+}

@@ -1,0 +1,467 @@
+// GOV.UK App architecture — Context.
+//
+// The model. Presentation that a LikeC4 view cannot hold — tab order, audience,
+// reference tables — is in views.json beside this file. Every link names one of the four
+// repositories project.config.json lists; the build refuses a link to any other.
+
+model {
+
+  context_user = actor 'App user' {
+    #request-path
+    description 'a member of the public'
+    link https://github.com/govuk-once/govuk-mobile-android-app/blob/main/data/src/main/kotlin/uk/gov/govuk/data/auth/AuthRepo.kt 'android · AuthRepo.kt'
+    link https://github.com/govuk-once/govuk-mobile-ios-app/blob/main/Production/govuk_ios/ServiceClients/AuthenticationServiceClient.swift 'ios · AuthenticationServiceClient.swift'
+    metadata {
+      type 'Person'
+      tech '—'
+      role 'Uses the GOV.UK App on an iPhone or an Android phone.'
+      facts [
+        'Signs in with a GOV.UK One Login account, on One Login\'s own page, in a browser session the app opens for the purpose and throws away afterwards.',
+        'Never talks to any backend directly — everything below is reached through the app.'
+      ]
+      sourceId 'user'
+      order '1'
+      x '923'
+      y '20'
+      w '200'
+      h '62'
+      ownership 'person'
+    }
+  }
+
+  context_app = internal 'GOV.UK App' {
+    #request-path
+    description 'iOS · Android'
+    link https://github.com/govuk-once/govuk-mobile-ios-app/blob/main/Production/govuk_ios/Services/AppEnvironmentService.swift 'ios · AppEnvironmentService.swift'
+    link https://github.com/govuk-once/govuk-mobile-android-app/blob/main/data/build.gradle.kts 'android · data/build.gradle.kts'
+    link https://github.com/govuk-once/govuk-mobile-android-app/blob/main/config/src/main/kotlin/uk/gov/govuk/config/data/flags/FlagRepo.kt 'android · FlagRepo.kt'
+    link https://github.com/govuk-once/govuk-mobile-ios-app/blob/main/Production/govuk_ios/Model/AppConfig/Feature.swift 'ios · Feature.swift'
+    metadata {
+      type 'Software system · in scope'
+      tech 'Swift · Kotlin'
+      role 'The mobile client: two native codebases, one Swift and one Kotlin, calling the same backends.'
+      facts [
+        'Every backend it calls is set per build: the repositories hold the staging values, and release builds take production values — from the release build type on Android, and from GitHub environment variables on iOS.',
+        'Whether it calls FLEX at all is decided by <code>profile_v2</code>, a release flag in the signed config it downloads at launch. iOS staging builds force it on.',
+        'Qualtrics is initialised with placeholder IDs on iOS and empty ones on Android, so neither repository configures a survey project.'
+      ]
+      sourceId 'app'
+      order '2'
+      x '690'
+      y '150'
+      w '666'
+      h '62'
+      ownership 'app'
+    }
+  }
+
+  context_backend = boundary 'GOV.UK App backend' {
+    metadata {
+      type 'Ownership boundary'
+      tech '—'
+      role 'What was built for the app and nothing else: two SAM stacks from one repository, and a bucket of signed JSON from another.'
+      facts [
+        'Both repositories are in the <code>alphagov</code> organisation; the two apps are in <code>govuk-once</code>.',
+        'Nothing in either repository writes a value FLEX reads — no SSM parameter, no stack export.'
+      ]
+      sourceId 'backend'
+      order '0'
+      x '690'
+      y '300'
+      w '666'
+      h '134'
+      boundary 'hard'
+    }
+
+    context_signin = internal 'Sign-in and tokens' {
+      #request-path
+      description 'keeps the app signed in'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/template.yaml 'backend · services/auth/template.yaml'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/proxy/proxy.ts 'backend · proxy.ts'
+      metadata {
+        type 'Container group · SAM stack'
+        tech 'Cognito · API Gateway · Lambda'
+        role 'A Cognito user pool whose only identity provider is GOV.UK One Login, and an API in front of its token endpoint.'
+        facts [
+          'The app\'s code exchange and every refresh go to the proxy, not to Cognito: the proxy adds the client secret, so the app never holds it.',
+          'Access tokens last 5 minutes, ID tokens an hour and refresh tokens 365 days; revocation is enabled.',
+          'The same stack receives One Login\'s account events and signs users out or deletes them in response.'
+        ]
+        sourceId 'signin'
+        order '3'
+        x '714'
+        y '350'
+        w '210'
+        h '62'
+        ownership 'app'
+      }
+    }
+
+    context_chat = internal 'Chat proxy' {
+      #request-path
+      description 'carries questions to Chat'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/chat/template.yaml 'backend · services/chat/template.yaml'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/chat/authorizer/client/authorizer-client.ts 'backend · authorizer-client.ts'
+      metadata {
+        type 'Container group · SAM stack'
+        tech 'API Gateway · Lambda authorizer'
+        role 'Checks the app\'s Cognito access token, then forwards the request upstream with a different bearer token.'
+        facts [
+          'The bearer token it sends upstream comes from a secret; the user\'s own token never leaves this stack.',
+          'Its upstream URL is an SSM parameter; nothing in these repositories says what serves it.'
+        ]
+        sourceId 'chat'
+        order '4'
+        x '938'
+        y '350'
+        w '190'
+        h '62'
+        ownership 'app'
+      }
+    }
+
+    context_config = internal 'Remote config' {
+      #request-path
+      description 'settings the app fetches'
+      link https://github.com/alphagov/govuk-mobile-backend-config/blob/main/.github/workflows/deploy-integration.yaml 'config · deploy-integration.yaml'
+      link https://github.com/alphagov/govuk-mobile-backend-config/blob/main/.github/workflows/deploy-production.yaml 'config · deploy-production.yaml'
+      metadata {
+        type 'Container · S3 objects'
+        tech 'S3 · KMS signature'
+        role 'One config document per platform, and the topic pages, each signed and uploaded to a bucket per environment.'
+        facts [
+          'Integration deploys on every push to <code>main</code>; production only when somebody runs its workflow by hand.',
+          'Each file carries its signature in object metadata, and the app refuses a config whose signature does not verify.'
+        ]
+        sourceId 'config'
+        order '5'
+        x '1142'
+        y '350'
+        w '190'
+        h '62'
+        ownership 'app'
+      }
+    }
+  }
+
+  context_firebase = external 'Firebase' {
+    #request-path
+    description 'proves the app is genuine'
+    link https://github.com/govuk-once/govuk-mobile-android-app/blob/main/app/src/main/kotlin/uk/gov/govuk/MainActivity.kt 'android · MainActivity.kt'
+    link https://github.com/govuk-once/govuk-mobile-ios-app/blob/main/Production/govuk_ios/Services/AppAttest/GovUKProviderFactory.swift 'ios · GovUKProviderFactory.swift'
+    link https://github.com/govuk-once/govuk-mobile-ios-gov-kit/blob/main/GovKit/Sources/Analytics/AnalyticsServiceInterface.swift 'govkit · AnalyticsServiceInterface.swift'
+    link https://github.com/govuk-once/govuk-mobile-ios-app/blob/main/Production/govuk_ios/Clients/Analytics/FirebaseClient.swift 'ios · FirebaseClient.swift'
+    metadata {
+      type 'Third party · Google'
+      tech 'Firebase SDKs'
+      role 'Issues the attestation token the app sends when it asks for tokens, and collects analytics and crash reports.'
+      facts [
+        'App Check is backed by Play Integrity on Android and App Attest on iOS release builds; iOS staging builds use a provider that returns an empty token.',
+        'Analytics and Crashlytics are off until the user consents, on both platforms.',
+        'On iOS the analytics contract — the permission state, the event and the screen types — is defined in GovKit, the shared library the app depends on; the app supplies the Firebase, Crashlytics and Qualtrics clients behind it.'
+      ]
+      sourceId 'firebase'
+      order '6'
+      x '300'
+      y '350'
+      w '210'
+      h '62'
+      ownership 'vendor'
+    }
+  }
+
+  context_onesignal = external 'OneSignal' {
+    #request-path
+    description 'push notifications'
+    link https://github.com/govuk-once/govuk-mobile-android-app/blob/main/notifications/src/main/kotlin/uk/gov/govuk/notifications/data/NotificationsRepo.kt 'android · NotificationsRepo.kt'
+    link https://github.com/govuk-once/govuk-mobile-ios-app/blob/main/Production/govuk_ios/Services/Notifications/NotificationService.swift 'ios · NotificationService.swift'
+    metadata {
+      type 'Third party'
+      tech 'OneSignal SDK'
+      role 'Delivers push notifications to the app.'
+      facts [
+        'The app logs in to OneSignal with the <code>pushId</code> FLEX returns for the user, so push targeting follows a FLEX identity — and only happens when FLEX is switched on.',
+        'The SDK is initialised with consent required, so it sends nothing until the user agrees.'
+      ]
+      sourceId 'onesignal'
+      order '7'
+      x '300'
+      y '250'
+      w '210'
+      h '62'
+      ownership 'vendor'
+    }
+  }
+
+  context_web = external 'www.gov.uk' {
+    #request-path
+    description 'content · search · councils'
+    link https://github.com/govuk-once/govuk-mobile-android-app/blob/main/feature/search/src/main/kotlin/uk/gov/govuk/search/domain/SearchConfig.kt 'android · SearchConfig.kt'
+    link https://github.com/govuk-once/govuk-mobile-android-app/blob/main/feature/local/src/main/kotlin/uk/govuk/app/local/data/remote/LocalApi.kt 'android · LocalApi.kt'
+    link https://github.com/govuk-once/govuk-mobile-ios-app/blob/main/Production/govuk_ios/Extensions/GovKit/Constants.swift 'ios · Constants.swift'
+    metadata {
+      type 'GOV.UK publishing · outside GOV.UK Once'
+      tech 'HTTPS · JSON APIs'
+      role 'Search, search suggestions, the terms content item and the local-authority lookup.'
+      facts [
+        'Every one of these calls is unauthenticated.',
+        'The search API host is set in the signed config, which can re-point it without a release.'
+      ]
+      sourceId 'web'
+      order '8'
+      x '300'
+      y '150'
+      w '210'
+      h '62'
+      ownership 'third'
+    }
+  }
+
+  context_flex = internal 'FLEX' {
+    #request-path
+    description 'GOV.UK Once API layer'
+    link https://github.com/govuk-once/govuk-mobile-android-app/blob/main/data/src/main/kotlin/uk/gov/govuk/data/di/NetworkModule.kt 'android · NetworkModule.kt'
+    link https://github.com/govuk-once/govuk-mobile-ios-app/blob/main/Production/govuk_ios/Extensions/Container/Container+APIClients.swift 'ios · Container+APIClients.swift'
+    metadata {
+      type 'GOV.UK Once system'
+      tech 'HTTPS · Bearer JWT'
+      role 'The platform the app reaches every GOV.UK Once domain through. Documented on its own page.'
+      facts [
+        'Staging is <code>staging.bl.once.service.gov.uk</code> and production <code>production.bl.once.service.gov.uk</code>.',
+        'The app calls four of its domains — <code>udp</code>, <code>uns</code>, <code>dvla</code> and <code>groups</code> — always as <code>/app/{domain}/v1/…</code>. Both apps also declare <code>/app/travel/v1/countries</code>, and neither calls it.'
+      ]
+      sourceId 'flex'
+      order '9'
+      x '1396'
+      y '150'
+      w '210'
+      h '62'
+      ownership 'govuk'
+    }
+  }
+
+  context_dvla = external 'DVLA' {
+    #request-path
+    description 'vehicle account sign-in'
+    link https://github.com/govuk-once/govuk-mobile-android-app/blob/main/feature/dvla/build.gradle.kts 'android · feature/dvla/build.gradle.kts'
+    link https://github.com/govuk-once/govuk-mobile-ios-app/blob/main/Production/govuk_ios/ViewModels/DVLA/DVLAAuthenticationViewModel.swift 'ios · DVLAAuthenticationViewModel.swift'
+    metadata {
+      type 'Outside GOV.UK Once'
+      tech 'HTTPS, in the browser'
+      role 'Where a user signs in to their driver and vehicle account to link it to the app.'
+      facts [
+        'The app opens DVLA\'s page in the browser rather than calling it; licence and vehicle data then come through FLEX.',
+        'The page it opens carries parameters the app backend minted for this link.'
+      ]
+      sourceId 'dvla'
+      order '10'
+      x '1396'
+      y '250'
+      w '210'
+      h '62'
+      ownership 'third'
+    }
+  }
+
+  context_onelogin = external 'GOV.UK One Login' {
+    #request-path
+    description 'the government sign-in'
+    link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/template.yaml 'backend · services/auth/template.yaml'
+    metadata {
+      type 'Outside GOV.UK Once'
+      tech 'OIDC · Shared Signals'
+      role 'The user pool\'s only identity provider, and the source of account events.'
+      facts [
+        'Cognito asks it for <code>openid email</code>, and its <code>sub</code> becomes the Cognito username.',
+        'Production federates to <code>oidc.account.gov.uk</code>; staging to One Login\'s staging environment; development and integration to its integration environment.'
+      ]
+      sourceId 'onelogin'
+      order '11'
+      x '714'
+      y '500'
+      w '210'
+      h '62'
+      ownership 'third'
+    }
+  }
+
+  context_chatapi = external 'Chat API' {
+    #request-path
+    description 'answers the questions'
+    link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/chat/template.yaml 'backend · services/chat/template.yaml'
+    metadata {
+      type 'Upstream · owner not stated'
+      tech 'HTTPS'
+      role 'Whatever answers the questions the app sends to the chat proxy.'
+      facts [
+        'Its address is the SSM parameter <code>/{ConfigStackName}/chat/api-url</code>, which this repository reads and does not write.',
+        'It receives a service bearer token and the user\'s Cognito <code>sub</code> as <code>Govuk-Chat-End-User-Id</code> — not the user\'s own token.'
+      ]
+      sourceId 'chatapi'
+      order '12'
+      x '938'
+      y '500'
+      w '190'
+      h '62'
+      ownership 'unstated'
+    }
+  }
+
+  context_user -> context_app 'uses' {
+    metadata {
+      protocol '—'
+      auth '—'
+      carries 'Everything the user does'
+      facts [
+        'The user is never a direct client of any backend here.'
+      ]
+      order '1'
+    }
+  }
+  context_app -> context_firebase 'proves it is the real app' {
+    link https://github.com/govuk-once/govuk-mobile-android-app/blob/main/data/src/main/kotlin/uk/gov/govuk/data/auth/AuthRepo.kt 'android · AuthRepo.kt'
+    metadata {
+      protocol 'Firebase SDKs'
+      auth 'SDK-managed'
+      carries 'App Check token requests; analytics and crash reports after consent'
+      facts [
+        'The App Check token is requested only when the app asks for Cognito tokens.'
+      ]
+      order '2'
+    }
+  }
+  context_app -> context_onesignal 'registers for push' {
+    link https://github.com/govuk-once/govuk-mobile-ios-app/blob/main/Production/govuk_ios/Services/Notifications/NotificationService.swift 'ios · NotificationService.swift'
+    metadata {
+      protocol 'OneSignal SDK'
+      auth 'SDK-managed'
+      carries 'The FLEX pushId, as OneSignal\'s external user ID'
+      facts [
+        'Logged out of OneSignal again when the user signs out.'
+      ]
+      order '3'
+    }
+  }
+  context_app -> context_web 'searches · looks up' {
+    link https://github.com/govuk-once/govuk-mobile-android-app/blob/main/feature/local/src/main/kotlin/uk/govuk/app/local/data/remote/LocalApi.kt 'android · LocalApi.kt'
+    metadata {
+      protocol 'HTTPS'
+      auth 'None'
+      carries 'Search terms, postcodes and content paths'
+      facts [
+        'A postcode goes to <code>/api/local-authority</code> as a query parameter.'
+      ]
+      order '4'
+    }
+  }
+  context_app -> context_signin 'signs in · refreshes' {
+    link https://github.com/govuk-once/govuk-mobile-android-app/blob/main/data/src/main/kotlin/uk/gov/govuk/data/auth/di/AuthModule.kt 'android · AuthModule.kt'
+    link https://github.com/govuk-once/govuk-mobile-ios-app/blob/main/Production/govuk_ios/ServiceClients/AuthenticationServiceClient.swift 'ios · AuthenticationServiceClient.swift'
+    metadata {
+      protocol 'HTTPS · OAuth 2.0 authorization code'
+      auth 'An App Check token with each token request'
+      carries 'The authorize request, then a code or a refresh token in exchange for tokens'
+      facts [
+        'The authorize request goes to Cognito\'s hosted UI; the token request goes to the proxy — see Sign-in path.'
+      ]
+      order '5'
+    }
+  }
+  context_app -> context_chat 'asks' {
+    link https://github.com/govuk-once/govuk-mobile-android-app/blob/main/feature/chat/build.gradle.kts 'android · feature/chat/build.gradle.kts'
+    metadata {
+      protocol 'HTTPS'
+      auth 'Cognito access token as Bearer'
+      carries 'Conversations: questions and their answers'
+      facts [
+        'Switched on and off by the <code>chat</code> release flag.'
+      ]
+      order '6'
+    }
+  }
+  context_app -> context_config 'fetches at launch' {
+    link https://github.com/govuk-once/govuk-mobile-android-app/blob/main/config/build.gradle.kts 'android · config/build.gradle.kts'
+    metadata {
+      protocol 'HTTPS'
+      auth 'None — the response is signed instead'
+      carries 'The config document for the platform, and topic pages'
+      facts [
+        'Release Android builds read <code>app.publishing.service.gov.uk</code>; debug builds and iOS\'s repository defaults read <code>app.integration.publishing.service.gov.uk</code>.'
+      ]
+      order '7'
+    }
+  }
+  context_app -> context_flex 'what other services hold' {
+    link https://github.com/govuk-once/govuk-mobile-android-app/blob/main/data/src/main/kotlin/uk/gov/govuk/data/remote/AuthorizationInterceptor.kt 'android · AuthorizationInterceptor.kt'
+    link https://github.com/govuk-once/govuk-mobile-ios-app/blob/main/Production/govuk_ios/Networking/APIServiceClient.swift 'ios · APIServiceClient.swift'
+    metadata {
+      protocol 'HTTPS'
+      auth 'Cognito access token as Bearer'
+      carries '/app/{domain}/v1/… requests'
+      facts [
+        'With <code>profile_v2</code> off, the app makes none of these calls, and never learns the user\'s <code>pushId</code>.',
+        'No attestation header is sent to FLEX.'
+      ]
+      order '8'
+    }
+  }
+  context_app -> context_dvla 'opens in browser' {
+    link https://github.com/govuk-once/govuk-mobile-android-app/blob/main/feature/dvla/build.gradle.kts 'android · feature/dvla/build.gradle.kts'
+    metadata {
+      protocol 'HTTPS, in the browser'
+      auth 'Parameters minted by the app backend'
+      carries 'The user, to DVLA\'s account sign-in'
+      facts [
+        'Development builds open DVLA\'s external test site; release builds its live account site.'
+      ]
+      order '9'
+    }
+  }
+  context_signin -> context_onelogin 'checks who they are' {
+    link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/template.yaml 'backend · services/auth/template.yaml'
+    metadata {
+      protocol 'OIDC redirect from the hosted UI'
+      auth 'The user\'s One Login credentials'
+      carries 'The sign-in itself'
+      facts [
+        'The client ID comes from SSM and the client secret from Secrets Manager, both under <code>/{ConfigStackName}/onelogin/</code>.'
+      ]
+      order '10'
+    }
+  }
+  context_onelogin -> context_signin 'account events' {
+    link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/shared-signal-receiver/handlers/account-purged-handler.ts 'backend · account-purged-handler.ts'
+    metadata {
+      protocol 'HTTPS POST · Security Event Tokens'
+      auth 'A Cognito client-credentials token, from an allowlisted IP'
+      carries 'Credential changes and account deletions'
+      facts [
+        'A credential change signs the user out of every device; an account purge signs them out and deletes their Cognito user.',
+        'The receiver accepts only tokens from the issuer <code>https://ssf.account.gov.uk/</code>, and answers 503 while its SSM feature flag is off.'
+      ]
+      order '11'
+    }
+  }
+  context_chat -> context_chatapi 'forwards' {
+    link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/chat/template.yaml 'backend · services/chat/template.yaml'
+    metadata {
+      protocol 'HTTPS · API Gateway HTTP proxy'
+      auth 'A service bearer token from Secrets Manager'
+      carries 'The request, and the user\'s Cognito sub'
+      facts [
+        'The authorizer\'s answer is cached for 300 seconds per Authorization header.'
+      ]
+      order '12'
+    }
+  }
+}
+
+views {
+  view context {
+    title 'Context'
+    include context_user, context_app
+    include context_backend, context_backend.**
+    include context_firebase, context_onesignal, context_web, context_flex, context_dvla
+    include context_onelogin, context_chatapi
+  }
+}
