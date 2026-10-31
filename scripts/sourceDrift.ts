@@ -37,7 +37,7 @@ import {
   assertCheckout,
   locate,
   type Project,
-  selectProjects,
+  selectSourced,
   type Source,
   sourceLabel,
 } from "./lib/projects.js";
@@ -280,7 +280,7 @@ async function markProjectRead(project: Project, only: string | null) {
 const asked = valueOf("--since", "a commit");
 const only = valueOf("--source", "a source id");
 const marking = process.argv.includes("--mark-read");
-const projects = selectProjects(
+const projects = selectSourced(
   // Flag values must not be read as project ids.
   process.argv.slice(2).filter((a) => a !== asked && a !== only),
 );

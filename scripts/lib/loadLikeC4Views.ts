@@ -55,8 +55,11 @@ function detail(
   const d: Record<string, unknown> = {};
   for (const k of ["type", "tech", "role", "protocol", "auth", "carries"])
     if (str(md[k])) d[k] = md[k];
-  const facts = arr(md.facts);
-  if (facts) d.facts = facts;
+  // Always present, even empty: a state may add facts to a box the model gave none.
+  d.facts = arr(md.facts) ?? [];
+  // A proposed architecture cites the decision register where a documented one cites code.
+  const why = arr(md.why);
+  if (why) d.why = why;
   // A link is stored as the path it cites plus the label the explorer shows — named by
   // its source when the project reads several. A link into a repository the project does
   // not read stays absolute, and the build refuses it.

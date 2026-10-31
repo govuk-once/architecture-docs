@@ -159,6 +159,11 @@ export interface StateOverlay {
         role?: string;
         plane?: Plane;
         facts?: string[];
+        /**
+         * The inventory rows this box deploys once the step is taken, replacing today's.
+         * An empty list drops the badge: today's count would describe something else.
+         */
+        resources?: string[];
         why?: Why;
       }
   >;
@@ -214,6 +219,8 @@ export interface StateOverlay {
       /** A sprite symbol, when the type does not imply one. */
       icon?: string;
       facts?: string[];
+      /** Inventory rows it deploys, when they are already in this project's inventory. */
+      resources?: string[];
       why?: Why;
     })[];
   /**
@@ -1002,9 +1009,18 @@ export function composeChain(
       if (!still.has(edgeKey(e)) && here.has(e.from) && here.has(e.to))
         edges.push(mark(e, "retired", edgeKey(e)));
   }
-  const placement: Record<string, string[]> = {};
-  for (const [box, ids] of Object.entries(base.placement ?? {}))
-    if (here.has(box)) placement[box] = ids;
+  /* A step may say what a box it changes or adds deploys, and a later step wins. Without
+     this a box re-purposed by a state kept today's count, which describes the box it was. */
+  const placed = new Map(Object.entries(base.placement ?? {}));
+  for (const { ov } of chain) {
+    for (const [id, c] of Object.entries(ov?.changed ?? {}))
+      if (c.resources) placed.set(id, c.resources);
+    for (const n of ov?.newNodes ?? [])
+      if (n.resources) placed.set(n.id, n.resources);
+  }
+  const placement = Object.fromEntries(
+    [...placed].filter(([box, ids]) => here.has(box) && ids.length),
+  );
 
   const edge = (vals: number[], fallback: number) =>
     Math.max(fallback, ...vals) + 40;

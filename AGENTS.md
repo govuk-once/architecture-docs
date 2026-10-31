@@ -92,6 +92,11 @@ answerable for. You may be asked to write one down, lay it out, or check it; you
 invent one, and you may not decide what a state should contain because it would make the
 diagram tidier. If an overlay needs a change nobody has argued for, say so and stop.
 
+The same holds for a **proposed architecture** — a whole system with no code yet, drawn for
+approval or threat modelling. It lives in architecture-docs-states too, read through
+`ARCH_PROPOSED_DIR`, and every claim in it cites the register rather than a file; see
+[`projects/README.md`](projects/README.md#a-proposed-architecture).
+
 The line is enforced as well as stated: every planned change cites an entry in
 `states/decisions.json`, the build refuses a citation the register does not hold, and it
 counts the changes resting only on questions still open. The states, the register and the

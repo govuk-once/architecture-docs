@@ -98,6 +98,24 @@ What that changes, and what it does not:
 - **The renderer is told only where each source is browsed**, as `CONFIG.sources`, so a
   citation's link opens the right repository.
 
+### A proposed architecture
+
+A system that has no code yet — a design put up for approval or threat modelling — is a
+project too, with one difference: there is nothing to read, so nothing cites code. Its
+config says `"proposed": true` and names no `source`, `sources`, `repo`, `derive` or
+`synth`; the build refuses one that does. In their place, every box, line, reference table
+and inventory row carries `why`, ids from the decision register beside its states, and the
+build refuses a claim that cites nothing or cites an id the register does not hold. A code
+citation in one is refused as well.
+
+A proposal is somebody's design, so it never lives here. It is read only from
+`ARCH_PROPOSED_DIR`, which architecture-docs-states sets; the build refuses a proposed
+project under `projects/`, and an `ARCH_PROPOSED_DIR` inside this repository. `sync`,
+`synth`, `facts` and `drift` leave proposed projects out. The page and its index row say
+_Proposed · not built_, and its Decisions tab counts the model's own claims beside any
+planned changes. When the system is built, its proposal is deleted and it is documented
+from its code like any other — the build refuses an id that is both.
+
 ## Starting a model from nothing
 
 [`_template/`](_template/) is the smallest project that builds: five files, about 115

@@ -142,6 +142,31 @@ describe("validateConfig: one source, or several", () => {
   });
 });
 
+/* A proposed architecture is a design with no code yet. Anything that would read code is a
+   mistake in its config, and a documented one may still not leave its source out. */
+describe("validateConfig: a proposed architecture", () => {
+  const PROPOSED = { ...BASE, proposed: true };
+
+  it("accepts one that names no repository, and reads none", () => {
+    const cfg = validateConfig("p", PROPOSED);
+    expect(cfg.proposed).toBe(true);
+    expect(resolveSources("p", cfg)).toEqual([]);
+  });
+
+  it("refuses one that names something to read or derive", () => {
+    refuses({ ...PROPOSED, source: ONE.source }, /takes no source/);
+    refuses({ ...PROPOSED, repo: ONE.repo }, /takes no repo/);
+    refuses(
+      { ...PROPOSED, derive: { module: "m", inputs: {} } },
+      /takes no derive/,
+    );
+  });
+
+  it("still refuses a documented one with no source", () => {
+    refuses({ ...BASE, proposed: false }, /"source" needs/);
+  });
+});
+
 /** The two parts of a project the resolvers read. */
 function parts(cfg: unknown) {
   const config = validateConfig("p", cfg);

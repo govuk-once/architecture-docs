@@ -14,7 +14,9 @@ import { describe, expect, it } from "vitest";
 
 import {
   checkGeometry,
+  checkProposedCitations,
   checkSourceCitations,
+  checkStatePlacement,
   type View,
   type ViewNode,
 } from "./buildArchitectureExplorer.js";
@@ -246,5 +248,107 @@ describe("checkSourceCitations", () => {
     ]);
     expect(found).toHaveLength(1);
     expect(found[0]).toMatch(/pnpm sync gone/);
+  });
+});
+
+/**
+ * A proposed architecture has no code, so its claims cite the decision register instead.
+ * Every box, line, table and inventory row must name an entry, and every entry it names
+ * must be one the register holds.
+ */
+describe("checkProposedCitations", () => {
+  const REGISTER = { "adr-1": {}, "q-open": {} };
+  const cited = (why?: string[]) =>
+    view({
+      nodes: [box({ id: "a", d: { facts: [], why } }), box({ id: "b" })],
+      edges: [],
+    });
+
+  it("passes a proposal whose every claim cites the register", () => {
+    const v = view({
+      nodes: [box({ id: "a", d: { facts: [], why: ["adr-1"] } })],
+      edges: [
+        {
+          from: "a",
+          to: "a",
+          label: "x",
+          d: { facts: [], why: ["q-open"] },
+        } as never,
+      ],
+      tables: [{ name: "T", cols: ["c"], rows: [["r"]], why: ["adr-1"] }],
+    });
+    expect(checkProposedCitations([v], REGISTER)).toEqual([]);
+  });
+
+  it("refuses a box, a line or a table that cites nothing", () => {
+    expect(checkProposedCitations([cited(["adr-1"])], REGISTER)).toEqual([
+      "v/b: cites no decision — a proposed architecture rests on the register, " +
+        "so every claim names the entry it comes from",
+    ]);
+    const table = view({ tables: [{ name: "T", cols: ["c"], rows: [] }] });
+    expect(checkProposedCitations([table], REGISTER)).toHaveLength(1);
+  });
+
+  it("refuses a citation the register does not hold", () => {
+    const v = view({
+      nodes: [box({ id: "a", d: { facts: [], why: ["adr-9"] } })],
+    });
+    expect(checkProposedCitations([v], REGISTER)).toEqual([
+      'v/a: cites "adr-9", which is not in the decision register',
+    ]);
+  });
+
+  it("refuses an inventory row that cites nothing", () => {
+    const inv = {
+      id: "resources",
+      name: "R",
+      type: "doc",
+      groups: [
+        {
+          name: "G",
+          note: null,
+          table: null,
+          items: [{ id: "i", name: "I", n: 1, meta: [], d: { facts: [] } }],
+        },
+      ],
+    } as unknown as View;
+    expect(checkProposedCitations([inv], REGISTER)).toHaveLength(1);
+  });
+
+  it("leaves the decisions tab alone — it is the register", () => {
+    const decisions = { ...cited(), id: "decisions" };
+    expect(checkProposedCitations([decisions], REGISTER)).toEqual([]);
+  });
+
+  it("refuses code citations in a proposal, which has no code", () => {
+    const found = checkSourceCitations(
+      { id: "idx", qualified: false, sources: [], proposed: true },
+      [{ id: "v", nodes: [{ id: "n", d: { code: [["l", "src/a.ts"]] } }] }],
+    );
+    expect(found).toEqual([
+      "v/n: cites src/a.ts — idx is proposed and has no code; cite the decision " +
+        "register with why",
+    ]);
+  });
+});
+
+/** A state naming an inventory row the project does not have would draw a badge to nowhere. */
+describe("checkStatePlacement", () => {
+  const inventory = {
+    id: "resources",
+    groups: [{ items: [{ id: "fn" }] }],
+  } as unknown as View;
+  const composed = (ids: string[]) => [
+    view({ id: "containers@s1·future", placement: { box: ids } }),
+  ];
+
+  it("passes a row the inventory holds", () => {
+    expect(checkStatePlacement(inventory, composed(["fn"]))).toEqual([]);
+  });
+
+  it("refuses one it does not", () => {
+    expect(checkStatePlacement(inventory, composed(["gone"]))).toEqual([
+      'containers@s1/box: unknown resource id "gone"',
+    ]);
   });
 });

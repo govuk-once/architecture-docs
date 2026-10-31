@@ -29,7 +29,7 @@ import {
   loadProjects,
   locateOrThrow,
   type Project,
-  selectProjects,
+  selectSourced,
   type Source,
   sourceLabel,
 } from "./lib/projects.js";
@@ -212,7 +212,7 @@ if (clean) {
   }
   console.log(gone.length ? `Removed ${gone.join(", ")}` : "Nothing to remove");
 } else {
-  for (const project of selectProjects(process.argv.slice(2))) {
+  for (const project of selectSourced(process.argv.slice(2))) {
     const installs = installsIn(project);
     for (const source of project.sources)
       syncSource(project, source, source === installs);

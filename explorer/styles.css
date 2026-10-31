@@ -67,6 +67,17 @@ header {
   text-transform: uppercase;
   color: var(--muted);
 }
+/* A proposed architecture's page says so beside its name, at every width: the narrow
+   layouts hide the strapline, and this must not go with it. */
+.brand .proposed-badge {
+  display: inline-block;
+  align-self: flex-start;
+  margin-top: 3px;
+  padding: 1px 7px;
+  color: var(--ink-2);
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+}
 .tabs {
   display: flex;
   gap: 4px;

@@ -19,10 +19,17 @@
  * nothing is inferred: a path that could belong to any of four checkouts is a claim nobody
  * can check.
  */
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
-import { DOCS_ROOT, inDocs, SITE, SITE_CONFIG, SITE_ROOT } from "./paths.js";
+import {
+  DOCS_ROOT,
+  inDocs,
+  PROPOSED_ROOT,
+  SITE,
+  SITE_CONFIG,
+  SITE_ROOT,
+} from "./paths.js";
 
 /** Where one source lives: the repository, the ref to track, and where it is checked out. */
 export interface SourceContract {
@@ -129,6 +136,12 @@ export interface ProjectConfig {
   blurb: string;
   /** Base URL every `code` citation links against, with one `source`. */
   repo?: string;
+  /**
+   * A system that has no code yet: a design put up for approval. It reads no repository,
+   * derives nothing, and every claim in it cites the decision register instead of a file.
+   * Read only from `ARCH_PROPOSED_DIR`, never from projects/ here.
+   */
+  proposed?: boolean;
   inventoryView: string;
   /** What the inventory counts, e.g. "AWS resources" — shown wherever a box totals them. */
   inventoryLabel: string;
@@ -194,6 +207,8 @@ export interface Project {
   sources: Source[];
   /** Whether a citation must name its source — true exactly when the config says `sources`. */
   qualified: boolean;
+  /** A design with no code behind it — see `ProjectConfig.proposed`. */
+  proposed: boolean;
   derive: DeriveContract | null;
   /** projects/<id>/ */
   dir: string;
@@ -261,12 +276,23 @@ export function validateConfig(id: string, raw: unknown): ProjectConfig {
   if (blank.length)
     throw new Error(`projects/${id}: config has no ${blank.join(", ")}`);
 
-  if (cfg.source && cfg.sources)
+  if (cfg.proposed) {
+    const built = (
+      ["source", "sources", "repo", "derive", "synth"] as const
+    ).filter((k) => cfg[k] !== undefined);
+    if (built.length)
+      throw new Error(
+        `projects/${id}: a proposed architecture has no code to read, so it takes no ` +
+          `${built.join(", ")} — its claims cite the decision register instead`,
+      );
+  } else if (cfg.source && cfg.sources)
     throw new Error(
       `projects/${id}: declares both "source" and "sources" — one repository is ` +
         `"source", several are "sources"`,
     );
-  if (cfg.sources) {
+  if (cfg.proposed) {
+    // Nothing to check out: see above.
+  } else if (cfg.sources) {
     const entries = Object.entries(cfg.sources);
     if (!entries.length)
       throw new Error(`projects/${id}: "sources" names no repository`);
@@ -383,6 +409,7 @@ export function resolveSources(id: string, config: ProjectConfig): Source[] {
     url,
     dir: path.resolve(DOCS_ROOT, s.root),
   });
+  if (config.proposed) return [];
   if (config.sources)
     return Object.entries(config.sources).map(([name, s]) =>
       at(s, name, s.url ?? ""),
@@ -396,19 +423,29 @@ export function resolveSources(id: string, config: ProjectConfig): Source[] {
  * site config lists, and which nothing therefore builds — can still be held to the same
  * contract as a real one.
  */
-export function toProject(id: string): Project {
-  const dir = path.join(PROJECTS_DIR, id);
+export function toProject(id: string, root = PROJECTS_DIR): Project {
+  const dir = path.join(root, id);
   if (!existsSync(dir))
     throw new Error(
       `explorer.config.json lists "${id}", but projects/${id}/ does not exist. ` +
         `A project is a directory there with a project.config.json and a model/.`,
     );
   const config = readConfig(id, path.join(dir, "project.config.json"));
+  const proposed = root !== PROJECTS_DIR;
+  if (proposed !== Boolean(config.proposed))
+    throw new Error(
+      proposed
+        ? `${id}: everything under ARCH_PROPOSED_DIR is a proposal — its config needs ` +
+            `"proposed": true`
+        : `projects/${id}: a proposed architecture never lives in this public repository — ` +
+            `move it to architecture-docs-states and build with ARCH_PROPOSED_DIR`,
+    );
   return {
     id,
     config,
     sources: resolveSources(id, config),
     qualified: config.sources !== undefined,
+    proposed,
     derive: config.derive ?? null,
     dir,
     modelDir: path.join(dir, "model"),
@@ -420,9 +457,45 @@ export function toProject(id: string): Project {
   };
 }
 
-/** Every project the site publishes, in the order the index lists them. */
+/**
+ * The proposed architectures this build was given, by directory name, sorted. None unless
+ * `ARCH_PROPOSED_DIR` is set, and the build refuses one pointing inside this repository:
+ * it is public, and a proposal kept here would be published with the as-is.
+ */
+export function proposedIds(root: string | null = PROPOSED_ROOT): string[] {
+  if (!root) return [];
+  if (root === DOCS_ROOT || root.startsWith(DOCS_ROOT + path.sep))
+    throw new Error(
+      `ARCH_PROPOSED_DIR points inside architecture-docs, which is public. Proposed ` +
+        `architectures live in govuk-once/architecture-docs-states.`,
+    );
+  if (!existsSync(root)) return [];
+  const ids = readdirSync(root, { withFileTypes: true })
+    .filter(
+      (e) =>
+        e.isDirectory() &&
+        existsSync(path.join(root, e.name, "project.config.json")),
+    )
+    .map((e) => e.name)
+    .sort();
+  const clash = ids.filter((id) => SITE_CONFIG.projects.includes(id));
+  if (clash.length)
+    throw new Error(
+      `${clash.join(", ")} is both documented and proposed — a system with code is read ` +
+        `from that code, so drop the proposal once it has been built`,
+    );
+  return ids;
+}
+
+/**
+ * Every project the site publishes, in the order the index lists them: the documented
+ * ones, then any proposed ones this build was given.
+ */
 export function loadProjects(): Project[] {
-  return SITE_CONFIG.projects.map((id) => toProject(id));
+  return [
+    ...SITE_CONFIG.projects.map((id) => toProject(id)),
+    ...proposedIds().map((id) => toProject(id, PROPOSED_ROOT ?? undefined)),
+  ];
 }
 
 /**
@@ -435,14 +508,35 @@ export function loadProjects(): Project[] {
 export function selectProjects(argv: string[]): Project[] {
   const ids = argv.filter((a) => !a.startsWith("-"));
   if (!ids.length) return loadProjects();
-  const known = new Set(SITE_CONFIG.projects);
+  const proposed = proposedIds();
+  const known = new Set([...SITE_CONFIG.projects, ...proposed]);
   const unknown = ids.filter((id) => !known.has(id));
   if (unknown.length)
     throw new Error(
       `No such project: ${unknown.join(", ")}. explorer.config.json lists ` +
-        `${SITE_CONFIG.projects.join(", ")}.`,
+        SITE_CONFIG.projects.join(", ") +
+        (proposed.length ? `, and ${proposed.join(", ")} is proposed.` : "."),
     );
-  return ids.map((id) => toProject(id));
+  return ids.map((id) =>
+    proposed.includes(id)
+      ? toProject(id, PROPOSED_ROOT ?? undefined)
+      : toProject(id),
+  );
+}
+
+/**
+ * The same, for a command that reads code: sync, synth, facts, drift. A proposed project
+ * has none, so it is left out — and named, if it was asked for by name.
+ */
+export function selectSourced(argv: string[]): Project[] {
+  const picked = selectProjects(argv);
+  const named = picked.filter((p) => p.proposed && argv.includes(p.id));
+  if (named.length)
+    throw new Error(
+      `${named.map((p) => p.id).join(", ")} is proposed: it has no code, so there is ` +
+        `nothing to sync, synthesise, derive or drift from`,
+    );
+  return picked.filter((p) => !p.proposed);
 }
 
 /**

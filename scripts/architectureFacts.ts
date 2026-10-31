@@ -27,7 +27,7 @@ import {
   assertCheckouts,
   builtFrom,
   type Project,
-  selectProjects,
+  selectSourced,
 } from "./lib/projects.js";
 import {
   commitsBetween,
@@ -147,7 +147,7 @@ async function deriveProject(project: Project): Promise<void> {
   console.log(`  wrote ${rel(project.statePath)}`);
 }
 
-for (const project of selectProjects(process.argv.slice(2))) {
+for (const project of selectSourced(process.argv.slice(2))) {
   console.log(`${project.id}:`);
   await deriveProject(project);
 }

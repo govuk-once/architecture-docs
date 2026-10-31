@@ -27,7 +27,7 @@ import {
   assertCheckout,
   locateOrThrow,
   type Project,
-  selectProjects,
+  selectSourced,
 } from "./lib/projects.js";
 
 const fill = (s: string, st: { id: string; synth?: string }) =>
@@ -129,5 +129,5 @@ function synthProject(project: Project): void {
   }
 }
 
-for (const project of selectProjects(process.argv.slice(2)))
+for (const project of selectSourced(process.argv.slice(2)))
   synthProject(project);

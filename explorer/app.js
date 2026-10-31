@@ -1152,7 +1152,7 @@ function renderNode(n) {
       ${n.sub ? `<p class="insp-sub mono">${esc(n.sub)}</p>` : ""}
     </div>
     <dl class="kv"><dt>Type</dt><dd>${esc(n.d.type || "—")}</dd><dt>Technology</dt><dd>${iconTag(n.icon || iconForType(n.d.type))}${esc(n.d.tech || "—")}</dd><dt>Plane</dt><dd>${esc(PLANE_LABEL[n.plane || "request"])}</dd></dl>
-    ${n.d.lifecycle ? `<dl class="kv lc-kv lc-${n.d.lifecycle}"><dt>Status</dt><dd>${esc(LC_LABEL[n.d.lifecycle])}</dd>${whyHtml(n.d.why)}</dl>` : ""}
+    ${n.d.lifecycle ? `<dl class="kv lc-kv lc-${n.d.lifecycle}"><dt>Status</dt><dd>${esc(LC_LABEL[n.d.lifecycle])}</dd>${whyHtml(n.d.why)}</dl>` : n.d.why ? `<dl class="kv">${whyHtml(n.d.why)}</dl>` : ""}
     ${n.d.role ? `<p style="margin:0;font-size:14px;color:var(--ink-2)">${esc(n.d.role)}</p>` : ""}
     ${facts(n.d.facts)}
     ${resourcesHere(n.id)}
@@ -1245,7 +1245,7 @@ function renderEdge(e) {
       <h2 class="insp-title">${esc(e.label || `${a.label} → ${b.label}`)}</h2>
       <p class="insp-sub mono">${esc(a.label)} ${e.dir === "both" ? "↔" : "→"} ${esc(b.label)}</p>
     </div>
-    ${e.d.lifecycle ? `<dl class="kv lc-kv lc-${e.d.lifecycle}"><dt>Status</dt><dd>${esc(LC_LABEL[e.d.lifecycle])}</dd>${whyHtml(e.d.why)}</dl>` : ""}
+    ${e.d.lifecycle ? `<dl class="kv lc-kv lc-${e.d.lifecycle}"><dt>Status</dt><dd>${esc(LC_LABEL[e.d.lifecycle])}</dd>${whyHtml(e.d.why)}</dl>` : e.d.why ? `<dl class="kv">${whyHtml(e.d.why)}</dl>` : ""}
     <dl class="kv">
       <dt>Protocol</dt><dd>${esc(e.d.protocol || "—")}</dd>
       <dt>Auth</dt><dd>${esc(e.d.auth || "—")}</dd>
@@ -1322,7 +1322,7 @@ function renderTables() {
     <div class="tbl-body" id="tbl-body">${t
       .map(
         (x) =>
-          `<section class="grp${x.lifecycle ? ` lc-${x.lifecycle}` : ""}"><h3 data-name="${esc(x.name)}">${esc(x.name)}${x.lifecycle ? ` <span class="lc-tag lc-${x.lifecycle}">${LC_SHORT[x.lifecycle]}</span>${(x.why || []).map(citeTag).join("")}` : ""}</h3>${x.note ? `<p class="gnote">${rich(x.note)}</p>` : ""}${tableHtml(x)}${codes(x.code)}</section>`,
+          `<section class="grp${x.lifecycle ? ` lc-${x.lifecycle}` : ""}"><h3 data-name="${esc(x.name)}">${esc(x.name)}${x.lifecycle ? ` <span class="lc-tag lc-${x.lifecycle}">${LC_SHORT[x.lifecycle]}</span>` : ""}${x.lifecycle || CONFIG.proposed ? (x.why || []).map(citeTag).join("") : ""}</h3>${x.note ? `<p class="gnote">${rich(x.note)}</p>` : ""}${tableHtml(x)}${codes(x.code)}</section>`,
       )
       .join("")}</div>`;
   box
@@ -1589,6 +1589,7 @@ function renderItem(it, groupName, ctx) {
     <dl class="kv"><dt>${esc((view.itemTerms || {}).type || "Resource")}</dt><dd class="mono" style="font-size:12px">${iconTag(it.d.icon || iconForType(it.d.type))}${esc(it.d.type)}</dd>${it.d.tech ? `<dt>${esc((view.itemTerms || {}).tech || "Config")}</dt><dd>${rich(it.d.tech)}</dd>` : ""}</dl>
     <p style="margin:0;font-size:14px;color:var(--ink-2)">${esc(it.d.role)}</p>
     ${facts(it.d.facts)}
+    ${it.d.why ? `<dl class="kv">${whyHtml(it.d.why)}</dl>` : ""}
     ${(it.meta || []).length ? `<div class="sect"><div class="eyebrow">Scope</div><div class="rmeta" style="justify-content:flex-start">${it.meta.map((m) => `<span class="tag">${esc(m)}</span>`).join("")}</div></div>` : ""}
     ${placeRows ? `<hr><div class="sect"><div class="eyebrow">Also shown in</div><div class="reslist">${placeRows}</div></div>` : ""}
     ${it.id && !places.length && !(ctx && ctx.node) ? `<div class="sect"><div class="eyebrow">Placement</div><p class="insp-sub">Not drawn as its own box in any diagram — it is cross-cutting.</p></div>` : ""}
@@ -1979,7 +1980,11 @@ if (COARSE) {
    view's own title are h2, and a reference view's sections h3. Before this the page had
    a single heading and nothing to navigate by. */
 document.getElementById("brand").innerHTML =
-  `<h1>${esc(CONFIG.title)}</h1><span>${esc(CONFIG.tagline)}</span>`;
+  `<h1>${esc(CONFIG.title)}</h1><span>${esc(CONFIG.tagline)}</span>` +
+  /* A proposal is a design, not a reading of code; the page says so where it is named. */
+  (CONFIG.proposed
+    ? `<span class="proposed-badge" title="Nothing here is built. Every claim cites a decision, not code.">Proposed · not built</span>`
+    : "");
 iconBtn.setAttribute("aria-label", CONFIG.iconLabel);
 svg.setAttribute("aria-label", `Interactive ${CONFIG.title} diagram`);
 document.getElementById("savepng").addEventListener("click", exportPng);

@@ -635,9 +635,19 @@ function checkTableCitations(views: View[]): string[] {
  * checkout, can happen to exist there.
  */
 export function checkSourceCitations(
-  project: Pick<Project, "id" | "sources" | "qualified">,
+  project: Pick<Project, "id" | "sources" | "qualified"> & {
+    proposed?: boolean;
+  },
   views: unknown,
 ): string[] {
+  /* A proposed architecture has no code, so a code citation in one can only be a claim
+     about some other system's code dressed as provenance for this one. */
+  if (project.proposed)
+    return [...collectCitations(views)].map(
+      ([rel, where]) =>
+        `${[...where].slice(0, 3).join(", ")}: cites ${rel} — ${project.id} is proposed ` +
+        `and has no code; cite the decision register with why`,
+    );
   const problems: string[] = [];
   const unsynced = new Set<string>();
   for (const [rel, where] of collectCitations(views)) {
@@ -674,6 +684,71 @@ export function checkSourceCitations(
       `${project.id}: no checkout at ${root}, so its citations cannot be checked — ` +
         `run \`pnpm sync ${project.id}\``,
     );
+  return problems;
+}
+
+/** Every claim a proposed model makes, in words, with what it cites. */
+export function proposedClaims(
+  views: View[],
+): { where: string; line: string; why: string[] }[] {
+  const out: { where: string; line: string; why: string[] }[] = [];
+  for (const v of views) {
+    if (v.id === "decisions") continue;
+    const label = (id: string) =>
+      v.nodes?.find((n) => n.id === id)?.label ?? id;
+    for (const n of v.nodes ?? [])
+      out.push({
+        where: `${v.id}/${n.id}`,
+        line: `${v.name} — ${n.label}`,
+        why: n.d.why ?? [],
+      });
+    for (const e of v.edges ?? [])
+      out.push({
+        where: `${v.id}/${e.from} → ${e.to}`,
+        line: `${v.name} — ${label(e.from)} to ${label(e.to)}`,
+        why: e.d.why ?? [],
+      });
+    for (const t of v.tables ?? [])
+      out.push({
+        where: `${v.id}/"${t.name}"`,
+        line: `${v.name} — the table ${t.name}`,
+        why: t.why ?? [],
+      });
+    for (const g of v.groups ?? [])
+      for (const it of g.items)
+        out.push({
+          where: `${v.id}/${it.id || it.name}`,
+          line: `${v.name} — ${it.name}`,
+          why: it.d.why ?? [],
+        });
+  }
+  return out;
+}
+
+/**
+ * A proposed architecture has no code to cite, so the register stands where the code would:
+ * every box, line, reference table and inventory row cites at least one decision, and every
+ * decision it cites is in the register. A proposal that cites nothing is an assertion, which
+ * is exactly what the planned-state gates exist to stop — this holds a whole proposed system
+ * to the same rule.
+ */
+export function checkProposedCitations(
+  views: View[],
+  decisions: Record<string, unknown>,
+): string[] {
+  const problems: string[] = [];
+  for (const c of proposedClaims(views)) {
+    if (!c.why.length)
+      problems.push(
+        `${c.where}: cites no decision — a proposed architecture rests on the register, ` +
+          `so every claim names the entry it comes from`,
+      );
+    for (const id of c.why)
+      if (!(id in decisions))
+        problems.push(
+          `${c.where}: cites "${id}", which is not in the decision register`,
+        );
+  }
   return problems;
 }
 
@@ -826,6 +901,30 @@ function checkDashLegend(views: View[]): string[] {
   return problems;
 }
 
+/** A state may name inventory rows for a box; each has to be one the inventory holds. */
+export function checkStatePlacement(
+  inventory: View | undefined,
+  composed: View[],
+): string[] {
+  const known = new Set(
+    (inventory?.groups ?? []).flatMap((g) => g.items.map((it) => it.id)),
+  );
+  return [
+    ...new Set(
+      composed.flatMap((v) =>
+        Object.entries(v.placement ?? {}).flatMap(([box, ids]) =>
+          ids
+            .filter((id) => !known.has(id))
+            .map(
+              (id) =>
+                `${v.id.split("·")[0] ?? v.id}/${box}: unknown resource id "${id}"`,
+            ),
+        ),
+      ),
+    ),
+  ];
+}
+
 function checkPlacement(project: Project, views: View[]) {
   const resources = views.find((v) => v.id === project.config.inventoryView);
   if (!resources)
@@ -890,11 +989,34 @@ interface Built {
  * view that answers "what does this decision actually change", which is the question a
  * reviewer has and the diagrams alone cannot answer.
  */
-function decisionsView(views: View[], states: States): View | null {
+function decisionsView(
+  views: View[],
+  states: States,
+  proposed = false,
+): View | null {
   const ids = Object.keys(states.decisions);
   if (!ids.length) return null;
   const name = (id: string) => views.find((v) => v.id === id)?.name ?? id;
-  const changes = planned(states);
+  /* What rests on a decision: every planned change that cites it and, in a proposed
+     architecture, every claim of the model itself. */
+  const uncited = proposed
+    ? "Nothing cites this yet."
+    : "Nothing in any state cites this yet.";
+  const rests = proposed
+    ? "claim(s) and planned change(s)"
+    : "planned change(s)";
+  const changes = [
+    ...planned(states).map((c) => ({
+      why: c.why,
+      line: `${c.st.name} · ${name(c.view)} — ${c.what}`,
+    })),
+    ...(proposed
+      ? proposedClaims(views).map((c) => ({
+          why: c.why,
+          line: `Proposed · ${c.line}`,
+        }))
+      : []),
+  ];
   const byCategory = new Map<string, DocItem[]>();
   for (const id of ids) {
     const d = states.decisions[id];
@@ -916,10 +1038,10 @@ function decisionsView(views: View[], states: States): View | null {
             ? "Still open — nothing has been decided. "
             : "") +
           (mine.length
-            ? `Rests on this: ${String(mine.length)} planned change(s).`
-            : "Nothing in any state cites this yet.") +
+            ? `Rests on this: ${String(mine.length)} ${rests}.`
+            : uncited) +
           (d.supersededBy ? ` Superseded by ${d.supersededBy}.` : ""),
-        facts: mine.map((c) => `${c.st.name} · ${name(c.view)} — ${c.what}`),
+        facts: mine.map((c) => c.line),
         links: d.links?.map((l) => [l.title, l.url] as [string, string]),
       },
     };
@@ -958,7 +1080,7 @@ async function buildProject(project: Project): Promise<Built> {
   const states = loadStates(project);
   /* Appended rather than modelled: it is a view of the register, not of the architecture,
      and nothing in the .c4 files knows the register exists. */
-  const decisions = decisionsView(views, states);
+  const decisions = decisionsView(views, states, project.proposed);
   if (decisions) views.push(decisions);
   const composed = composeAll(views, states);
   const coverage = stateCoverage(views, states);
@@ -985,9 +1107,15 @@ async function buildProject(project: Project): Promise<Built> {
     ]),
     ...checkGlyphs(views, fontCharset()),
     ...checkPlacement(project, views),
+    ...checkStatePlacement(
+      views.find((v) => v.id === project.config.inventoryView),
+      composed.labelled,
+    ),
     ...checkDashLegend(views),
     ...checkDerivedCounts(project, views),
-    ...checkTableCitations(views),
+    ...(project.proposed
+      ? checkProposedCitations(views, states.decisions)
+      : checkTableCitations(views)),
     ...checkSourceCitations(project, views),
     ...checkDerivedTables(project, views),
   ];
@@ -1062,6 +1190,12 @@ const repoName = (url: string) =>
  * date, because the least-read repository is the one the page is least sure of.
  */
 function sourceMeta(project: Project): string[] {
+  // A proposal has no code to have read, and its row must say so before anything else.
+  if (project.proposed)
+    return [
+      `<span class="badge">Proposed · not built</span>`,
+      "<span>cites decisions, not code</span>",
+    ];
   const states = readStates(project);
   const day = (iso: string) => esc(iso.slice(0, 10));
   // A project with no `derive` block derives nothing: its recorded commit is the one the
@@ -1342,8 +1476,10 @@ function buildIndex(built: Built[]): string {
     built.map((b) => systemRow(b)).join("\n") +
     SITE_CONFIG.planned.map((p) => plannedRow(p, named)).join("\n");
 
+  const proposed = built.filter((b) => b.project.proposed).length;
   const counted =
-    `${String(built.length)} documented` +
+    `${String(built.length - proposed)} documented` +
+    (proposed ? `, ${String(proposed)} proposed` : "") +
     (SITE_CONFIG.planned.length
       ? `, ${String(SITE_CONFIG.planned.length)} planned`
       : "");
@@ -1466,7 +1602,9 @@ async function main() {
   writeFileSync(path.join(SITE_ROOT, "robots.txt"), ROBOTS_TXT + "\n");
   console.log(
     `index: wrote ${path.relative(DOCS_ROOT, SITE_INDEX)} ` +
-      `(${String(shown.length)} documented, ${String(SITE_CONFIG.planned.length)} planned)`,
+      `(${String(shown.filter((b) => !b.project.proposed).length)} documented, ` +
+      `${String(shown.filter((b) => b.project.proposed).length)} proposed, ` +
+      `${String(SITE_CONFIG.planned.length)} planned)`,
   );
 }
 

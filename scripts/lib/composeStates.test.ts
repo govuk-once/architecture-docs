@@ -155,6 +155,27 @@ describe("composeChain", () => {
     });
   });
 
+  it("lets a step say what a box it changes or adds deploys", () => {
+    const placed = base({ placement: { keep: ["fn"] } });
+    const drop = chain([S1, ov({ changed: { keep: { resources: [] } } })]);
+    expect(composeChain(placed, drop, S1, "future").placement).toEqual({});
+    const swap = chain([
+      S1,
+      ov({
+        changed: { keep: { resources: ["proxy"] } },
+        newNodes: [{ ...fresh("added"), resources: ["api"] }],
+      }),
+    ]);
+    expect(composeChain(placed, swap, S1, "future").placement).toEqual({
+      keep: ["proxy"],
+      added: ["api"],
+    });
+    // Saying nothing keeps today's.
+    expect(
+      composeChain(placed, chain([S1, ov()]), S1, "future").placement,
+    ).toEqual({ keep: ["fn"] });
+  });
+
   it("moves a survivor in both modes — the diff is the future layout", () => {
     const c = chain([S1, ov({ moved: { keep: { x: 700, y: 400 } } })]);
     for (const mode of ["future", "changes"] as const)

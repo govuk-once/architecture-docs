@@ -44,6 +44,7 @@ function project(ids: string[] = ["example"]): Project {
     config: {} as Project["config"],
     sources: ids.map((id) => source(dir, id)),
     qualified: ids.length > 1,
+    proposed: false,
     derive: { module: "example", inputs: { configs: "src/*.config.ts" } },
     dir,
     modelDir: path.join(dir, "model"),

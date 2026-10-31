@@ -32,6 +32,7 @@ function project(root: string, counts: Record<string, CountSpec>): Project {
   return {
     id: "t",
     config: { stages, synth: {} } as Project["config"],
+    proposed: false,
     sources: [
       { id: "t", repo: "x", ref: "main", root: ".", url: "", dir: root },
     ],
