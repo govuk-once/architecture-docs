@@ -213,5 +213,25 @@ export const STATES_ROOT = process.env.ARCH_STATES_DIR
   ? path.resolve(DOCS_ROOT, process.env.ARCH_STATES_DIR)
   : null;
 
+/**
+ * Where proposed architectures are read from: a directory holding one `<project id>/` per
+ * system that has no code yet, set by `ARCH_PROPOSED_DIR`. Like a planned state, a proposed
+ * architecture is somebody's design, not a reading of code, so it never lives in this
+ * public repository — architecture-docs-states sets this when it builds its own copy.
+ */
+export const PROPOSED_ROOT = process.env.ARCH_PROPOSED_DIR
+  ? path.resolve(DOCS_ROOT, process.env.ARCH_PROPOSED_DIR)
+  : null;
+
+/**
+ * Which repository the states are in and which ref of it is building, from
+ * `ARCH_STATES_REPO` and `ARCH_STATES_REF`. A register writes its links to the ADRs beside
+ * it at `main`; a site built from a branch points those links at the branch instead, so a
+ * review page or a manual publish from the branch reaches files `main` does not have yet.
+ * Unset, links are left as written.
+ */
+export const STATES_REPO = process.env.ARCH_STATES_REPO ?? null;
+export const STATES_REF = process.env.ARCH_STATES_REF ?? null;
+
 /** The index over the projects, at the root of the site. */
 export const SITE_INDEX = path.join(SITE_ROOT, SITE.page);

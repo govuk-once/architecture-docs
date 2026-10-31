@@ -55,7 +55,10 @@ A build may carry planned states — proposed architectures laid over the as-is,
 not compose them; the build does, and injects the finished views. That is
 deliberate: a layout only a person ever sees is a layout nothing checks, so the future and
 diff views are gated by the same geometry rules as the as-is. The renderer only switches
-between them.
+between them. Two more variables travel with it: `ARCH_STATES_REPO` and `ARCH_STATES_REF`
+say which repository the states are in and which ref of it is building, and the build points
+the register's links into that repository — written to `main`, where a file lives once it has
+landed — at that ref, so a page built from a branch links to files the branch has.
 
 - **The state selector** sits beside the stage selector, `As-is` first and then each state
   in order. Its last segment is the **Changes** toggle, which marks what a state does:

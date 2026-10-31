@@ -25,7 +25,7 @@ import {
   rowKey,
   STATUSES,
 } from "./composeStates.js";
-import { DOCS_ROOT, STATES_ROOT } from "./paths.js";
+import { DOCS_ROOT, STATES_REF, STATES_REPO, STATES_ROOT } from "./paths.js";
 import type { Project } from "./projects.js";
 
 /**
@@ -70,7 +70,11 @@ export function loadStates(project: Project): States {
      the only thing standing between it and an assertion. */
   const register = path.join(dir, "decisions.json");
   const decisions: Record<string, Decision> = existsSync(register)
-    ? (JSON.parse(readFileSync(register, "utf8")) as Record<string, Decision>)
+    ? relinkDecisions(
+        JSON.parse(readFileSync(register, "utf8")) as Record<string, Decision>,
+        STATES_REPO,
+        STATES_REF,
+      )
     : {};
   const list: StateManifest[] = [];
   const overlays: Record<string, Record<string, StateOverlay>> = {};
@@ -89,6 +93,43 @@ export function loadStates(project: Project): States {
   }
   list.sort((a, b) => a.order - b.order);
   return { list, overlays, decisions };
+}
+
+/**
+ * A register's links into its own repository — the ADRs beside it — are written to `main`,
+ * because that is where the file lives once it has landed. A site built from a branch, for
+ * review or published by hand before the merge, would send every such link to a file `main`
+ * does not have yet. So when the build knows which repository the states are in and which
+ * ref it is building, those links, and only those, are pointed at that ref. A link into any
+ * other repository is left as written: a citation into FLEX at `main` is right whichever
+ * branch of the states repository is building. The file keeps `main`, so it is right at
+ * rest; a page built from a branch goes stale when the branch is deleted, and the next build
+ * from `main` sends every link back.
+ */
+export function relinkDecisions(
+  decisions: Record<string, Decision>,
+  repo: string | null,
+  ref: string | null,
+): Record<string, Decision> {
+  if (!repo || !ref || ref === "main") return decisions;
+  const base = repo.replace(/\/+$/, "").replace(/\.git$/, "");
+  const from = `${base}/blob/main/`;
+  const to = `${base}/blob/${ref}/`;
+  return Object.fromEntries(
+    Object.entries(decisions).map(([id, d]) => [
+      id,
+      d.links
+        ? {
+            ...d,
+            links: d.links.map((l) =>
+              l.url.startsWith(from)
+                ? { ...l, url: to + l.url.slice(from.length) }
+                : l,
+            ),
+          }
+        : d,
+    ]),
+  );
 }
 
 /** Every planned change, in words, with what it cites. One walk, because the citation gate

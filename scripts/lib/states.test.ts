@@ -20,6 +20,7 @@ import {
   composeAll,
   foldComposed,
   planned,
+  relinkDecisions,
   statesDir,
 } from "./states.js";
 
@@ -277,5 +278,52 @@ describe("planned changes to tables", () => {
       expect.stringContaining('changes the row b of Paths cites "adr-row"'),
     ]);
     expect(r.uncited).toBe(2);
+  });
+});
+
+describe("relinkDecisions", () => {
+  const repo = "https://github.com/govuk-once/architecture-docs-states";
+  const register = {
+    "adr-001": {
+      title: "Identifier Exchange",
+      kind: "ADR",
+      category: "Identity",
+      links: [
+        { title: "ADR-001", url: `${repo}/blob/main/decisions/udp/adr-001.md` },
+        {
+          title: "FLEX gateway",
+          url: "https://github.com/govuk-once/flex/blob/main/platform/gateway.ts",
+        },
+        { title: "Framework", url: "https://www.gov.uk/adr-framework" },
+      ],
+    },
+    "q-open": {
+      title: "Hub or pairs?",
+      kind: "Board question",
+      category: "Data",
+    },
+  };
+
+  it("points links into the states repository at the ref being built, and nothing else", () => {
+    const out = relinkDecisions(register, repo, "docs/idx");
+    expect(out["adr-001"]?.links?.map((l) => l.url)).toEqual([
+      `${repo}/blob/docs/idx/decisions/udp/adr-001.md`,
+      "https://github.com/govuk-once/flex/blob/main/platform/gateway.ts",
+      "https://www.gov.uk/adr-framework",
+    ]);
+    expect(out["q-open"]).toEqual(register["q-open"]);
+  });
+
+  it("leaves the register as written on main, or when it is not told where it is", () => {
+    expect(relinkDecisions(register, repo, "main")).toBe(register);
+    expect(relinkDecisions(register, null, "docs/idx")).toBe(register);
+    expect(relinkDecisions(register, repo, null)).toBe(register);
+  });
+
+  it("reads the repository the way git names it as well as the way a browser does", () => {
+    const out = relinkDecisions(register, `${repo}.git/`, "docs/idx");
+    expect(out["adr-001"]?.links?.[0]?.url).toBe(
+      `${repo}/blob/docs/idx/decisions/udp/adr-001.md`,
+    );
   });
 });
