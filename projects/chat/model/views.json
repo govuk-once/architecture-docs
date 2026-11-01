@@ -13,7 +13,7 @@
         "code": [
           ["cdk/bin/app.ts", "cdk/bin/app.ts"],
           ["chat-api-stack.ts", "cdk/src/stacks/chat-api-stack.ts"],
-          ["chat-ui-stack.ts", "cdk/src/stacks/chat-ui-stack.ts"],
+          ["demo-ui-stack.ts", "cdk/src/stacks/demo-ui-stack.ts"],
           ["agui-agent/main.py", "services/agui-agent/src/agui_agent/main.py"]
         ],
         "cols": [
@@ -36,7 +36,7 @@
             "The same"
           ],
           [
-            "ChatUiStack — TypeScript, Next.js on ECS Express",
+            "DemoUiStack — TypeScript, Next.js on ECS Express",
             "Cognito Hosted UI, code flow with PKCE, scope openid",
             "None: it calls ChatApiStack as that stack's app client",
             "—"
@@ -156,7 +156,7 @@
         "code": [
           ["environment.ts", "cdk/src/constants/environment.ts"],
           ["chat-api-stack.ts", "cdk/src/stacks/chat-api-stack.ts"],
-          ["chat-ui-stack.ts", "cdk/src/stacks/chat-ui-stack.ts"],
+          ["demo-ui-stack.ts", "cdk/src/stacks/demo-ui-stack.ts"],
           ["cdk/bin/app.ts", "cdk/bin/app.ts"]
         ],
         "cols": ["Setting", "Ephemeral", "Staging and production"],
@@ -200,7 +200,7 @@
         "name": "Controls: what is set, and what is not",
         "code": [
           ["chat-api-stack.ts", "cdk/src/stacks/chat-api-stack.ts"],
-          ["chat-ui-stack.ts", "cdk/src/stacks/chat-ui-stack.ts"],
+          ["demo-ui-stack.ts", "cdk/src/stacks/demo-ui-stack.ts"],
           ["agui-agent-stack.ts", "cdk/src/stacks/agui-agent-stack.ts"],
           ["cdk/bin/app.ts", "cdk/bin/app.ts"]
         ],
@@ -245,7 +245,7 @@
         "code": [
           ["chat-api-stack.ts", "cdk/src/stacks/chat-api-stack.ts"],
           ["agui-agent-stack.ts", "cdk/src/stacks/agui-agent-stack.ts"],
-          ["chat-ui-stack.ts", "cdk/src/stacks/chat-ui-stack.ts"]
+          ["demo-ui-stack.ts", "cdk/src/stacks/demo-ui-stack.ts"]
         ],
         "cols": ["Identity", "May do", "On what"],
         "rows": [
@@ -305,7 +305,7 @@
           [
             "<code>cdk synth</code>",
             "GitHub Actions",
-            "The private repository token, and Docker to bundle each agent"
+            "A GitHub App token for the private repository, minted for the run, and Docker to bundle each agent"
           ],
           [
             "<code>cdk deploy</code>",
@@ -327,13 +327,13 @@
             "services/agui-agent/scripts/cdk-deploy.sh"
           ],
           ["chat-api/cdk-deploy.sh", "services/chat-api/scripts/cdk-deploy.sh"],
-          ["chat-ui/cdk-deploy.sh", "services/chat-ui/scripts/cdk-deploy.sh"]
+          ["demo-ui/cdk-deploy.sh", "services/demo-ui/scripts/cdk-deploy.sh"]
         ],
         "cols": ["Run this", "Deploys"],
         "rows": [
           ["services/agui-agent/scripts/cdk-deploy.sh", "AguiAgentStack"],
           ["services/chat-api/scripts/cdk-deploy.sh", "ChatApiStack"],
-          ["services/chat-ui/scripts/cdk-deploy.sh", "ChatUiStack"]
+          ["services/demo-ui/scripts/cdk-deploy.sh", "DemoUiStack"]
         ]
       }
     ],

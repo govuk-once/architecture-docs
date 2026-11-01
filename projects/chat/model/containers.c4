@@ -174,7 +174,7 @@ model {
       link https://github.com/govuk-once/govuk-chat-v2/blob/main/cdk/src/bundling/python.ts 'bundling/python.ts'
       metadata {
         type 'AWS::BedrockAgentCore::Runtime'
-        tech 'Python 3.13 · Strands · AG-UI protocol'
+        tech 'Python 3.14 · Strands · AG-UI protocol'
         role 'Hosts one Strands agent behind the AG-UI protocol, serving <code>/invocations</code> with <code>/ping</code> as its health check, and streaming events back as it goes.'
         facts [
           'Its system prompt is loaded at import from <code>govuk_chat_v2_private</code>, a pinned git dependency fetched during Docker bundling with a GitHub token. That token is why nothing outside this repository\'s own CI can synthesise this stack.',
@@ -218,14 +218,15 @@ model {
     }
   }
 
-  containers_uistack = boundary 'Chat UI stack' {
+  containers_uistack = boundary 'Demo UI stack' {
     metadata {
       type 'CloudFormation stack'
-      tech 'ChatUiStack · chat-ui-stack.ts'
+      tech 'DemoUiStack · demo-ui-stack.ts'
       role 'The web app for trying the API in a browser: a Next.js service on ECS Express Mode, the client it signs people in with, the secret its sessions are sealed with, and the subnets it runs in.'
       facts [
         'Takes the API\'s URL, token endpoint, user pool and app client from <code>ChatApiStack</code> as stack props, so it cannot deploy without that stack.',
-        'Deployed to ECS since 29 September 2026 (947ae0d), and never modelled here until the Python API was removed.'
+        'Deployed to ECS since 29 September 2026 (947ae0d), and never modelled here until the Python API was removed.',
+        'Renamed from Chat UI on 21 October 2026 (dd6686b): the stack, the service and its directory; nothing in it changed.'
       ]
       sourceId 'uistack'
       order '0'
@@ -239,7 +240,7 @@ model {
     containers_uivpc = platform 'Public subnets' {
       #off-request-path
       description 'VPC · 2 AZs · no NAT'
-      link https://github.com/govuk-once/govuk-chat-v2/blob/main/cdk/src/stacks/chat-ui-stack.ts 'chat-ui-stack.ts'
+      link https://github.com/govuk-once/govuk-chat-v2/blob/main/cdk/src/stacks/demo-ui-stack.ts 'demo-ui-stack.ts'
       metadata {
         type 'AWS::EC2::VPC'
         tech 'the only network in this repository'
@@ -258,8 +259,8 @@ model {
     containers_uisignin = platform 'Sign-in client' {
       #request-path
       description 'code flow · PKCE · openid'
-      link https://github.com/govuk-once/govuk-chat-v2/blob/main/cdk/src/stacks/chat-ui-stack.ts 'chat-ui-stack.ts'
-      link https://github.com/govuk-once/govuk-chat-v2/blob/main/services/chat-ui/src/auth/cognito-sign-in.ts 'auth/cognito-sign-in.ts'
+      link https://github.com/govuk-once/govuk-chat-v2/blob/main/cdk/src/stacks/demo-ui-stack.ts 'demo-ui-stack.ts'
+      link https://github.com/govuk-once/govuk-chat-v2/blob/main/services/demo-ui/src/auth/cognito-sign-in.ts 'auth/cognito-sign-in.ts'
       metadata {
         type 'AWS::Cognito::UserPoolClient'
         tech 'a second client on the API\'s pool'
@@ -282,8 +283,8 @@ model {
     containers_uisecret = platform 'Session secret' {
       #off-request-path
       description 'Secrets Manager · 64 chars'
-      link https://github.com/govuk-once/govuk-chat-v2/blob/main/cdk/src/stacks/chat-ui-stack.ts 'chat-ui-stack.ts'
-      link https://github.com/govuk-once/govuk-chat-v2/blob/main/services/chat-ui/src/auth/session.ts 'auth/session.ts'
+      link https://github.com/govuk-once/govuk-chat-v2/blob/main/cdk/src/stacks/demo-ui-stack.ts 'demo-ui-stack.ts'
+      link https://github.com/govuk-once/govuk-chat-v2/blob/main/services/demo-ui/src/auth/session.ts 'auth/session.ts'
       metadata {
         type 'AWS::SecretsManager::Secret'
         tech 'generated, no punctuation'
@@ -299,12 +300,12 @@ model {
       }
     }
 
-    containers_uiservice = platform 'Chat UI service' {
+    containers_uiservice = platform 'Demo UI service' {
       #request-path
       description 'ECS Express · Next.js · 1 task'
-      link https://github.com/govuk-once/govuk-chat-v2/blob/main/cdk/src/stacks/chat-ui-stack.ts 'chat-ui-stack.ts'
-      link https://github.com/govuk-once/govuk-chat-v2/blob/main/services/chat-ui/README.md 'chat-ui/README.md'
-      link https://github.com/govuk-once/govuk-chat-v2/blob/main/services/chat-ui/src/chat-api/client.ts 'chat-api/client.ts'
+      link https://github.com/govuk-once/govuk-chat-v2/blob/main/cdk/src/stacks/demo-ui-stack.ts 'demo-ui-stack.ts'
+      link https://github.com/govuk-once/govuk-chat-v2/blob/main/services/demo-ui/README.md 'demo-ui/README.md'
+      link https://github.com/govuk-once/govuk-chat-v2/blob/main/services/demo-ui/src/chat-api/client.ts 'chat-api/client.ts'
       metadata {
         type 'AWS::ECS::ExpressGatewayService'
         tech '512 CPU · 1 GB · port 3000'
@@ -385,7 +386,7 @@ model {
     }
   }
   containers_uiservice -> containers_tsapi 'asks the API' {
-    link https://github.com/govuk-once/govuk-chat-v2/blob/main/services/chat-ui/src/chat-api/client.ts 'chat-api/client.ts'
+    link https://github.com/govuk-once/govuk-chat-v2/blob/main/services/demo-ui/src/chat-api/client.ts 'chat-api/client.ts'
     metadata {
       protocol 'HTTPS from the server side, streaming back'
       auth 'A client-credentials token for the API app client, whose secret the UI reads from Cognito at run time'

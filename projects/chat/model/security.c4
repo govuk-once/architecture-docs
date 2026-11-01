@@ -121,7 +121,7 @@ model {
     }
   }
 
-  security_uizone = boundary 'Chat UI' {
+  security_uizone = boundary 'Demo UI' {
     metadata {
       type 'Chain of authority'
       tech 'Cognito, then the API\'s own client'
@@ -138,8 +138,8 @@ model {
     security_uicred = internal 'A signed-in person' {
       #request-path
       description 'Hosted UI · code + PKCE'
-      link https://github.com/govuk-once/govuk-chat-v2/blob/main/services/chat-ui/src/auth/cognito-sign-in.ts 'auth/cognito-sign-in.ts'
-      link https://github.com/govuk-once/govuk-chat-v2/blob/main/services/chat-ui/src/auth/session.ts 'auth/session.ts'
+      link https://github.com/govuk-once/govuk-chat-v2/blob/main/services/demo-ui/src/auth/cognito-sign-in.ts 'auth/cognito-sign-in.ts'
+      link https://github.com/govuk-once/govuk-chat-v2/blob/main/services/demo-ui/src/auth/session.ts 'auth/session.ts'
       metadata {
         type 'OpenID Connect session'
         tech 'openid-client · iron-session'
@@ -158,11 +158,11 @@ model {
       }
     }
 
-    security_uisvc = platform 'Chat UI service' {
+    security_uisvc = platform 'Demo UI service' {
       #request-path
       description 'calls the API as a client'
-      link https://github.com/govuk-once/govuk-chat-v2/blob/main/services/chat-ui/src/chat-api/client.ts 'chat-api/client.ts'
-      link https://github.com/govuk-once/govuk-chat-v2/blob/main/services/chat-ui/src/chat-api/end-user-id.ts 'chat-api/end-user-id.ts'
+      link https://github.com/govuk-once/govuk-chat-v2/blob/main/services/demo-ui/src/chat-api/client.ts 'chat-api/client.ts'
+      link https://github.com/govuk-once/govuk-chat-v2/blob/main/services/demo-ui/src/chat-api/end-user-id.ts 'chat-api/end-user-id.ts'
       metadata {
         type 'AWS::ECS::ExpressGatewayService'
         tech 'Next.js, server-side routes'
@@ -184,7 +184,7 @@ model {
     security_uiroles = platform 'UI task and execution roles' {
       #request-path
       description 'pool client · session secret'
-      link https://github.com/govuk-once/govuk-chat-v2/blob/main/cdk/src/stacks/chat-ui-stack.ts 'chat-ui-stack.ts'
+      link https://github.com/govuk-once/govuk-chat-v2/blob/main/cdk/src/stacks/demo-ui-stack.ts 'demo-ui-stack.ts'
       metadata {
         type 'AWS::IAM::Role'
         tech 'granted in the stack, not by hand'
@@ -216,7 +216,7 @@ model {
       facts [
         'The app refuses to synthesise at all without it: <code>cdk/bin/app.ts</code> throws when <code>GITHUB_TOKEN</code> is unset, before any stack is constructed.',
         'During bundling it is written into git\'s configuration with an <code>insteadOf</code> rule, so every GitHub fetch in that container carries it.',
-        'In CI it is the only secret used, and it is not an AWS credential. No workflow in the repository holds AWS access at all.'
+        'Since 26 October 2026 (8903372) CI holds no token at all: each run mints one from a GitHub App — the two secrets are the app\'s client id and private key — scoped to <code>contents: read</code> on <code>govuk-chat-v2-private</code> alone. It is not an AWS credential; no workflow in the repository holds AWS access.'
       ]
       sourceId 'token'
       order '9'

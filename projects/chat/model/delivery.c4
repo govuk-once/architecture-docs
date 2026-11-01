@@ -18,7 +18,7 @@ model {
       role 'Runs the checks, then runs the deploy. There is no pipeline between a merge and an environment anywhere in this repository.'
       facts [
         'Setting up is a sourced script rather than a run one, because it has to export variables into the current shell: it takes a GitHub token from <code>gh auth token</code> when one is not already set.',
-        'The same token that lets a developer build an agent locally is the one CI holds as a secret.'
+        'A developer\'s token comes from <code>gh auth token</code>; CI no longer holds one — it mints a short-lived token from a GitHub App on every run (8903372).'
       ]
       sourceId 'dev'
       order '1'
@@ -63,7 +63,8 @@ model {
       facts [
         'Each workflow is filtered by path, so a change to one package does not run the others.',
         'Every action is pinned to a full commit hash rather than a tag.',
-        'The only secret any workflow uses is the private repository token. Nothing in <code>.github</code> configures AWS credentials, assumes a role, or requests an OIDC identity token.'
+        'The only secrets any workflow uses are a GitHub App\'s client id and private key, exchanged each run for a token that can read <code>govuk-chat-v2-private</code> and nothing else. Nothing in <code>.github</code> configures AWS credentials, assumes a role, or requests an OIDC identity token.',
+        'The demo UI workflow stopped building its Docker image on 26 October 2026 (32eb3e3); the image is built only when the stack deploys.'
       ]
       sourceId 'ci'
       order '3'
@@ -84,7 +85,7 @@ model {
       tech 'needs the private token, not AWS'
       role 'Proves the three stacks still build. This is as far as continuous integration goes.'
       facts [
-        'It is the only job given the private repository token, because synthesising bundles each agent in Docker and that is when the prompts package is fetched.',
+        'It mints a private-repository token for the run, as the Python jobs that install the agent do, because synthesising bundles each agent in Docker and that is when the prompts package is fetched.',
         'Because the bundling is a Docker build against a private dependency, this step is also the reason the app cannot be synthesised outside this repository\'s own CI.'
       ]
       sourceId 'synth'
@@ -179,7 +180,7 @@ model {
   delivery_checks -> delivery_ci 'the same checks again' {
     metadata {
       protocol 'GitHub Actions, on pull request and on push to main'
-      auth 'The repository\'s own token, plus one secret for private dependencies'
+      auth 'The repository\'s own token, plus a GitHub App token minted for the run'
       carries 'Tests, lint, format, type checks'
       order '2'
     }
@@ -187,7 +188,7 @@ model {
   delivery_ci -> delivery_synth 'and a synth' {
     metadata {
       protocol 'cdk synth --quiet'
-      auth 'The private repository token, so the agents can be bundled'
+      auth 'A GitHub App token for the private repository, minted for the run, so the agents can be bundled'
       carries 'Proof that the three stacks still build'
       order '3'
     }
