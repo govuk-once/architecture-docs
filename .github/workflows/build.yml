@@ -163,15 +163,25 @@ jobs:
         working-directory: .sources/flex
         run: pnpm install --frozen-lockfile --ignore-scripts
 
-      # UDP's CDK app loads every function from a build directory its own script writes,
-      # so `pnpm synth` runs that build first (`synth.prepare` in its config); the install
-      # here is what that build and the app need.
-      - name: Install UDP dependencies
-        working-directory: .sources/udp
-        run: pnpm install --frozen-lockfile --ignore-scripts
-
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      # UDP's CDK app imports a tagging package published only to a private CodeArtifact
+      # registry, which this runner has no token for. The app uses it for tags, which these
+      # docs count nothing from, so `synth.stubs` in its config names a stand-in that does
+      # nothing and this puts it in the checkout.
+      - name: Stand in for what UDP's install cannot reach here
+        run: pnpm stubs udp
+
+      # UDP's CDK app loads every function from a build directory its own script writes,
+      # so `pnpm synth` runs that build first (`synth.prepare` in its config); the install
+      # here is what that build and the app need. The flags are STUBBED_INSTALL_ARGS in
+      # scripts/stubSource.ts, which says why each one: the override is not in UDP's
+      # committed lockfile, and pnpm's exotic-subdependency check misreads a lockfile it
+      # re-resolves in part.
+      - name: Install UDP dependencies
+        working-directory: .sources/udp
+        run: pnpm install --no-frozen-lockfile --ignore-scripts --config.blockExoticSubdeps=false
 
       # The one step that executes a documented repository: each project's CDK app is run
       # per stage to produce the CloudFormation the counts are read from. No credentials —

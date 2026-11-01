@@ -122,7 +122,34 @@ export interface SynthContract {
    * exist. `cwd` is relative to the checkout; the command is an argv array.
    */
   prepare?: { cwd: string; command: string[] };
+  /**
+   * Packages the checkout's install cannot reach from here, each replaced by a stand-in
+   * kept in this repository — `dir` relative to projects/<id>/ — before the install, so
+   * the app synthesises without credentials. For a package that only decorates what the
+   * app builds, tags say; nothing these docs derive may depend on what the stub leaves
+   * out, and `why` says what does. See scripts/stubSource.ts.
+   */
+  stubs?: { package: string; dir: string; why: string }[];
+  /**
+   * Files the app reads that its own pipeline generates from somewhere this machine
+   * cannot reach — UDP's monitoring inventory is discovered from the deployed account.
+   * Each is produced here instead from the app's own templates: the stage is synthesised
+   * once with `context` added (the flag that leaves out the stack that needs the file),
+   * `module` under scripts/synth/ turns those templates into the file, and the stage is
+   * synthesised again. `file` is relative to the checkout; `why` says what the pipeline
+   * would have read and why the templates are the same answer.
+   */
+  generated?: GeneratedInput[];
   output: string;
+}
+
+/** One generated input — see `SynthContract.generated`. The rest is the module's options. */
+export interface GeneratedInput {
+  file: string;
+  module: string;
+  context: Record<string, string>;
+  why: string;
+  [option: string]: unknown;
 }
 
 /** Everything true of one architecture rather than of the site or of the renderer. */
@@ -382,6 +409,26 @@ export function validateConfig(id: string, raw: unknown): ProjectConfig {
         throw new Error(
           `projects/${id}: stage "${st.id}" has an empty synth value`,
         );
+    for (const g of (synth.generated ?? []) as Partial<GeneratedInput>[]) {
+      if (!g.file || !g.module || !g.why || !g.context)
+        throw new Error(
+          `projects/${id}: each synth.generated input needs a file, a module, a context and a why`,
+        );
+      if (path.isAbsolute(g.file) || g.file.split(/[\\/]/).includes(".."))
+        throw new Error(
+          `projects/${id}: generated "${g.file}" is outside the checkout`,
+        );
+    }
+    for (const stub of synth.stubs ?? []) {
+      if (!stub.package || !stub.dir || !stub.why)
+        throw new Error(
+          `projects/${id}: each synth stub needs a package, a dir and a why`,
+        );
+      if (path.isAbsolute(stub.dir) || stub.dir.split(/[\\/]/).includes(".."))
+        throw new Error(
+          `projects/${id}: stub "${stub.package}" names "${stub.dir}", which is outside projects/${id}/`,
+        );
+    }
   }
   return { ...(cfg as ProjectConfig), planes: cfg.planes ?? DEFAULT_PLANES };
 }

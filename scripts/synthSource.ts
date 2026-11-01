@@ -19,7 +19,13 @@
  * which is how the derivation names an alarm by its construct rather than by a hash.
  */
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync, rmSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { globSync } from "node:fs";
 import path from "node:path";
 
@@ -29,6 +35,7 @@ import {
   type Project,
   selectSourced,
 } from "./lib/projects.js";
+import { generatedPath, GENERATORS } from "./synth/taggedNames.js";
 
 const fill = (s: string, st: { id: string; synth?: string }) =>
   s.replaceAll("{stage}", st.synth ?? "").replaceAll("{id}", st.id);
@@ -100,29 +107,58 @@ function synthProject(project: Project): void {
       throw new Error(
         `projects/${project.id}: synth.output "${synth.output}" is outside the checkout`,
       );
-    rmSync(out, { recursive: true, force: true });
-    const env = {
-      ...process.env,
+    const stageContext = {
+      ...context,
       ...Object.fromEntries(
-        Object.entries(synth.env).map(([k, v]) => [k, fill(v, st)]),
+        Object.entries(synth.context ?? {}).map(([k, v]) => [k, fill(v, st)]),
       ),
-      CDK_OUTDIR: out,
-      CDK_CONTEXT_JSON: JSON.stringify({
-        ...context,
-        ...Object.fromEntries(
-          Object.entries(synth.context ?? {}).map(([k, v]) => [k, fill(v, st)]),
-        ),
-      }),
     };
-    const [cmd, ...args] = synth.command;
+    const runApp = (extra: Record<string, string>) => {
+      rmSync(out, { recursive: true, force: true });
+      const env = {
+        ...process.env,
+        ...Object.fromEntries(
+          Object.entries(synth.env).map(([k, v]) => [k, fill(v, st)]),
+        ),
+        CDK_OUTDIR: out,
+        CDK_CONTEXT_JSON: JSON.stringify({ ...stageContext, ...extra }),
+      };
+      const [cmd, ...args] = synth.command;
+      execFileSync(cmd ?? "", args, {
+        cwd,
+        env,
+        stdio: ["ignore", "ignore", "inherit"],
+      });
+      return globSync("*.template.json", { cwd: out }).map((file) => ({
+        file,
+        body: JSON.parse(readFileSync(path.join(out, file), "utf8")) as unknown,
+      }));
+    };
+
+    // A file the app reads that its pipeline generates elsewhere is produced from the
+    // app's own templates: one pass without the stack that needs it, the generator over
+    // what that wrote, then the pass that counts. See SynthContract.generated.
+    for (const g of synth.generated ?? []) {
+      const generate = GENERATORS[g.module];
+      if (!generate)
+        throw new Error(
+          `projects/${project.id}: generated "${g.file}" names module "${g.module}", which scripts/synth does not have`,
+        );
+      process.stdout.write(`  ${st.id.padEnd(5)} ${g.file} … `);
+      const { file: _f, module: _m, context: _c, why: _w, ...options } = g;
+      const body = generate(runApp(g.context), options);
+      const target = generatedPath(root, g.file);
+      mkdirSync(path.dirname(target), { recursive: true });
+      writeFileSync(target, body);
+      const counts = Object.entries(JSON.parse(body) as Record<string, unknown>)
+        .map(([k, v]) => `${String(Array.isArray(v) ? v.length : "?")} ${k}`)
+        .join(", ");
+      console.log(`generated from the templates (${counts})`);
+    }
+
     const started = Date.now();
     process.stdout.write(`  ${st.id.padEnd(5)} ${st.synth ?? ""} … `);
-    execFileSync(cmd ?? "", args, {
-      cwd,
-      env,
-      stdio: ["ignore", "ignore", "inherit"],
-    });
-    const n = globSync("*.template.json", { cwd: out }).length;
+    const n = runApp({}).length;
     console.log(
       `${String(n)} templates in ${((Date.now() - started) / 1000).toFixed(0)}s → ${path.relative(root, out)}`,
     );

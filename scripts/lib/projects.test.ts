@@ -242,3 +242,89 @@ describe("citationFor", () => {
     ).toBe("docs:a.md");
   });
 });
+
+/* A stub stands in for a package the install cannot reach. It has to say which package,
+   where the stand-in is, and why what it leaves out does not matter here. */
+describe("validateConfig: synth stubs", () => {
+  const SYNTH = {
+    cwd: "cdk",
+    command: ["npx", "tsx", "bin/app.ts"],
+    env: {},
+    output: "cdk.out/{id}",
+  };
+  const STUB = {
+    package: "@org/tag",
+    dir: "stubs/org-tag",
+    why: "private registry; tags only",
+  };
+
+  it("accepts a stub with a package, a dir inside the project and a why", () => {
+    const cfg = validateConfig("p", {
+      ...ONE,
+      synth: { ...SYNTH, stubs: [STUB] },
+    });
+    expect(cfg.synth?.stubs).toEqual([STUB]);
+  });
+
+  it("refuses one missing any of the three, or reaching outside the project", () => {
+    for (const k of ["package", "dir", "why"] as const)
+      refuses(
+        { ...ONE, synth: { ...SYNTH, stubs: [{ ...STUB, [k]: "" }] } },
+        /needs a package, a dir and a why/,
+      );
+    refuses(
+      { ...ONE, synth: { ...SYNTH, stubs: [{ ...STUB, dir: "../x" }] } },
+      /outside projects/,
+    );
+    refuses(
+      { ...ONE, synth: { ...SYNTH, stubs: [{ ...STUB, dir: "/tmp/x" }] } },
+      /outside projects/,
+    );
+  });
+});
+
+/* A generated input is a file the app reads that its pipeline makes somewhere this
+   machine cannot reach. It has to say the file, how to make it here, what to leave out
+   of the pass that makes it, and why the templates are the same answer. */
+describe("validateConfig: synth generated inputs", () => {
+  const SYNTH = {
+    cwd: "cdk",
+    command: ["npx", "tsx", "bin/app.ts"],
+    env: {},
+    output: "cdk.out/{id}",
+  };
+  const GEN = {
+    file: "cdk/.generated/inventory.json",
+    module: "taggedNames",
+    context: { skipMonitoringStack: "true" },
+    why: "discovered from the account; the templates tag the same resources",
+    tag: { Monitor: "true" },
+  };
+
+  it("accepts one with a file inside the checkout, a module, a context and a why", () => {
+    const cfg = validateConfig("p", {
+      ...ONE,
+      synth: { ...SYNTH, generated: [GEN] },
+    });
+    expect(cfg.synth?.generated).toEqual([GEN]);
+  });
+
+  it("refuses one missing any of the four, or reaching outside the checkout", () => {
+    for (const k of ["file", "module", "why"] as const)
+      refuses(
+        { ...ONE, synth: { ...SYNTH, generated: [{ ...GEN, [k]: "" }] } },
+        /needs a file, a module, a context and a why/,
+      );
+    refuses(
+      {
+        ...ONE,
+        synth: { ...SYNTH, generated: [{ ...GEN, context: undefined }] },
+      },
+      /needs a file, a module, a context and a why/,
+    );
+    refuses(
+      { ...ONE, synth: { ...SYNTH, generated: [{ ...GEN, file: "../x" }] } },
+      /outside the checkout/,
+    );
+  });
+});

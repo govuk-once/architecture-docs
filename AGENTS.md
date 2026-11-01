@@ -356,7 +356,13 @@ Things that are the workflow's, not the scripts':
   list. The job then has no log, which is the tell.
 - **Synth needs no credentials** as long as every context lookup the app makes degrades to a
   dummy, which counting by resource type tolerates. An app that hard-fails on a lookup
-  needs a stub `cdk.context.json` written into the checkout before synth.
+  needs a stub `cdk.context.json` written into the checkout before synth. An install that
+  needs a package from a private registry gets a stand-in instead: `synth.stubs` in the
+  project's config names it, `pnpm stubs <id>` puts it in the checkout, and that install
+  runs without a frozen lockfile because the override is not in the committed one. A file
+  the app reads that its pipeline discovers from the deployed account is produced from
+  the app's own templates by `synth.generated` — one pass without the stack that needs
+  it, then the pass that counts.
 
 ## Adding an architecture
 

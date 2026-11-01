@@ -72,7 +72,37 @@
     "prepare": {
       "cwd": ".",
       "command": ["pnpm", "build:all"]
-    }
+    },
+    "stubs": [
+      {
+        "package": "@govuk-connect/tag",
+        "dir": "stubs/govuk-connect-tag",
+        "why": "Published only to a private CodeArtifact registry, which a public runner has no token for. The app uses it to tag what it builds, so the templates synthesised here carry none of the GovUKTag tags — Product, Owner, DataClassification, PII, Exposure — and nothing derived counts them. Read the tags in the source, not the template."
+      }
+    ],
+    "generated": [
+      {
+        "file": "cdk/.generated/monitoring-inventory.json",
+        "module": "taggedNames",
+        "context": {
+          "skipMonitoringStack": "true"
+        },
+        "why": "The monitoring stack alarms whatever carries Monitor=true in the deployed account: UDP's pipeline asks the Resource Groups Tagging API and writes the names here, gitignored, before it deploys that stack. The same tag is on the same resources in the app's own templates, each with the name it deploys under, so one pass without the monitoring stack (the flag UDP's local synth uses) gives the same list.",
+        "tag": {
+          "Monitor": "true"
+        },
+        "shape": {
+          "lambdaNames": {
+            "type": "AWS::Lambda::Function",
+            "name": "FunctionName"
+          },
+          "tableNames": {
+            "type": "AWS::DynamoDB::Table",
+            "name": "TableName"
+          }
+        }
+      }
+    ]
   },
   "derive": {
     "module": "cloudformation",
@@ -177,19 +207,19 @@
       },
       "alarmsLambdaErrors": {
         "type": "AWS::CloudWatch::Alarm",
-        "logicalId": "^Lambda\\d+Errors"
+        "logicalId": "Lambda(Dev|Stag|Prod)Errors[0-9A-F]+$"
       },
       "alarmsLambdaDuration": {
         "type": "AWS::CloudWatch::Alarm",
-        "logicalId": "^Lambda\\d+Duration"
+        "logicalId": "Lambda(Dev|Stag|Prod)Duration[0-9A-F]+$"
       },
       "alarmsLambdaThrottles": {
         "type": "AWS::CloudWatch::Alarm",
-        "logicalId": "^Lambda\\d+Throttles"
+        "logicalId": "Lambda(Dev|Stag|Prod)Throttles[0-9A-F]+$"
       },
       "alarmsDynamo": {
         "type": "AWS::CloudWatch::Alarm",
-        "logicalId": "^DynamoDb"
+        "logicalId": "Dynamo(ReadThrottled|SystemErrors|WriteThrottled)[0-9A-F]+$"
       },
       "alarmsApi": {
         "type": "AWS::CloudWatch::Alarm",

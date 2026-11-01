@@ -44,6 +44,7 @@ import {
   short,
   STATE_FILE,
 } from "./lib/sourceState.js";
+import { applyStubs, STUBBED_INSTALL_ARGS } from "./stubSource.js";
 
 const clean = process.argv.includes("--clean");
 const skipInstall = process.argv.includes("--no-install");
@@ -148,15 +149,25 @@ function syncSource(project: Project, source: Source, installs: boolean) {
   }
 
   const head = headCommit(source);
+  /* After every reset, not only before an install: the reset just removed the stand-ins
+     the installed node_modules link to. */
+  const stubbed = installs ? applyStubs(project, source) : [];
+  if (stubbed.length)
+    console.log(
+      `  stubbed ${stubbed.join(", ")} — see synth.stubs in its config`,
+    );
   const reason =
     skipInstall || !installs ? null : installReason(project, source, head);
   if (reason) {
     console.log(`  installing its dependencies — ${reason}`);
     // --ignore-scripts: no lifecycle script runs. `pnpm synth` is the only command that
-    // executes the checkout, and it is opt-in.
+    // executes the checkout, and it is opt-in. A stubbed checkout installs differently —
+    // see STUBBED_INSTALL_ARGS for what, and why.
     run(
       "pnpm",
-      ["install", "--frozen-lockfile", "--ignore-scripts"],
+      stubbed.length
+        ? STUBBED_INSTALL_ARGS
+        : ["install", "--frozen-lockfile", "--ignore-scripts"],
       source.dir,
     );
   } else if (!installs) {
