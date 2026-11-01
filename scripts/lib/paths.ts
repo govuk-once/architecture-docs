@@ -60,6 +60,8 @@ export interface FitNode {
   sub: string;
   col: number;
   row: number;
+  /** Set only by `mergeFit`, on a box a proposed project brought: drawn dashed. */
+  proposed?: boolean;
 }
 
 /**
@@ -72,6 +74,8 @@ export interface FitEdge {
   to: string;
   label: string;
   see: string;
+  /** Set only by `mergeFit`, on a line a proposed project brought: drawn dashed. */
+  proposed?: boolean;
 }
 
 export interface FitSketch {

@@ -17,6 +17,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 
 import type { View } from "./buildArchitectureExplorer.js";
+import { sketchFor } from "./lib/fit.js";
 import { loadLikeC4Views } from "./lib/loadLikeC4Views.js";
 import {
   indexPage,
@@ -59,7 +60,8 @@ async function exportIndex(projects: Project[]): Promise<void> {
     url: live(p.href),
     pageTitle: titlesOf(p).overview,
   }));
-  const drawn = SITE_CONFIG.fit
+  const fit = sketchFor(SITE_CONFIG.fit, projects);
+  const drawn = fit
     ? await snapshots(
         {
           id: "index",
@@ -73,7 +75,7 @@ async function exportIndex(projects: Project[]): Promise<void> {
     : "no fit sketch to picture";
   const page = pasteShell(
     { title: SITE_CONFIG.title, folder: path.relative(DOCS_ROOT, dir) },
-    indexPage(SITE_CONFIG, entries, live(""), embedded(dir)),
+    indexPage({ ...SITE_CONFIG, fit }, entries, live(""), embedded(dir)),
   );
   writeFileSync(path.join(dir, "index-paste.html"), page);
   console.log(

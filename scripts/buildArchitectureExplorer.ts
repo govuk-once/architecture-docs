@@ -34,6 +34,7 @@ import { pathToFileURL } from "node:url";
 import { check } from "prettier";
 
 import type { Lifecycle, StateManifest, Why } from "./lib/composeStates.js";
+import { sketchFor } from "./lib/fit.js";
 import { loadLikeC4Views } from "./lib/loadLikeC4Views.js";
 import {
   DOCS_ROOT,
@@ -1356,7 +1357,10 @@ function fitClips(
 }
 
 function fitSketch(built: Built[]): string {
-  const fit = SITE_CONFIG.fit;
+  const fit = sketchFor(
+    SITE_CONFIG.fit,
+    built.map((b) => b.project),
+  );
   if (!fit) return "";
   const views = new Map(
     built.map((b) => [b.project.id, new Set(b.views.map((v) => v.id))]),
@@ -1426,7 +1430,7 @@ function fitSketch(built: Built[]): string {
       const href = e.see.replace("#", "/#tab=");
       const bw = e.label.length * FIT_ADVANCE + 12;
       return (
-        `<a href="${esc(href)}" class="edge"><title>${esc(e.label)} — proven on ${esc(e.see)}</title>` +
+        `<a href="${esc(href)}" class="edge${e.proposed ? " prop" : ""}"><title>${esc(e.label)} — ${e.proposed ? "proposed, argued" : "proven"} on ${esc(e.see)}</title>` +
         `<path class="line" d="${d}" marker-end="url(#fit-arrow)"/>` +
         `<rect class="lblbg" x="${String(lx - bw / 2)}" y="${String(ly - 11)}" ` +
         `width="${String(bw)}" height="15" rx="3"/>` +
@@ -1441,17 +1445,18 @@ function fitSketch(built: Built[]): string {
       /*
        * Colour carries ownership, exactly as it does inside a page: a system this site
        * documents takes the in-scope blue, a party outside the programme the third-party
-       * amber. Nothing is dashed — inside a page the dash means off the request path, and
-       * every box here is on it.
+       * amber. Only a proposal is dashed, box and lines both, and the note says so: the
+       * rest of the sketch is what runs, and every box of it is on the request path.
        */
       const box =
         `<rect class="box" x="${String(p.x)}" y="${String(p.y)}" width="${String(FIT.w)}" height="${String(FIT.h)}" rx="8"/>` +
         `<rect class="bar" x="${String(p.x)}" y="${String(p.y)}" width="4" height="${String(FIT.h)}" rx="2"/>` +
         `<text class="t" x="${String(p.x + 16)}" y="${String(p.y + FIT.h / 2 - 2)}">${esc(n.label)}</text>` +
         `<text class="s" x="${String(p.x + 16)}" y="${String(p.y + FIT.h / 2 + 15)}">${esc(n.sub)}</text>`;
-      return n.project
-        ? `<a href="${esc(n.project)}/" class="node sys"><title>${esc(n.label)} — open its page</title>${box}</a>`
-        : `<g class="node out">${box}</g>`;
+      if (!n.project) return `<g class="node out">${box}</g>`;
+      const cls = n.proposed ? "node sys prop" : "node sys";
+      const title = n.proposed ? "proposed; open its page" : "open its page";
+      return `<a href="${esc(n.project)}/" class="${cls}"><title>${esc(n.label)} — ${title}</title>${box}</a>`;
     })
     .join("");
 

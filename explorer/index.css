@@ -153,6 +153,11 @@ main {
   stroke: var(--line-strong);
   stroke-width: 1.6;
 }
+/* A proposal: nothing built. The one dash on the sketch, and the note under it says so. */
+.fit .prop .box,
+.fit .prop .line {
+  stroke-dasharray: 6 4;
+}
 .fit #fit-arrow path {
   fill: var(--line-strong);
 }

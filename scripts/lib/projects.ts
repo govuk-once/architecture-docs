@@ -22,6 +22,7 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
+import type { ProposedFit } from "./fit.js";
 import {
   DOCS_ROOT,
   inDocs,
@@ -169,6 +170,12 @@ export interface ProjectConfig {
    * Read only from `ARCH_PROPOSED_DIR`, never from projects/ here.
    */
   proposed?: boolean;
+  /**
+   * A proposed project's box on the index sketch, and the lines it adds there. Only a
+   * proposed project takes one: a documented system's box is in explorer.config.json.
+   * See scripts/lib/fit.ts.
+   */
+  fit?: ProposedFit;
   inventoryView: string;
   /** What the inventory counts, e.g. "AWS resources" — shown wherever a box totals them. */
   inventoryLabel: string;
@@ -290,6 +297,39 @@ function checkSource(
     );
 }
 
+/** The shape of a proposed project's `fit`, checked before anything draws it. */
+function validateFit(id: string, cfg: Partial<ProjectConfig>): void {
+  if (!cfg.proposed)
+    throw new Error(
+      `projects/${id}: "fit" is for a proposed architecture — a documented system's box ` +
+        `on the index sketch is in explorer.config.json`,
+    );
+  const fit = cfg.fit as Partial<ProposedFit>;
+  const n = fit.node;
+  if (
+    !n?.label ||
+    !n.sub ||
+    typeof n.col !== "number" ||
+    typeof n.row !== "number"
+  )
+    throw new Error(
+      `projects/${id}: "fit" needs node {label, sub, col, row} — its box on the index sketch`,
+    );
+  if (!Array.isArray(fit.edges))
+    throw new Error(`projects/${id}: "fit" needs edges, even if none`);
+  for (const e of fit.edges as Partial<ProposedFit["edges"][number]>[])
+    if (
+      !e.from ||
+      !e.to ||
+      !e.label ||
+      !/^[a-z][a-z0-9-]*#[a-z][a-z0-9-]*$/.test(e.see ?? "")
+    )
+      throw new Error(
+        `projects/${id}: fit line ${JSON.stringify(e)} needs from, to, label and ` +
+          `see: "<project>#<view>", the tab that argues it`,
+      );
+}
+
 /**
  * The config, held to the contract. Pure, and exported so the refusals can be tested
  * without a project directory for each one.
@@ -317,6 +357,7 @@ export function validateConfig(id: string, raw: unknown): ProjectConfig {
       `projects/${id}: declares both "source" and "sources" — one repository is ` +
         `"source", several are "sources"`,
     );
+  if (cfg.fit !== undefined) validateFit(id, cfg);
   if (cfg.proposed) {
     // Nothing to check out: see above.
   } else if (cfg.sources) {

@@ -165,6 +165,28 @@ describe("validateConfig: a proposed architecture", () => {
   it("still refuses a documented one with no source", () => {
     refuses({ ...BASE, proposed: false }, /"source" needs/);
   });
+
+  const FIT = {
+    node: { label: "IdX", sub: "proposed", col: 2, row: 2 },
+    edges: [{ from: "udp", to: "p", label: "swaps", see: "p#context" }],
+  };
+
+  it("accepts a box and lines of its own for the index sketch", () => {
+    expect(validateConfig("p", { ...PROPOSED, fit: FIT }).fit).toEqual(FIT);
+  });
+
+  it("refuses a sketch box on a documented one, or one missing a part", () => {
+    refuses({ ...ONE, fit: FIT }, /"fit" is for a proposed/);
+    refuses(
+      { ...PROPOSED, fit: { ...FIT, node: { ...FIT.node, col: "2" } } },
+      /needs node/,
+    );
+    refuses({ ...PROPOSED, fit: { node: FIT.node } }, /needs edges/);
+    refuses(
+      { ...PROPOSED, fit: { ...FIT, edges: [{ ...FIT.edges[0], see: "p" }] } },
+      /needs from, to, label and see/,
+    );
+  });
 });
 
 /** The two parts of a project the resolvers read. */

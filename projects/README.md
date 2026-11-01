@@ -116,6 +116,14 @@ _Proposed · not built_, and its Decisions tab counts the model's own claims bes
 planned changes. When the system is built, its proposal is deleted and it is documented
 from its code like any other — the build refuses an id that is both.
 
+The public `explorer.config.json` cannot draw a proposal on the index sketch, because it
+cannot name one. So a proposed project's config may carry `fit`: one `node` — `label`,
+`sub`, `col`, `row` — and the `edges` it adds, each touching it and each with a `see` that
+names the tab arguing it. A build that reads the proposal merges them in, dashed, and adds a
+sentence to the note saying what the dash means; the public build never sees them. A box on
+a cell that is taken, or a line that does not touch the project, is refused, and the clip
+check that holds every other line holds these.
+
 ## Starting a model from nothing
 
 [`_template/`](_template/) is the smallest project that builds: five files, about 115
