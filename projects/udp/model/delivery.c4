@@ -72,9 +72,10 @@ model {
       metadata {
         type 'GitHub Actions job · 60 min'
         tech 'pnpm lint:all · build:all · test:all'
-        role 'Pre-commit hygiene, dependency review failing on high severity, at least one conventional commit, every project linted, built and unit-tested, then a synth with development credentials for Checkov and a Semgrep scan with six rule packs.'
+        role 'Pre-commit hygiene, dependency review failing on high severity, at least one conventional commit, every project linted, built and unit-tested, then a synth with development credentials for Checkov and a Semgrep scan with six rule packs. The synth skips the monitoring stack, which needs the discovered inventory.'
         facts [
-          'Checkov\'s config adds one custom check from <code>custom-checks</code>: a KMS key must rotate, every 90 days or less.',
+          'Checkov\'s config adds one custom check from <code>custom-checks</code>: a KMS key must rotate, every 90 days or less. The live-schema stack suppresses it, and the built-in rotation check, on its HMAC key, which KMS cannot rotate.',
+          'Every workflow first assumes the development role and logs in to CodeArtifact, because <code>@govuk-connect/tag</code> is installed from there; Sonar and version, which touched no AWS before, now do too.',
           '<code>cdk-nag</code> is a dependency and is imported nowhere.'
         ]
         sourceId 'ci'
@@ -158,8 +159,8 @@ model {
       link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/macie/index.ts 'cdk/lib/macie/index.ts'
       metadata {
         type 'GitHub Actions job'
-        tech 'cdk destroy --exclusively "pr-{n}-dev-*"'
-        role 'Destroys every stack named <code>pr-{n}-dev-*</code>, after a full <code>build:all</code> — type check, unit tests, Lambda build. A failing type check or unit test leaves the stacks up.'
+        tech 'cdk destroy --exclusively, seven stacks by name'
+        role 'Destroys the pull request\'s perf, e2e, monitoring, sar, dsar, dvla-pilot and main stacks, named one by one, after a full <code>build:all</code> — type check, unit tests, Lambda build. A failing type check or unit test leaves the stacks up; the vpc and macie stacks are not in the list.'
         sourceId 'cleanup'
         order '7'
         x '64'
@@ -181,7 +182,7 @@ model {
       x '676'
       y '30'
       w '620'
-      h '1044'
+      h '1174'
       boundary 'soft'
     }
 
@@ -372,6 +373,33 @@ model {
       }
     }
 
+    delivery_monitoring = internal 'deploy-monitoring' {
+      #off-request-path
+      description 'discover · hash · deploy'
+      link https://github.com/govuk-once/user-data-platform/blob/main/.github/workflows/__deploy-monitoring.yml '__deploy-monitoring.yml'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/scripts/discover-monitoring.ts 'discover-monitoring.ts'
+      link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/utils/discover-monitored-resources.ts 'discover-monitored-resources.ts'
+      link https://github.com/govuk-once/user-data-platform/blob/main/.github/workflows/release.yml 'release.yml'
+      link https://github.com/govuk-once/user-data-platform/blob/main/.github/workflows/pr-deploy.yml 'pr-deploy.yml'
+      metadata {
+        type 'Reusable workflow · GitHub environment'
+        tech 'Resource Groups Tagging API → cdk synth → sha256 vs SSM → cdk deploy --exclusively'
+        role 'Since UDP-422 the monitoring stack deploys on its own, after dev, staging, production and each pull request environment. It lists every function and table tagged <code>Monitor=true</code> in the account, writes them to <code>cdk/.generated</code>, synthesises only the monitoring stack, and deploys it when the template\'s hash differs from the one saved in SSM under <code>/upd/{stack}/template-hash</code> — spelled so in the workflow.'
+        facts [
+          'The main deploys pass <code>skipMonitoringStack</code>, so a new function is alarmed only once this job has run after it was deployed.',
+          'Checkov runs on the synthesised monitoring template before a deploy, with the same config as ci.',
+          'The Slack release note now waits for the production monitoring deploy, not the production deploy.'
+        ]
+        sourceId 'monitoring'
+        order '11'
+        x '724'
+        y '990'
+        w '262'
+        h '62'
+        ownership 'udp'
+      }
+    }
+
     delivery_notify = internal '8. Slack release note' {
       #off-request-path
       description 'major and minor only'
@@ -382,9 +410,9 @@ model {
         tech 'gh release view → SNS → Chatbot'
         role 'The release notes, cut to 1,500 characters, published to the release topic the main stack creates, for the Slack channel the SSM parameter names.'
         sourceId 'notify'
-        order '11'
+        order '12'
         x '724'
-        y '990'
+        y '1120'
         w '262'
         h '62'
         ownership 'udp'
@@ -515,8 +543,11 @@ model {
   delivery_e2estag -> delivery_prod 'needs' {
     metadata { protocol 'GitHub Actions job dependency' auth '—' carries 'A pass' order '13' }
   }
-  delivery_prod -> delivery_notify 'needs' {
-    metadata { protocol 'GitHub Actions job dependency' auth 'OIDC to the production role' carries 'The release notes' order '14' }
+  delivery_prod -> delivery_monitoring 'needs' {
+    metadata { protocol 'GitHub Actions job dependency' auth 'OIDC to the production role' carries 'A finished production deploy to discover' order '14' }
+  }
+  delivery_monitoring -> delivery_notify 'needs' {
+    metadata { protocol 'GitHub Actions job dependency' auth '—' carries 'The release notes' order '14' }
   }
   delivery_perfdev -> delivery_perfbuild 'StartBuild' {
     metadata { protocol 'CodeBuild API' auth 'OIDC to the deployment role' carries 'PERF_TARGET' order '15' }

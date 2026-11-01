@@ -196,7 +196,8 @@ model {
         tech 'rotation every 90 days'
         role 'Both tables, the function, API and WAF log groups, the alarm and release topics, the SAR bucket and sar-stack queues in every environment, the SAR and DSAR intake queues in development only, and the live-schema failure queue.'
         facts [
-          'Marked for Macie: an aspect adds Macie\'s service-linked role to its policy with decrypt, so Macie can read the SAR bucket wherever there is one.'
+          'Marked for Macie: an aspect adds Macie\'s service-linked role to its policy with decrypt, so Macie can read the SAR bucket wherever there is one.',
+          'Its policy now grants EventBridge decrypt and data-key generation explicitly; CDK used to add that through the monitoring stack\'s cross-stack reference, and UDP-422 removed the reference. The monitoring stack finds the key by its alias, <code>encryption-{env}</code>.'
         ]
         sourceId 'mainkey'
         order '3'
@@ -373,7 +374,7 @@ model {
     metadata {
       type 'Controls'
       tech 'monitoring stack · {env}-monitoring'
-      role 'Fifty-one alarms in development, thirty-nine in staging, thirty-six in production, and where they go. Thresholds come from the CDK NFR constants, now thirty times the 200 ms the performance tests still hold to.'
+      role 'Fifty-seven alarms in development and staging, fifty-one in production, and where they go. Since UDP-422 the stack is deployed on its own and alarms whatever carries <code>Monitor=true</code> in the account, found by its deploy workflow rather than passed from the other stacks. Thresholds come from the CDK NFR constants, now thirty times the 200 ms the performance tests still hold to.'
       sourceId 'alerting'
       order '0'
       x '1006'
@@ -390,11 +391,11 @@ model {
       link https://github.com/govuk-once/user-data-platform/blob/main/cdk/constants/nfr.ts 'nfr.ts'
       link https://github.com/govuk-once/user-data-platform/blob/main/cdk/bin/app.ts 'cdk/bin/app.ts'
       metadata {
-        type 'AWS::CloudWatch::Alarm ×45 · ×33 staging · ×30 production'
+        type 'AWS::CloudWatch::Alarm ×51 · ×51 staging · ×45 production'
         tech '1-minute periods'
         role 'Errors ≥ 2 in two periods; p95 duration ≥ 5,000 ms in three; any throttle in three. All critical.'
         facts [
-          'Fifteen functions in development: the ten data and identity routes, the four sar-stack functions and the live-schema extractor. Eleven in staging, the routes and the extractor; ten in production. The three rights functions are filtered out everywhere; the sar-stack functions are deployed in all three but monitored only in development; the live-schema migration and DVLA purge functions have none.'
+          'Every function tagged <code>Monitor=true</code>: the eleven routed functions, the four sar-stack functions in every environment, and outside production the live-schema extractor and migration — seventeen in development and staging, fifteen in production. The three disabled rights functions and the DVLA purge carry no tag and have no alarms. The list is discovered from the account by the deploy workflow, so an alarm exists only for what was deployed before it ran.'
         ]
         sourceId 'fnalarms'
         order '1'
@@ -436,7 +437,7 @@ model {
       metadata {
         type 'AWS::CloudWatch::Alarm ×3'
         tech 'threshold 1 over two periods'
-        role 'On-demand tables can still throttle; any event is critical.'
+        role 'On-demand tables can still throttle; any event is critical. Only the data table is tagged for monitoring; the identity table has no alarm.'
         sourceId 'dbalarms'
         order '3'
         x '1030'
@@ -458,6 +459,9 @@ model {
         type 'AWS::SNS::Topic ×2 · AWS::Chatbot::SlackChannelConfiguration'
         tech 'workspace and channel from SSM …/udp/monitoring'
         role 'The critical topic is subscribed by a Chatbot Slack channel, and by PagerDuty over HTTPS, when the SSM parameter names them. Nothing in the repository subscribes the warning topic — 4xx bursts and failed performance builds land there.'
+        facts [
+          'The perf stack no longer receives the warning topic from the monitoring stack; it names it by ARN, <code>{prefix}-warning-alarms</code>, so the two stacks deploy independently.'
+        ]
         sourceId 'topics'
         order '4'
         x '1030'
@@ -477,7 +481,7 @@ model {
       metadata {
         type 'AWS::CloudWatch::Dashboard ×2'
         tech 'per-function invocations, errors, throttles, duration'
-        role 'One operational, one for the performance test metrics under <code>UDP/PerformanceTests</code>.'
+        role 'One operational, one for the performance test metrics under <code>UDP/PerformanceTests</code>. Widgets are per discovered function and table, titled by name.'
         sourceId 'dashboards'
         order '5'
         x '1030'

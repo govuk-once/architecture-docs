@@ -19,7 +19,7 @@
     "dashMeans": "a header the gateway reads but never checks",
     "tables": [
       {
-        "name": "The ten routes, and the consumer permission each needs — three more declared and never routed",
+        "name": "The eleven routes, and the consumer permission each needs — three more declared and never routed",
         "code": [
           ["routes.ts", "libs/utils/schemas/routes/routes.ts"],
           [
@@ -31,10 +31,21 @@
           [
             "DynamoDbIdentityService.ts",
             "libs/data-access/services/DynamoDbIdentityService.ts"
-          ]
+          ],
+          [
+            "healthCheck.ts",
+            "libs/utils/schemas/endpoints/health/healthCheck.ts"
+          ],
+          ["healthCheckLambda/handler.ts", "src/healthCheckLambda/handler.ts"]
         ],
         "cols": ["Method and path", "Permission", "Lambda", "Does"],
         "rows": [
+          [
+            "<code>GET /v1/_health</code>",
+            "none — any consumer role",
+            "healthCheck",
+            "Added in UDP-419. <code>DescribeTable</code> on both tables; <code>200 {status: healthy}</code> when both are <code>ACTIVE</code>, else <code>500</code> naming the one that is not. No scope, no record read"
+          ],
           [
             "<code>POST /v1/user</code>",
             "write",
@@ -194,7 +205,8 @@
           ["main-stack.ts", "cdk/lib/stacks/main-stack.ts"],
           ["routes.ts", "libs/utils/schemas/routes/routes.ts"],
           ["sar-stack.ts", "cdk/lib/stacks/sar-stack.ts"],
-          ["live-schema-stack.ts", "cdk/lib/stacks/live-schema-stack.ts"]
+          ["live-schema-stack.ts", "cdk/lib/stacks/live-schema-stack.ts"],
+          ["monitoring-stack.ts", "cdk/lib/stacks/monitoring-stack.ts"]
         ],
         "cols": ["Setting", "Development", "Staging", "Production"],
         "rows": [
@@ -228,7 +240,8 @@
             "from SSM <code>…/udp/monitoring</code>, when set",
             "the same",
             "the same"
-          ]
+          ],
+          ["Functions the monitoring stack alarms", "17", "17", "15"]
         ]
       }
     ]
@@ -300,11 +313,17 @@
           [
             "liveSchemaExtractorLambda/handler.ts",
             "src/liveSchemaExtractorLambda/handler.ts"
-          ]
+          ],
+          ["healthCheckLambda/handler.ts", "src/healthCheckLambda/handler.ts"]
         ],
         "note": "Every API-triggered handler runs the same six: logger, tracer, annotation, serialiser, error handler and validator. The two variations are the sanitiser, which the four message-returning routes skip, and the JSON body parser, which only the four routes with a body add.",
         "cols": ["Function", "Trigger", "Chain, in file order"],
         "rows": [
+          [
+            "<code>healthCheck</code>",
+            "API Gateway",
+            "logger · tracer · annotation · serialiser · errors · validator — <b>no sanitiser</b>"
+          ],
           [
             "<code>createUser</code>",
             "API Gateway",
@@ -391,7 +410,7 @@
           [
             "<code>liveSchemaExtractor</code>",
             "DynamoDB stream — INSERT, MODIFY where <code>schemaEvaluationRequired</code>; dev and staging",
-            "none — a stub that returns <code>true</code>, with no middy"
+            "logger · tracer · annotation — and partial-batch failure reporting in the handler, since UDP-416"
           ]
         ]
       },
@@ -432,7 +451,12 @@
             "getSarStatusLambda/handler.ts",
             "src/getSarStatusLambda/handler.ts"
           ],
-          ["lambda-construct.ts", "cdk/lib/constructs/lambda-construct.ts"]
+          ["lambda-construct.ts", "cdk/lib/constructs/lambda-construct.ts"],
+          ["healthCheckLambda/handler.ts", "src/healthCheckLambda/handler.ts"],
+          [
+            "DynamoDbDataService.ts",
+            "libs/data-access/services/DynamoDbDataService.ts"
+          ]
         ],
         "note": "<code>{resourcePath+}</code> is greedy, so <code>/v1/notifications</code>, <code>/v1/groups</code> and <code>/v1/local-council/…</code> are all the same four data handlers with a different sort key. Every route declares an <code>authorizationScopes</code> value and nothing enforces it: every method is <code>AWS_IAM</code> with no authorizer, so the scope is documentation.",
         "cols": [
@@ -443,6 +467,13 @@
           "Deployed"
         ],
         "rows": [
+          [
+            "<code>healthCheck</code>",
+            "GET <code>/v1/_health</code>",
+            "identity, data — <code>DescribeTable</code> only",
+            "none",
+            "yes"
+          ],
           [
             "<code>createUser</code>",
             "POST <code>/v1/user</code>",
@@ -1146,7 +1177,7 @@
         ],
         "rows": [
           [
-            "Lambda — the route functions · 13 in development, 10 elsewhere",
+            "Lambda — the route functions · 14 in development, 11 elsewhere",
             "CloudWatch · <code>/aws/lambda/{name}-{env}</code>, one per function",
             "30 days dev · 365 prod",
             "Main key",
@@ -1258,9 +1289,9 @@
         "rows": [
           [
             "Response sanitiser",
-            "<code>ttl</code>, <code>pk</code>, <code>sk</code>, <code>udpId</code>, <code>lsi</code>, <code>lsi_1</code>, <code>__dataKey</code>",
+            "<code>ttl</code>, <code>pk</code>, <code>sk</code>, <code>udpId</code>, <code>lsi</code>, <code>lsi_1</code>, <code>__dataKey</code>, and since UDP-416 <code>schemaEvaluationRequired</code> and <code>schemaVersion</code>",
             "The response body's top level only: <code>deep</code> defaults to false and every caller passes <code>{}</code>",
-            "Nine routes run it; createIdentity, createUser, deleteData and deleteIdentity do not"
+            "Nine routes run it; createIdentity, createUser, deleteData, deleteIdentity and healthCheck do not"
           ],
           [
             "Logger redaction",
@@ -1327,14 +1358,15 @@
           [
             "liveSchemaExtractorLambda/handler.ts",
             "src/liveSchemaExtractorLambda/handler.ts"
-          ]
+          ],
+          ["healthCheckLambda/handler.ts", "src/healthCheckLambda/handler.ts"]
         ],
         "note": "UDP's telemetry is X-Ray annotations: no Powertools Metrics and no embedded-metric log lines are emitted anywhere in <code>src/</code> or <code>libs/</code>. Every function annotates its segment with the stack before the handler runs; nine add one outcome annotation.",
         "cols": ["Annotation", "Written by"],
         "rows": [
           [
             "<code>stack</code>",
-            "every function but the live-schema extractor, whose handler is a stub"
+            "every function, the live-schema extractor and health check included"
           ],
           ["<code>dsarRequestSuccess</code>", "startDsar"],
           ["<code>patchEntitySuccess</code>", "patchData"],
@@ -1356,10 +1388,7 @@
           ["ci.yml", ".github/workflows/ci.yml"],
           ["dependabot.yml", ".github/dependabot.yml"],
           ["package.json", "package.json"],
-          [
-            "gov-uk-tag-validate.aspect.ts",
-            "cdk/lib/gov-uk-tag/gov-uk-tag-validate.aspect.ts"
-          ]
+          ["cdk/bin/app.ts", "cdk/bin/app.ts"]
         ],
         "note": "\"None\" means no construct or workflow in this repository creates it. Any of these may still be enabled at the AWS Organisation or account level, outside this codebase — this table describes the CDK app and its CI only.",
         "cols": ["Control", "Searched for", "Found in this repository"],
@@ -1415,7 +1444,7 @@
           [
             "Resource classification tags",
             "<code>GovUKTag</code>",
-            "Aspects in <code>cdk/bin/app.ts</code> tag every resource with owner and environment, and report as a synth error any resource of a listed type missing <code>PII</code>, <code>DataClassification</code> or <code>Exposure</code>. Types not listed, the DSQL cluster among them, are not checked"
+            "An aspect in <code>cdk/bin/app.ts</code> tags every resource with product, owner, environment and source, and each construct classifies its own. Since UDP-458 the aspect comes from <code>@govuk-connect/tag</code>, a package on a private CodeArtifact registry: what it validates, and whether it still fails a synth on a missing tag, cannot be read from this repository"
           ]
         ]
       },
@@ -1426,27 +1455,31 @@
           ["nfr.ts", "cdk/constants/nfr.ts"],
           ["perf-stack.ts", "cdk/lib/stacks/perf-stack.ts"],
           ["cdk/bin/app.ts", "cdk/bin/app.ts"],
-          ["performance/src/config.ts", "performance/src/config.ts"]
+          ["performance/src/config.ts", "performance/src/config.ts"],
+          [
+            "discover-monitored-resources.ts",
+            "cdk/lib/utils/discover-monitored-resources.ts"
+          ]
         ],
         "cols": ["Alarm", "Fires when", "Topic"],
         "rows": [
           [
-            "Lambda errors · ×15, ×11 in staging, ×10 in production",
+            "Lambda errors · ×17, ×17 in staging, ×15 in production",
             "≥ 2 errors in each of two 1-minute periods",
             "critical"
           ],
           [
-            "Lambda duration · ×15, ×11 in staging, ×10 in production",
+            "Lambda duration · ×17, ×17 in staging, ×15 in production",
             "p95 ≥ 5,000 ms in each of three periods",
             "critical"
           ],
           [
-            "Lambda throttles · ×15, ×11 in staging, ×10 in production",
+            "Lambda throttles · ×17, ×17 in staging, ×15 in production",
             "≥ 1 throttle in each of three periods",
             "critical"
           ],
           [
-            "DynamoDB read throttled, write throttled, system errors",
+            "DynamoDB read throttled, write throttled, system errors · the data table only",
             "≥ 1 in each of two periods",
             "critical"
           ],
@@ -1490,7 +1523,11 @@
           ["sonar-scan.yml", ".github/workflows/sonar-scan.yml"],
           ["vitest.config.ts", "vitest.config.ts"],
           ["check-commit-signatures.sh", "scripts/check-commit-signatures.sh"],
-          ["package.json", "package.json"]
+          ["package.json", "package.json"],
+          [
+            "__deploy-monitoring.yml",
+            ".github/workflows/__deploy-monitoring.yml"
+          ]
         ],
         "cols": [
           "Check",
@@ -1530,7 +1567,12 @@
             "yes",
             "in each deploy"
           ],
-          ["Checkov on the synthesised templates", "push", "yes", "—"],
+          [
+            "Checkov on the synthesised templates — without the monitoring stack, which is checked again by its own deploy",
+            "push",
+            "yes",
+            "—"
+          ],
           ["Semgrep (six rule packs)", "push", "yes", "—"],
           ["Dependency review, high severity fails", "—", "yes", "—"],
           ["Sonar quality gate", "—", "yes", "yes, before deploy-dev"],
@@ -1545,6 +1587,12 @@
             "—",
             "smoke, not waited for, and the CodeBuild step fails (no npm script)",
             "smoke on dev, baseline on staging, neither waited for, and the CodeBuild step fails (no npm script)"
+          ],
+          [
+            "Monitoring template unchanged (sha256 against SSM)",
+            "—",
+            "after the PR deploy",
+            "after each environment's deploy; a changed template deploys"
           ]
         ]
       },

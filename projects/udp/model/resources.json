@@ -9,9 +9,9 @@
           "id": "api-routes",
           "name": "Routes",
           "n": {
-            "dev": 10,
-            "stg": 10,
-            "prod": 10
+            "dev": 11,
+            "stg": 11,
+            "prod": 11
           },
           "from": "counts.apiRoutes",
           "meta": ["main stack", "AWS_IAM", "AWS_PROXY"],
@@ -19,7 +19,7 @@
             "type": "AWS::ApiGateway::Method",
             "role": "One private REST API; every method is IAM-authorised and proxies to its own Lambda.",
             "facts": [
-              "Six identity routes and four data routes in every environment. The three rights routes — SAR status, start-SAR and start-DSAR — carry <code>disableRoute</code> in <code>routes.ts</code>, and the Lambda construct gives a disabled route no API method in any environment (f3988d6). Development still builds their functions; staging and production drop them entirely (<code>setRoutes</code>)."
+              "Six identity routes, four data routes and, since UDP-419, <code>GET /v1/_health</code>, in every environment. The three rights routes — SAR status, start-SAR and start-DSAR — carry <code>disableRoute</code> in <code>routes.ts</code>, and the Lambda construct gives a disabled route no API method in any environment (f3988d6). Development still builds their functions; staging and production drop them entirely (<code>setRoutes</code>)."
             ],
             "code": [
               ["routes.ts", "libs/utils/schemas/routes/routes.ts"],
@@ -103,19 +103,23 @@
           "id": "fn-main",
           "name": "Route functions",
           "n": {
-            "dev": 13,
-            "stg": 10,
-            "prod": 10
+            "dev": 14,
+            "stg": 11,
+            "prod": 11
           },
           "from": "counts.functions.main",
           "meta": ["main stack", "isolated subnets", "nodejs24.x"],
           "d": {
             "type": "AWS::Lambda::Function",
-            "role": "One per route in <code>routes.ts</code>: 512 MB, 30 s, X-Ray on, reserved concurrency 2 in development or 50 elsewhere. Ten outside development. The SAR status, start-SAR and start-DSAR routes carry <code>disableRoute</code>: in development their three functions are built but have no API method and nothing invokes them (f3988d6, <code>lambda-construct.ts</code>); in staging and production <code>setRoutes</code> drops them, so neither the function, its log group, its role nor its queue is created there (a9f97ed).",
+            "role": "One per route in <code>routes.ts</code>: 512 MB, 30 s, X-Ray on, reserved concurrency 2 in development or 50 elsewhere. Eleven outside development, the health check among them since UDP-419. The SAR status, start-SAR and start-DSAR routes carry <code>disableRoute</code>: in development their three functions are built but have no API method and nothing invokes them (f3988d6, <code>lambda-construct.ts</code>); in staging and production <code>setRoutes</code> drops them, so neither the function, its log group, its role nor its queue is created there (a9f97ed).",
             "code": [
               ["lambda-construct.ts", "cdk/lib/constructs/lambda-construct.ts"],
               ["main-stack.ts", "cdk/lib/stacks/main-stack.ts"],
-              ["routes.ts", "libs/utils/schemas/routes/routes.ts"]
+              ["routes.ts", "libs/utils/schemas/routes/routes.ts"],
+              [
+                "healthCheckLambda/handler.ts",
+                "src/healthCheckLambda/handler.ts"
+              ]
             ]
           }
         },
@@ -176,10 +180,14 @@
           ],
           "d": {
             "type": "AWS::Lambda::Function",
-            "role": "liveSchemaExtractor (512 MB, 60 s) reads the data-table stream, filtered to INSERT and MODIFY, in batches of 100, bisecting on error, failures to SQS; its handler is a stub. liveSchemaMigration (512 MB, 300 s) is run by a CDK Trigger when the stack is created and whenever the function changes.",
+            "role": "liveSchemaExtractor (512 MB, 60 s) reads the data-table stream, filtered to INSERT and MODIFY with <code>schemaEvaluationRequired</code> set, in batches of 100 with a 5 s window, bisecting on error, five retries, failures to SQS; since UDP-416 it infers and versions the shape of each record in DSQL and stamps the record. liveSchemaMigration (512 MB, 300 s) is run by a CDK Trigger when the stack is created and whenever the function changes.",
             "code": [
               ["live-schema-stack.ts", "cdk/lib/stacks/live-schema-stack.ts"],
-              ["cdk/bin/app.ts", "cdk/bin/app.ts"]
+              ["cdk/bin/app.ts", "cdk/bin/app.ts"],
+              [
+                "liveSchemaExtractorLambda/handler.ts",
+                "src/liveSchemaExtractorLambda/handler.ts"
+              ]
             ]
           }
         },
@@ -187,15 +195,15 @@
           "id": "fn-total",
           "name": "All named functions",
           "n": {
-            "dev": 20,
-            "stg": 17,
-            "prod": 15
+            "dev": 21,
+            "stg": 18,
+            "prod": 16
           },
           "from": "counts.functionsTotal",
           "meta": ["every stack"],
           "d": {
             "type": "AWS::Lambda::Function",
-            "role": "The twenty <code>build-lambdas.mjs</code> builds, one per <code>src/*/handler.ts</code>: thirteen main functions — ten behind API methods and, in development only, the three disabled SAR and DSAR route functions, which have no method — four in the sar stack, the DVLA pilot purge, and the live-schema extractor and migration. Seventeen in staging, without the three disabled route functions; fifteen in production, which also has no live-schema stack. Custom-resource providers CDK adds — the live-schema Trigger's among them — have no FunctionName and are not counted.",
+            "role": "The twenty-one <code>build-lambdas.mjs</code> builds, one per <code>src/*/handler.ts</code>: fourteen main functions — eleven behind API methods, the health check among them, and, in development only, the three disabled SAR and DSAR route functions, which have no method — four in the sar stack, the DVLA pilot purge, and the live-schema extractor and migration. Eighteen in staging, without the three disabled route functions; sixteen in production, which also has no live-schema stack. Custom-resource providers CDK adds — the live-schema Trigger's among them — have no FunctionName and are not counted.",
             "code": [
               ["build-lambdas.mjs", "scripts/build-lambdas.mjs"],
               ["cdk/bin/app.ts", "cdk/bin/app.ts"],
@@ -265,7 +273,7 @@
           "meta": ["live-schema stack", "not in production"],
           "d": {
             "type": "AWS::DSQL::Cluster",
-            "role": "<code>live-schema-{env}</code>, for the schemas the extractor will write; deletion protection off in development and on in staging, and no customer-managed key.",
+            "role": "<code>live-schema-{env}</code>, holding <code>live_schemas</code> and <code>live_user_schemas</code>, which the extractor writes; deletion protection off in development and on in staging, and no customer-managed key.",
             "code": [
               ["live-schema-stack.ts", "cdk/lib/stacks/live-schema-stack.ts"],
               ["tables.ts", "libs/live-schema/tables.ts"]
@@ -320,22 +328,26 @@
           "id": "kms-keys",
           "name": "KMS keys",
           "n": {
-            "dev": 4,
-            "stg": 5,
+            "dev": 5,
+            "stg": 6,
             "prod": 5
           },
           "from": "counts.kmsKeys",
-          "meta": ["90-day rotation", "+1 per real consumer config"],
+          "meta": [
+            "90-day rotation, HMAC key excepted",
+            "+1 per real consumer config"
+          ],
           "d": {
             "type": "AWS::KMS::Key",
-            "role": "The VPC stack's key, the main and DB keys, Macie's results key, and outside development the backup vault's. The consumer-config key exists only when the SSM config names a consumer.",
+            "role": "The VPC stack's key, the main and DB keys, Macie's results key, outside production the live-schema stack's HMAC-256 key — <code>live-user-id-hmac-{env}</code>, which hashes the <code>udpId</code> and, being HMAC, cannot rotate — and outside development the backup vault's. The consumer-config key exists only when the SSM config names a consumer.",
             "code": [
               ["kms-construct.ts", "cdk/lib/constructs/kms-construct.ts"],
               [
                 "consumer-config-construct.ts",
                 "cdk/lib/constructs/consumer-config-construct.ts"
               ],
-              ["backup-stack.ts", "cdk/lib/stacks/backup-stack.ts"]
+              ["backup-stack.ts", "cdk/lib/stacks/backup-stack.ts"],
+              ["live-schema-stack.ts", "cdk/lib/stacks/live-schema-stack.ts"]
             ]
           }
         },
@@ -487,19 +499,24 @@
           "id": "alarms",
           "name": "Alarms",
           "n": {
-            "dev": 51,
-            "stg": 39,
-            "prod": 36
+            "dev": 57,
+            "stg": 57,
+            "prod": 51
           },
           "from": "counts.alarmsTotal",
           "meta": ["monitoring stack"],
           "d": {
             "type": "AWS::CloudWatch::Alarm",
-            "role": "Three per function for fifteen functions in development — the ten main route functions that are not SAR or DSAR, the four sar-stack functions and the live-schema extractor — eleven in staging, with no sar-stack functions, and ten in production; three for DynamoDB, three for the API. The three SAR and DSAR route functions and the live-schema migration are never alarmed.",
+            "role": "Three per function for every function tagged <code>Monitor=true</code>: the eleven routed functions, the four sar-stack functions in every environment, and outside production the two live-schema functions — seventeen in development and staging, fifteen in production — plus three for the data table and three for the API. The three disabled rights functions and the DVLA purge are not tagged and never alarmed. Since UDP-422 the list comes from the account, discovered by the deploy workflow, not from the other stacks.",
             "code": [
               ["monitoring-stack.ts", "cdk/lib/stacks/monitoring-stack.ts"],
               ["cdk/bin/app.ts", "cdk/bin/app.ts"],
-              ["live-schema-stack.ts", "cdk/lib/stacks/live-schema-stack.ts"]
+              ["live-schema-stack.ts", "cdk/lib/stacks/live-schema-stack.ts"],
+              [
+                "discover-monitored-resources.ts",
+                "cdk/lib/utils/discover-monitored-resources.ts"
+              ],
+              ["sar-stack.ts", "cdk/lib/stacks/sar-stack.ts"]
             ]
           }
         },
@@ -507,9 +524,9 @@
           "id": "alarms-fn-errors",
           "name": "Lambda error alarms",
           "n": {
-            "dev": 15,
-            "stg": 11,
-            "prod": 10
+            "dev": 17,
+            "stg": 17,
+            "prod": 15
           },
           "from": "counts.alarmsLambdaErrors",
           "meta": ["critical", "≥ 2 in two 1-min periods"],
@@ -524,9 +541,9 @@
           "id": "alarms-fn-duration",
           "name": "Lambda duration alarms",
           "n": {
-            "dev": 15,
-            "stg": 11,
-            "prod": 10
+            "dev": 17,
+            "stg": 17,
+            "prod": 15
           },
           "from": "counts.alarmsLambdaDuration",
           "meta": ["critical", "p95 ≥ 5,000 ms"],
@@ -542,9 +559,9 @@
           "id": "alarms-fn-throttles",
           "name": "Lambda throttle alarms",
           "n": {
-            "dev": 15,
-            "stg": 11,
-            "prod": 10
+            "dev": 17,
+            "stg": 17,
+            "prod": 15
           },
           "from": "counts.alarmsLambdaThrottles",
           "meta": ["critical", "any throttle"],
@@ -567,9 +584,10 @@
           "meta": ["critical"],
           "d": {
             "type": "AWS::CloudWatch::Alarm",
-            "role": "Read throttled, write throttled, system errors.",
+            "role": "Read throttled, write throttled, system errors — on the data table, the only table tagged <code>Monitor=true</code>.",
             "code": [
-              ["monitoring-stack.ts", "cdk/lib/stacks/monitoring-stack.ts"]
+              ["monitoring-stack.ts", "cdk/lib/stacks/monitoring-stack.ts"],
+              ["main-stack.ts", "cdk/lib/stacks/main-stack.ts"]
             ]
           }
         },
@@ -594,15 +612,15 @@
           "id": "log-groups",
           "name": "Log groups",
           "n": {
-            "dev": 27,
-            "stg": 24,
-            "prod": 20
+            "dev": 28,
+            "stg": 25,
+            "prod": 21
           },
           "from": "counts.logGroups",
           "meta": ["1 year · 1 month in dev", "KMS"],
           "d": {
             "type": "AWS::Logs::LogGroup",
-            "role": "One per named function, plus the API access log, the WAF, the flow log, two custom-resource providers, and the two test builds outside production. Three fewer in staging, with the SAR and DSAR route functions; production also loses the two live-schema functions and the test builds.",
+            "role": "One per named function — the health check's since UDP-419 — plus the API access log, the WAF, the flow log, two custom-resource providers, and the two test builds outside production. Three fewer in staging, with the SAR and DSAR route functions; production also loses the two live-schema functions and the test builds.",
             "code": [
               ["lambda-construct.ts", "cdk/lib/constructs/lambda-construct.ts"],
               ["environment.ts", "cdk/constants/environment.ts"],
@@ -622,11 +640,12 @@
           "meta": ["critical", "warning", "release", "backup outside dev"],
           "d": {
             "type": "AWS::SNS::Topic",
-            "role": "Only the critical topic has subscribers in the repository: a Chatbot Slack channel, and PagerDuty over HTTPS, when the SSM monitoring parameter names them.",
+            "role": "Only the critical topic has subscribers in the repository: a Chatbot Slack channel, and PagerDuty over HTTPS, when the SSM monitoring parameter names them. The perf stack reaches the warning topic by ARN, not by reference.",
             "code": [
               ["monitoring-stack.ts", "cdk/lib/stacks/monitoring-stack.ts"],
               ["main-stack.ts", "cdk/lib/stacks/main-stack.ts"],
-              ["backup-stack.ts", "cdk/lib/stacks/backup-stack.ts"]
+              ["backup-stack.ts", "cdk/lib/stacks/backup-stack.ts"],
+              ["perf-stack.ts", "cdk/lib/stacks/perf-stack.ts"]
             ]
           }
         },
@@ -642,7 +661,7 @@
           "meta": ["monitoring stack"],
           "d": {
             "type": "AWS::CloudWatch::Dashboard",
-            "role": "Operational, and performance-test metrics.",
+            "role": "Operational, and performance-test metrics; widgets per discovered function and table, titled by name.",
             "code": [
               ["monitoring-stack.ts", "cdk/lib/stacks/monitoring-stack.ts"]
             ]
@@ -659,15 +678,15 @@
           "id": "iam-roles",
           "name": "IAM roles",
           "n": {
-            "dev": 32,
-            "stg": 28,
-            "prod": 23
+            "dev": 33,
+            "stg": 29,
+            "prod": 24
           },
           "from": "counts.iamRoles",
           "meta": ["every stack", "+1 per real consumer"],
           "d": {
             "type": "AWS::IAM::Role",
-            "role": "A role per named function, the API's CloudWatch role, the test consumer role, the flow-log role, custom-resource roles (the live-schema Trigger's among them), the backup role outside development, and the CodeBuild roles outside production. Staging drops the three SAR and DSAR route roles and two S3 auto-delete provider roles, and adds the backup role.",
+            "role": "A role per named function — the health check's since UDP-419 — the API's CloudWatch role, the test consumer role, the flow-log role, custom-resource roles (the live-schema Trigger's among them), the backup role outside development, and the CodeBuild roles outside production. Staging drops the three SAR and DSAR route roles and two S3 auto-delete provider roles, and adds the backup role.",
             "code": [
               ["lambda-construct.ts", "cdk/lib/constructs/lambda-construct.ts"],
               [

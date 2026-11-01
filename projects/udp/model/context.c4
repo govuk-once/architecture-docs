@@ -123,8 +123,8 @@ model {
         tech 'AWS · TypeScript · serverless · one VPC'
         role 'Keeps one record per person — a <code>udpId</code> — the links from each service\'s own identifier to it, the data services store against it, and the requests to export or erase all of it.'
         facts [
-          'Ten routes on one private REST API in every environment — the SAR and DSAR routes are declared but never routed — each an IAM-authorised Lambda in an isolated subnet, over two DynamoDB tables.',
-          'VPC, main, SAR, DVLA pilot, monitoring and Macie stacks in every environment; live schema, end-to-end and performance test stacks outside production; backup outside development.',
+          'Eleven routes on one private REST API in every environment — ten for identity and data, and <code>GET /v1/_health</code>, which checks both tables — the SAR and DSAR routes are declared but never routed. Each is an IAM-authorised Lambda in an isolated subnet, over two DynamoDB tables.',
+          'VPC, main, SAR, DVLA pilot, monitoring and Macie stacks in every environment; live schema, end-to-end and performance test stacks outside production; backup outside development. Since UDP-422 the monitoring stack is deployed on its own, after the rest, from what it finds deployed.',
           'The README says no Cognito or OAuth credentials are involved and access is cross-account IAM. The OpenAPI file still declares a Cognito bearer scheme; nothing enforces one.'
         ]
         sourceId 'udp'
