@@ -61,7 +61,7 @@ model {
         facts [
           '<code>domain()</code> is generic over its own argument: <code>InferResourceKeys</code>, <code>InferIntegrationKeys</code>, <code>InferFeatureFlagKeys</code> and <code>InferEnvironmentKeys</code> read the keys back out of the config, so a route may only list resources, integrations and flags that the same file defines.',
           'The context type is built per route from the route key string and that route\'s schemas: <code>ctx.pathParams.id</code> exists because the key contains <code>:id</code>, and <code>ctx.body</code> takes its type from the route\'s body schema.',
-          '<b>One field is keyed off the wrong axis.</b> <code>WithAuth</code> adds <code>ctx.auth</code> unless the route\'s network access tier is <code>public</code> — which no domain uses — while at run time it is only populated for routes on the public gateway. Private routes therefore type-check against an <code>auth</code> object that is undefined when they run.'
+          'Since FLEX-554 <code>WithAuth</code> adds <code>ctx.auth</code> when the route key names the <code>public</code> gateway, which is when it is populated at run time. Until then it was keyed off the network access tier, so private routes type-checked against an <code>auth</code> that was undefined when they ran.'
         ]
         sourceId 'typed'
         order '1'
@@ -128,7 +128,7 @@ model {
         facts [
           'Public routes get a <code>TokenAuthorizer</code> pointed at the shared authorizer Lambda and are mounted at <code>/app/{domain}/{version}{path}</code>; private routes get <code>AuthorizationType.IAM</code> and are mounted at <code>/domains/{domain}/{version}{path}</code>.',
           'Only the resources and integrations that route declares are granted to that route\'s role, so two routes in the same domain do not share permissions.',
-          'Every function is given <code>FLEX_ENVIRONMENT</code> set to the stage. <code>STAGE</code> is never set on a function, which is what breaks the feature-flag environment level.'
+          'Every function is given <code>FLEX_ENVIRONMENT</code> set to the stage. <code>STAGE</code> is never set on a function; until FLEX-552 the feature-flag environment level read <code>STAGE</code>, and so never worked when deployed.'
         ]
         sourceId 'fnp'
         order '3'
@@ -231,7 +231,7 @@ model {
           'Two phases: at module load it resolves the route config, log level, resources and header rules once, builds the Middy stack and memoises the integration invokers. Per invocation it only assembles the context and runs the handler.',
           'The key is parsed back into method, version, path and gateway and used to look up <code>routes[version][path][METHOD][gateway]</code>. A key with no matching config entry throws at module load, before the first request.',
           'The logger\'s service name is set here to <code>{domain}-{gateway}-{version}-{routeName}</code>, so every line a route logs identifies exactly which route wrote it.',
-          '<code>logger.setLogLevel</code> is a hard no-op when <code>FLEX_ENVIRONMENT</code> is production, so a route\'s declared log level has no effect in the one stage where raising it matters most.'
+          'In production the resolved level is INFO whatever a route declares (FLEX-553), and <code>FlexLogger.setLogLevel</code> is a no-op there besides — so a route\'s declared log level has no effect in the one stage where raising it matters most.'
         ]
         sourceId 'rte'
         order '6'
@@ -283,7 +283,7 @@ model {
         facts [
           'A declaration of <code>{ type, target, route }</code> becomes the base path <code>/domains/{target}/{version}</code> or <code>/gateways/{target}/{version}</code> against the private API URL supplied by the route\'s <code>ssm</code> resource. The invokers and the signed fetcher are built once per container and cached.',
           'At synth the same declaration becomes an <code>execute-api:Invoke</code> statement on that route\'s role, one statement per HTTP method, scoped to the method and path ARN. A route key ending <code>/*</code> is a wildcard the caller extends at call time, and the same <code>*</code> lands inside the IAM resource ARN.',
-          'Retries are opt-in and nothing opts in: <code>DomainIntegrationBaseSchema</code> has no <code>retryAttempts</code> field and no handler passes one at call time, so every domain-to-gateway call is a single attempt.',
+          'Retries are opt-in and nothing opts in: since FLEX-556 the schema validates <code>retryAttempts</code> (0 to 5) and <code>maxRetryDelay</code> (10 to 1,000 ms) on an integration, but no domain declares either and no handler passes one at call time, so every domain-to-gateway call is a single attempt.',
           '<code>pnpm validate:integrations</code> only checks <code>type: "domain"</code> integrations. A gateway integration naming a route the gateway does not define passes CI and 404s in production.'
         ]
         sourceId 'integ'
@@ -555,7 +555,7 @@ model {
         facts [
           'Order: <code>process.env[key]</code> equal to the string "true" or "false" wins; otherwise the flag is true if its <code>environments</code> list contains the current environment; otherwise its <code>default</code>; otherwise false.',
           'Levels two and three are an OR rather than a fallback chain, so an <code>environments</code> list can switch a flag on for one stage but can never switch it off when <code>default</code> is true.',
-          '<b>The environment level does not work in a deployed Lambda.</b> The current environment is read from <code>process.env.STAGE</code>, and no Flex function construct sets STAGE — only FLEX_ENVIRONMENT — so it falls back to development in every stage, production included.',
+          'The environment level reads <code>FLEX_ENVIRONMENT</code>, which every function construct sets, since FLEX-552. Until then it read <code>process.env.STAGE</code>, which nothing set, and fell back to development in every stage, production included.',
           'Nothing injects a flag override variable either: an override has to be written by hand into the route\'s or the domain\'s <code>function.environment</code> block.'
         ]
         sourceId 'flags'

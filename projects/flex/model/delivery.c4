@@ -510,6 +510,7 @@ model {
         facts [
           'Declared through addExternalExports: importing a key no stack exports and that isn\'t declared external fails the synth. The values themselves are CloudFormation SSM references resolved at deploy time, so a parameter missing from SSM fails the deploy.',
           'The only genuine synth-time read is ReleaseSlackChannelId, via valueFromLookup.',
+          'FLEX-547 added one key, monitoring/criticalSlackChannelId, for the second Slack channel configuration.',
           'One import escapes the rule: the Lambda environment-encryption CMK is read with valueForStringParameter without being declared external, so a missing key there surfaces at deploy rather than synth.'
         ]
         sourceId 'params'
@@ -809,7 +810,10 @@ model {
 
     delivery_zap = platform 'ZAP API scan' {
       #off-request-path
-      description 'DAST against staging'
+      description 'DAST after staging'
+      link https://github.com/govuk-once/flex/blob/main/scripts/zap/security-gate.sh 'scripts/zap/security-gate.sh'
+      link https://github.com/govuk-once/flex/blob/main/scripts/zap/run-scan.sh 'scripts/zap/run-scan.sh'
+      link https://github.com/govuk-once/flex/blob/main/.github/workflows/main.yml 'main.yml'
       technology 'zap.yml'
       link https://github.com/govuk-once/flex/blob/main/.github/workflows/zap.yml 'zap.yml'
       link https://github.com/govuk-once/flex/blob/main/scripts/dastSetup.ts 'dastSetup.ts'
@@ -819,9 +823,9 @@ model {
         tech 'zap.yml'
         role 'Dynamic security scan driven by an OpenAPI document.'
         facts [
-          'Triggered by workflow_run when the whole Continuous Deployment workflow completes successfully on main — including the production gate. If production is rejected, DAST never runs.',
-          'Mints a real JWT first; the scan emits a SARIF report kept as a workflow-run artifact — nothing uploads it to code scanning.',
-          'The target is .zap/merged-openapi.json, a spec committed with the workflow and unchanged since: paths such as /v1/driving-licence and /v1/customer-summary no longer exist, and .zap/rules.tsv is empty.'
+          'Since FLEX-528 a reusable workflow, called by main.yml right after the staging deploy and by hand; the 390-line job became twelve scripts under scripts/zap/. It no longer waits for production.',
+          'Mints a real JWT, generates the OpenAPI from the code and merges the public API\'s into one document, verifies the token against the live API, then scans. The SARIF is normalised and uploaded to GitHub code scanning; findings are fingerprinted against a baseline kept as an artifact, and a Slack notice names the new ones.',
+          'security-gate.sh fails the job on any Medium or High instance that is neither approved nor in the baseline, so the scan gates for the first time — a day after staging, not before production.'
         ]
         sourceId 'zap'
         order '28'
@@ -880,7 +884,8 @@ model {
 
     delivery_canary = platform 'Smoke-test canary' {
       #off-request-path
-      description 'EventBridge · every 5m'
+      description 'EventBridge · 1 min'
+      link https://github.com/govuk-once/flex/blob/main/platform/smoke-test/src/probes.ts 'smoke-test/probes.ts'
       technology 'Lambda, no VPC'
       link https://github.com/govuk-once/flex/blob/main/platform/infra/flex/src/stacks/smoke-test.ts 'stacks/smoke-test.ts'
       link https://github.com/govuk-once/flex/blob/main/platform/smoke-test/src/credentials.ts 'credentials.ts'
@@ -889,8 +894,8 @@ model {
         tech 'Lambda, no VPC'
         role 'Synthetic canary exercising the whole public path.'
         facts [
-          'Calls GET /app/udp/v1/users/me through the public URL, so CloudFront, the edge function, WAF, the certificate, the authorizer and the udp domain are all covered by one signal.',
-          'Publishes Flex/SmokeTest.SmokeTestSuccess as 1 or 0 — but its alarm has no SNS action, so nothing is notified.',
+          'One probe per journey, through the public URL, so CloudFront, the edge function, WAF, the certificate, the authorizer and a domain are covered by each: GET /app/udp/v1/users/me everywhere, GET /app/travel/v1/countries outside production. DVLA and UNS need a linked licence or a push id and have no probe yet.',
+          'Publishes Flex/SmokeTest.SmokeTestSuccess per journey, and SmokeTestAuthRejected when a valid token is refused. Since FLEX-547 three failures in a row raise a critical alarm; until then its one alarm had no action and nothing was notified.',
           'Credentials differ by environment: a self-signed stub token in development, a real One Login sign-in with e-mail, password and TOTP in staging and production, and a Firebase App Check header everywhere except staging.',
           'Persistent stages only, production included — which makes it the second production caller of the public path.'
         ]
@@ -979,13 +984,13 @@ model {
       metadata {
         type 'Container'
         tech 'SNS → Lambda → SNS · failure queue · health topic'
-        role 'Republishes us-east-1 alarms onto the eu-west-2 topics, and alarms on itself to a health topic nothing reads.'
+        role 'Republishes us-east-1 alarms onto the eu-west-2 topics, and alarms on itself to a health topic the critical Slack channel now subscribes to.'
         facts [
           'Lives in us-east-1: CloudWatch cannot target an SNS topic in another region, so edge alarms need this hop to reach the eu-west-2 topics.',
           'The handler is relay-handler.ts and reads the target topic from TARGET_TOPIC_ARN; until FLEX-404 the ARN was interpolated unquoted into the inline source, a syntax error that failed every invocation.',
           'Forwards the subject, truncated to 100 characters, and the message; message attributes are not forwarded.',
           'createAlarmRelay is called twice, once per severity: two topics and two functions share one relay key, and each function\'s on-failure destination is its own SQS queue, kept 14 days.',
-          'Six alarms watch the relay — per severity, function errors, failure-queue depth and undelivered destinations, each above 0 over one 5-minute period — and publish to {stage}-flex-alerts-relay-health, which has no subscription in any stage.'
+          'Six alarms watch the relay — per severity, function errors, failure-queue depth and undelivered destinations, each above 0 over one 5-minute period — and publish to {stage}-flex-alerts-relay-health. Since FLEX-547 the core stack\'s critical Slack channel subscribes to that topic by ARN and may decrypt with its key by alias; until then it had no subscription in any stage.'
         ]
         sourceId 'relay'
         order '33'
@@ -1043,7 +1048,7 @@ model {
       metadata {
         type 'Container'
         tech 'AWS Chatbot'
-        role 'Delivers alarms to Slack via the flex-alerts-{stage} channel configuration; the target channel comes from the MonitoringSlackChannelId parameter.'
+        role 'Two channel configurations since FLEX-547: flex-alerts-{stage} for the warning topic, and flex-alerts-critical-{stage} for the critical topic and the us-east-1 relay-health topic; each channel id comes from its own SSM parameter.'
         facts [
           'A ReadOnlyAccess guardrail policy caps what anyone can do from Slack.',
           'Development adds one more configuration per release channel ID, and those IDs are the one value read at synth time.'
@@ -1071,7 +1076,7 @@ model {
         tech 'Slack'
         role 'Where alarms and deployment notices land.'
         facts [
-          'flex-alerts-{stage} for alarms; separate release channels, in development only, for deployment and release notices.'
+          'flex-alerts-{stage} for warnings and flex-alerts-critical-{stage} for critical alarms and relay health; separate release channels, in development only, for deployment and release notices.'
         ]
         sourceId 'slack'
         order '36'
@@ -1106,6 +1111,9 @@ model {
     delivery_runbooks = platform 'Runbooks' {
       #off-request-path
       description 'docs/runbooks'
+      link https://github.com/govuk-once/flex/blob/main/.github/workflows/docs.yml 'docs.yml'
+      link https://github.com/govuk-once/flex/blob/main/docs/astro.config.mjs 'docs/astro.config.mjs'
+      link https://github.com/govuk-once/flex/blob/main/docs/critical-alerts.md 'docs/critical-alerts.md'
       technology 'Markdown in the repository'
       link https://github.com/govuk-once/flex/blob/main/docs/runbooks/README.md 'runbooks/README.md'
       metadata {
@@ -1113,7 +1121,8 @@ model {
         tech 'Markdown in the repository'
         role 'Written procedures for what fires.'
         facts [
-          'Eight runbooks: API Gateway 5xx, Lambda errors and throttling, external service outage, leaked secret, fix-forward, pipeline promotion, deploying to staging/production, and environment health.'
+          'Eight runbooks: API Gateway 5xx, Lambda errors and throttling, external service outage, leaked secret, fix-forward, pipeline promotion, deploying to staging/production, and environment health. The FLEX-547 alarms name one each in their descriptions.',
+          'Since FLEX-540 docs/ is also an Astro site, built and published to GitHub Pages at govuk-once.github.io/flex by docs.yml on every push to main that touches it. docs/critical-alerts.md is the design the alarms follow.'
         ]
         sourceId 'runbooks'
         order '38'

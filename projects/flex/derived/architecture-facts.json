@@ -96,6 +96,34 @@
       },
       {
         "scope": "Alarm relay",
+        "id": "CognitoUserPoolChangeAlertLost",
+        "stages": ["development", "staging", "production"],
+        "Threshold": "0",
+        "EvaluationPeriods": "1",
+        "DatapointsToAlarm": "",
+        "ComparisonOperator": "GreaterThanThreshold",
+        "TreatMissingData": "notBreaching",
+        "MetricName": "InvocationsFailedToBeSentToDlq",
+        "Statistic": "Sum",
+        "ExtendedStatistic": "",
+        "AlarmActions": "WarningRelayTopic0390E667"
+      },
+      {
+        "scope": "Alarm relay",
+        "id": "CognitoUserPoolChangeAlertUndelivered",
+        "stages": ["development", "staging", "production"],
+        "Threshold": "0",
+        "EvaluationPeriods": "1",
+        "DatapointsToAlarm": "",
+        "ComparisonOperator": "GreaterThanThreshold",
+        "TreatMissingData": "notBreaching",
+        "MetricName": "ApproximateNumberOfMessagesVisible",
+        "Statistic": "Maximum",
+        "ExtendedStatistic": "",
+        "AlarmActions": "WarningRelayTopic0390E667"
+      },
+      {
+        "scope": "Alarm relay",
         "id": "CriticalRelayErrors",
         "stages": ["development", "staging", "production", "ephemeral"],
         "Threshold": "0",
@@ -153,6 +181,34 @@
       {
         "scope": "Alarm relay",
         "id": "IamChangeAlertUndelivered",
+        "stages": ["development", "staging", "production"],
+        "Threshold": "0",
+        "EvaluationPeriods": "1",
+        "DatapointsToAlarm": "",
+        "ComparisonOperator": "GreaterThanThreshold",
+        "TreatMissingData": "notBreaching",
+        "MetricName": "ApproximateNumberOfMessagesVisible",
+        "Statistic": "Maximum",
+        "ExtendedStatistic": "",
+        "AlarmActions": "WarningRelayTopic0390E667"
+      },
+      {
+        "scope": "Alarm relay",
+        "id": "KmsKeyChangeAlertLost",
+        "stages": ["development", "staging", "production"],
+        "Threshold": "0",
+        "EvaluationPeriods": "1",
+        "DatapointsToAlarm": "",
+        "ComparisonOperator": "GreaterThanThreshold",
+        "TreatMissingData": "notBreaching",
+        "MetricName": "InvocationsFailedToBeSentToDlq",
+        "Statistic": "Sum",
+        "ExtendedStatistic": "",
+        "AlarmActions": "WarningRelayTopic0390E667"
+      },
+      {
+        "scope": "Alarm relay",
+        "id": "KmsKeyChangeAlertUndelivered",
         "stages": ["development", "staging", "production"],
         "Threshold": "0",
         "EvaluationPeriods": "1",
@@ -260,7 +316,7 @@
         "MetricName": "5XXError",
         "Statistic": "Average",
         "ExtendedStatistic": "",
-        "AlarmActions": "SsmParameterValuedevelopmentflextopiccriticalalarmsC96584B6F00A464EAD1953AFF4B05118Parameter | SsmParameterValueproductionflextopiccriticalalarmsC96584B6F00A464EAD1953AFF4B05118Parameter | SsmParameterValuestagingflextopiccriticalalarmsC96584B6F00A464EAD1953AFF4B05118Parameter"
+        "AlarmActions": "SsmParameterValuedevelopmentflextopicwarningalarmsC96584B6F00A464EAD1953AFF4B05118Parameter | SsmParameterValueproductionflextopicwarningalarmsC96584B6F00A464EAD1953AFF4B05118Parameter | SsmParameterValuestagingflextopicwarningalarmsC96584B6F00A464EAD1953AFF4B05118Parameter"
       },
       {
         "scope": "API Gateway",
@@ -289,6 +345,34 @@
         "Statistic": "",
         "ExtendedStatistic": "",
         "AlarmActions": "SsmParameterValuedevelopmentflextopicwarningalarmsC96584B6F00A464EAD1953AFF4B05118Parameter | SsmParameterValueproductionflextopicwarningalarmsC96584B6F00A464EAD1953AFF4B05118Parameter | SsmParameterValuestagingflextopicwarningalarmsC96584B6F00A464EAD1953AFF4B05118Parameter"
+      },
+      {
+        "scope": "AuthFailureAlarms",
+        "id": "AuthFailure15m",
+        "stages": ["development", "staging", "production", "ephemeral"],
+        "Threshold": "50",
+        "EvaluationPeriods": "1",
+        "DatapointsToAlarm": "",
+        "ComparisonOperator": "GreaterThanThreshold",
+        "TreatMissingData": "notBreaching",
+        "MetricName": "",
+        "Statistic": "",
+        "ExtendedStatistic": "",
+        "AlarmActions": ""
+      },
+      {
+        "scope": "AuthFailureAlarms",
+        "id": "AuthFailure5m",
+        "stages": ["development", "staging", "production", "ephemeral"],
+        "Threshold": "50",
+        "EvaluationPeriods": "1",
+        "DatapointsToAlarm": "",
+        "ComparisonOperator": "GreaterThanThreshold",
+        "TreatMissingData": "notBreaching",
+        "MetricName": "",
+        "Statistic": "",
+        "ExtendedStatistic": "",
+        "AlarmActions": ""
       },
       {
         "scope": "Certificate",
@@ -347,6 +431,20 @@
         "AlarmActions": "WarningRelayTopic0390E667"
       },
       {
+        "scope": "CloudFront",
+        "id": "TrafficCliff",
+        "stages": ["staging", "production"],
+        "Threshold": "",
+        "EvaluationPeriods": "3",
+        "DatapointsToAlarm": "3",
+        "ComparisonOperator": "LessThanLowerThreshold",
+        "TreatMissingData": "breaching",
+        "MetricName": "",
+        "Statistic": "",
+        "ExtendedStatistic": "",
+        "AlarmActions": "CriticalRelayTopic2C3B693C"
+      },
+      {
         "scope": "CloudFront Function",
         "id": "FunctionExecutionErrors",
         "stages": ["development", "staging", "production", "ephemeral"],
@@ -358,7 +456,7 @@
         "MetricName": "FunctionExecutionErrors",
         "Statistic": "Sum",
         "ExtendedStatistic": "",
-        "AlarmActions": "CriticalRelayTopic2C3B693C"
+        "AlarmActions": "WarningRelayTopic0390E667"
       },
       {
         "scope": "CloudFront Function",
@@ -372,7 +470,7 @@
         "MetricName": "FunctionThrottles",
         "Statistic": "Sum",
         "ExtendedStatistic": "",
-        "AlarmActions": "CriticalRelayTopic2C3B693C"
+        "AlarmActions": "WarningRelayTopic0390E667"
       },
       {
         "scope": "CloudFront Function",
@@ -405,6 +503,62 @@
       {
         "scope": "Core alerts",
         "id": "CloudFormationChangeAlertUndelivered",
+        "stages": ["development", "staging", "production"],
+        "Threshold": "0",
+        "EvaluationPeriods": "1",
+        "DatapointsToAlarm": "",
+        "ComparisonOperator": "GreaterThanThreshold",
+        "TreatMissingData": "notBreaching",
+        "MetricName": "ApproximateNumberOfMessagesVisible",
+        "Statistic": "Maximum",
+        "ExtendedStatistic": "",
+        "AlarmActions": "WarningTopicE070F32B"
+      },
+      {
+        "scope": "Core alerts",
+        "id": "CognitoUserPoolChangeAlertLost",
+        "stages": ["development", "staging", "production"],
+        "Threshold": "0",
+        "EvaluationPeriods": "1",
+        "DatapointsToAlarm": "",
+        "ComparisonOperator": "GreaterThanThreshold",
+        "TreatMissingData": "notBreaching",
+        "MetricName": "InvocationsFailedToBeSentToDlq",
+        "Statistic": "Sum",
+        "ExtendedStatistic": "",
+        "AlarmActions": "WarningTopicE070F32B"
+      },
+      {
+        "scope": "Core alerts",
+        "id": "CognitoUserPoolChangeAlertUndelivered",
+        "stages": ["development", "staging", "production"],
+        "Threshold": "0",
+        "EvaluationPeriods": "1",
+        "DatapointsToAlarm": "",
+        "ComparisonOperator": "GreaterThanThreshold",
+        "TreatMissingData": "notBreaching",
+        "MetricName": "ApproximateNumberOfMessagesVisible",
+        "Statistic": "Maximum",
+        "ExtendedStatistic": "",
+        "AlarmActions": "WarningTopicE070F32B"
+      },
+      {
+        "scope": "Core alerts",
+        "id": "KmsKeyChangeAlertLost",
+        "stages": ["development", "staging", "production"],
+        "Threshold": "0",
+        "EvaluationPeriods": "1",
+        "DatapointsToAlarm": "",
+        "ComparisonOperator": "GreaterThanThreshold",
+        "TreatMissingData": "notBreaching",
+        "MetricName": "InvocationsFailedToBeSentToDlq",
+        "Statistic": "Sum",
+        "ExtendedStatistic": "",
+        "AlarmActions": "WarningTopicE070F32B"
+      },
+      {
+        "scope": "Core alerts",
+        "id": "KmsKeyChangeAlertUndelivered",
         "stages": ["development", "staging", "production"],
         "Threshold": "0",
         "EvaluationPeriods": "1",
@@ -557,17 +711,297 @@
         "AlarmActions": "CriticalTopic48D98EE4"
       },
       {
-        "scope": "Lambda",
-        "id": "Duration",
+        "scope": "JourneyAlarms",
+        "id": "DrivingFastBurn1h",
         "stages": ["development", "staging", "production", "ephemeral"],
-        "Threshold": "16000 | 20000 | 24000 | 48000 | 8000",
+        "Threshold": "7.2",
         "EvaluationPeriods": "1",
         "DatapointsToAlarm": "",
         "ComparisonOperator": "GreaterThanThreshold",
         "TreatMissingData": "notBreaching",
-        "MetricName": "Duration",
+        "MetricName": "",
         "Statistic": "",
-        "ExtendedStatistic": "p99",
+        "ExtendedStatistic": "",
+        "AlarmActions": ""
+      },
+      {
+        "scope": "JourneyAlarms",
+        "id": "DrivingFastBurn5m",
+        "stages": ["development", "staging", "production", "ephemeral"],
+        "Threshold": "7.2",
+        "EvaluationPeriods": "1",
+        "DatapointsToAlarm": "",
+        "ComparisonOperator": "GreaterThanThreshold",
+        "TreatMissingData": "notBreaching",
+        "MetricName": "",
+        "Statistic": "",
+        "ExtendedStatistic": "",
+        "AlarmActions": ""
+      },
+      {
+        "scope": "JourneyAlarms",
+        "id": "DrivingSlowBurn30m",
+        "stages": ["development", "staging", "production", "ephemeral"],
+        "Threshold": "3",
+        "EvaluationPeriods": "1",
+        "DatapointsToAlarm": "",
+        "ComparisonOperator": "GreaterThanThreshold",
+        "TreatMissingData": "notBreaching",
+        "MetricName": "",
+        "Statistic": "",
+        "ExtendedStatistic": "",
+        "AlarmActions": ""
+      },
+      {
+        "scope": "JourneyAlarms",
+        "id": "DrivingSlowBurn6h",
+        "stages": ["development", "staging", "production", "ephemeral"],
+        "Threshold": "3",
+        "EvaluationPeriods": "1",
+        "DatapointsToAlarm": "",
+        "ComparisonOperator": "GreaterThanThreshold",
+        "TreatMissingData": "notBreaching",
+        "MetricName": "",
+        "Statistic": "",
+        "ExtendedStatistic": "",
+        "AlarmActions": ""
+      },
+      {
+        "scope": "JourneyAlarms",
+        "id": "NotificationsFastBurn1h",
+        "stages": ["development", "staging", "production", "ephemeral"],
+        "Threshold": "7.2",
+        "EvaluationPeriods": "1",
+        "DatapointsToAlarm": "",
+        "ComparisonOperator": "GreaterThanThreshold",
+        "TreatMissingData": "notBreaching",
+        "MetricName": "",
+        "Statistic": "",
+        "ExtendedStatistic": "",
+        "AlarmActions": ""
+      },
+      {
+        "scope": "JourneyAlarms",
+        "id": "NotificationsFastBurn5m",
+        "stages": ["development", "staging", "production", "ephemeral"],
+        "Threshold": "7.2",
+        "EvaluationPeriods": "1",
+        "DatapointsToAlarm": "",
+        "ComparisonOperator": "GreaterThanThreshold",
+        "TreatMissingData": "notBreaching",
+        "MetricName": "",
+        "Statistic": "",
+        "ExtendedStatistic": "",
+        "AlarmActions": ""
+      },
+      {
+        "scope": "JourneyAlarms",
+        "id": "NotificationsSlowBurn30m",
+        "stages": ["development", "staging", "production", "ephemeral"],
+        "Threshold": "3",
+        "EvaluationPeriods": "1",
+        "DatapointsToAlarm": "",
+        "ComparisonOperator": "GreaterThanThreshold",
+        "TreatMissingData": "notBreaching",
+        "MetricName": "",
+        "Statistic": "",
+        "ExtendedStatistic": "",
+        "AlarmActions": ""
+      },
+      {
+        "scope": "JourneyAlarms",
+        "id": "NotificationsSlowBurn6h",
+        "stages": ["development", "staging", "production", "ephemeral"],
+        "Threshold": "3",
+        "EvaluationPeriods": "1",
+        "DatapointsToAlarm": "",
+        "ComparisonOperator": "GreaterThanThreshold",
+        "TreatMissingData": "notBreaching",
+        "MetricName": "",
+        "Statistic": "",
+        "ExtendedStatistic": "",
+        "AlarmActions": ""
+      },
+      {
+        "scope": "JourneyAlarms",
+        "id": "ReadsFastBurn1h",
+        "stages": ["development", "staging", "production", "ephemeral"],
+        "Threshold": "7.2",
+        "EvaluationPeriods": "1",
+        "DatapointsToAlarm": "",
+        "ComparisonOperator": "GreaterThanThreshold",
+        "TreatMissingData": "notBreaching",
+        "MetricName": "",
+        "Statistic": "",
+        "ExtendedStatistic": "",
+        "AlarmActions": ""
+      },
+      {
+        "scope": "JourneyAlarms",
+        "id": "ReadsFastBurn5m",
+        "stages": ["development", "staging", "production", "ephemeral"],
+        "Threshold": "7.2",
+        "EvaluationPeriods": "1",
+        "DatapointsToAlarm": "",
+        "ComparisonOperator": "GreaterThanThreshold",
+        "TreatMissingData": "notBreaching",
+        "MetricName": "",
+        "Statistic": "",
+        "ExtendedStatistic": "",
+        "AlarmActions": ""
+      },
+      {
+        "scope": "JourneyAlarms",
+        "id": "ReadsSlowBurn30m",
+        "stages": ["development", "staging", "production", "ephemeral"],
+        "Threshold": "3",
+        "EvaluationPeriods": "1",
+        "DatapointsToAlarm": "",
+        "ComparisonOperator": "GreaterThanThreshold",
+        "TreatMissingData": "notBreaching",
+        "MetricName": "",
+        "Statistic": "",
+        "ExtendedStatistic": "",
+        "AlarmActions": ""
+      },
+      {
+        "scope": "JourneyAlarms",
+        "id": "ReadsSlowBurn6h",
+        "stages": ["development", "staging", "production", "ephemeral"],
+        "Threshold": "3",
+        "EvaluationPeriods": "1",
+        "DatapointsToAlarm": "",
+        "ComparisonOperator": "GreaterThanThreshold",
+        "TreatMissingData": "notBreaching",
+        "MetricName": "",
+        "Statistic": "",
+        "ExtendedStatistic": "",
+        "AlarmActions": ""
+      },
+      {
+        "scope": "JourneyAlarms",
+        "id": "TravelFastBurn1h",
+        "stages": ["development", "staging", "production", "ephemeral"],
+        "Threshold": "14.4",
+        "EvaluationPeriods": "1",
+        "DatapointsToAlarm": "",
+        "ComparisonOperator": "GreaterThanThreshold",
+        "TreatMissingData": "notBreaching",
+        "MetricName": "",
+        "Statistic": "",
+        "ExtendedStatistic": "",
+        "AlarmActions": ""
+      },
+      {
+        "scope": "JourneyAlarms",
+        "id": "TravelFastBurn5m",
+        "stages": ["development", "staging", "production", "ephemeral"],
+        "Threshold": "14.4",
+        "EvaluationPeriods": "1",
+        "DatapointsToAlarm": "",
+        "ComparisonOperator": "GreaterThanThreshold",
+        "TreatMissingData": "notBreaching",
+        "MetricName": "",
+        "Statistic": "",
+        "ExtendedStatistic": "",
+        "AlarmActions": ""
+      },
+      {
+        "scope": "JourneyAlarms",
+        "id": "TravelSlowBurn30m",
+        "stages": ["development", "staging", "production", "ephemeral"],
+        "Threshold": "6",
+        "EvaluationPeriods": "1",
+        "DatapointsToAlarm": "",
+        "ComparisonOperator": "GreaterThanThreshold",
+        "TreatMissingData": "notBreaching",
+        "MetricName": "",
+        "Statistic": "",
+        "ExtendedStatistic": "",
+        "AlarmActions": ""
+      },
+      {
+        "scope": "JourneyAlarms",
+        "id": "TravelSlowBurn6h",
+        "stages": ["development", "staging", "production", "ephemeral"],
+        "Threshold": "6",
+        "EvaluationPeriods": "1",
+        "DatapointsToAlarm": "",
+        "ComparisonOperator": "GreaterThanThreshold",
+        "TreatMissingData": "notBreaching",
+        "MetricName": "",
+        "Statistic": "",
+        "ExtendedStatistic": "",
+        "AlarmActions": ""
+      },
+      {
+        "scope": "JourneyAlarms",
+        "id": "WritesFastBurn1h",
+        "stages": ["development", "staging", "production", "ephemeral"],
+        "Threshold": "1.44",
+        "EvaluationPeriods": "1",
+        "DatapointsToAlarm": "",
+        "ComparisonOperator": "GreaterThanThreshold",
+        "TreatMissingData": "notBreaching",
+        "MetricName": "",
+        "Statistic": "",
+        "ExtendedStatistic": "",
+        "AlarmActions": ""
+      },
+      {
+        "scope": "JourneyAlarms",
+        "id": "WritesFastBurn5m",
+        "stages": ["development", "staging", "production", "ephemeral"],
+        "Threshold": "1.44",
+        "EvaluationPeriods": "1",
+        "DatapointsToAlarm": "",
+        "ComparisonOperator": "GreaterThanThreshold",
+        "TreatMissingData": "notBreaching",
+        "MetricName": "",
+        "Statistic": "",
+        "ExtendedStatistic": "",
+        "AlarmActions": ""
+      },
+      {
+        "scope": "JourneyAlarms",
+        "id": "WritesSlowBurn30m",
+        "stages": ["development", "staging", "production", "ephemeral"],
+        "Threshold": "0.6",
+        "EvaluationPeriods": "1",
+        "DatapointsToAlarm": "",
+        "ComparisonOperator": "GreaterThanThreshold",
+        "TreatMissingData": "notBreaching",
+        "MetricName": "",
+        "Statistic": "",
+        "ExtendedStatistic": "",
+        "AlarmActions": ""
+      },
+      {
+        "scope": "JourneyAlarms",
+        "id": "WritesSlowBurn6h",
+        "stages": ["development", "staging", "production", "ephemeral"],
+        "Threshold": "0.6",
+        "EvaluationPeriods": "1",
+        "DatapointsToAlarm": "",
+        "ComparisonOperator": "GreaterThanThreshold",
+        "TreatMissingData": "notBreaching",
+        "MetricName": "",
+        "Statistic": "",
+        "ExtendedStatistic": "",
+        "AlarmActions": ""
+      },
+      {
+        "scope": "Lambda",
+        "id": "Duration",
+        "stages": ["development", "staging", "production", "ephemeral"],
+        "Threshold": "16000 | 20000 | 24000 | 48000 | 8000",
+        "EvaluationPeriods": "3",
+        "DatapointsToAlarm": "2",
+        "ComparisonOperator": "GreaterThanThreshold",
+        "TreatMissingData": "notBreaching",
+        "MetricName": "",
+        "Statistic": "",
+        "ExtendedStatistic": "",
         "AlarmActions": "SsmParameterValuedevelopmentflextopicwarningalarmsC96584B6F00A464EAD1953AFF4B05118Parameter | SsmParameterValueproductionflextopicwarningalarmsC96584B6F00A464EAD1953AFF4B05118Parameter | SsmParameterValuestagingflextopicwarningalarmsC96584B6F00A464EAD1953AFF4B05118Parameter | WarningTopicE070F32B"
       },
       {
@@ -582,7 +1016,7 @@
         "MetricName": "",
         "Statistic": "",
         "ExtendedStatistic": "",
-        "AlarmActions": "CriticalTopic48D98EE4 | SsmParameterValuedevelopmentflextopiccriticalalarmsC96584B6F00A464EAD1953AFF4B05118Parameter | SsmParameterValueproductionflextopiccriticalalarmsC96584B6F00A464EAD1953AFF4B05118Parameter | SsmParameterValuestagingflextopiccriticalalarmsC96584B6F00A464EAD1953AFF4B05118Parameter"
+        "AlarmActions": "SsmParameterValuedevelopmentflextopicwarningalarmsC96584B6F00A464EAD1953AFF4B05118Parameter | SsmParameterValueproductionflextopicwarningalarmsC96584B6F00A464EAD1953AFF4B05118Parameter | SsmParameterValuestagingflextopicwarningalarmsC96584B6F00A464EAD1953AFF4B05118Parameter | WarningTopicE070F32B"
       },
       {
         "scope": "Lambda",
@@ -596,7 +1030,7 @@
         "MetricName": "Throttles",
         "Statistic": "Sum",
         "ExtendedStatistic": "",
-        "AlarmActions": "CriticalTopic48D98EE4 | SsmParameterValuedevelopmentflextopiccriticalalarmsC96584B6F00A464EAD1953AFF4B05118Parameter | SsmParameterValueproductionflextopiccriticalalarmsC96584B6F00A464EAD1953AFF4B05118Parameter | SsmParameterValuestagingflextopiccriticalalarmsC96584B6F00A464EAD1953AFF4B05118Parameter"
+        "AlarmActions": "SsmParameterValuedevelopmentflextopicwarningalarmsC96584B6F00A464EAD1953AFF4B05118Parameter | SsmParameterValueproductionflextopicwarningalarmsC96584B6F00A464EAD1953AFF4B05118Parameter | SsmParameterValuestagingflextopicwarningalarmsC96584B6F00A464EAD1953AFF4B05118Parameter | WarningTopicE070F32B"
       },
       {
         "scope": "Shield",
@@ -628,17 +1062,45 @@
       },
       {
         "scope": "Smoke test",
-        "id": "SmokeTestAlarm",
+        "id": "SmokeTestAuthRejectedAlarm",
         "stages": ["development", "staging", "production"],
+        "Threshold": "0",
+        "EvaluationPeriods": "3",
+        "DatapointsToAlarm": "3",
+        "ComparisonOperator": "GreaterThanThreshold",
+        "TreatMissingData": "notBreaching",
+        "MetricName": "SmokeTestAuthRejected",
+        "Statistic": "Sum",
+        "ExtendedStatistic": "",
+        "AlarmActions": "SsmParameterValuedevelopmentflextopiccriticalalarmsC96584B6F00A464EAD1953AFF4B05118Parameter | SsmParameterValueproductionflextopiccriticalalarmsC96584B6F00A464EAD1953AFF4B05118Parameter | SsmParameterValuestagingflextopiccriticalalarmsC96584B6F00A464EAD1953AFF4B05118Parameter"
+      },
+      {
+        "scope": "Smoke test",
+        "id": "SmokeTestTravelAlarm",
+        "stages": ["development", "staging"],
         "Threshold": "1",
-        "EvaluationPeriods": "1",
-        "DatapointsToAlarm": "",
+        "EvaluationPeriods": "3",
+        "DatapointsToAlarm": "3",
         "ComparisonOperator": "LessThanThreshold",
         "TreatMissingData": "breaching",
         "MetricName": "SmokeTestSuccess",
         "Statistic": "Sum",
         "ExtendedStatistic": "",
-        "AlarmActions": ""
+        "AlarmActions": "SsmParameterValuedevelopmentflextopiccriticalalarmsC96584B6F00A464EAD1953AFF4B05118Parameter | SsmParameterValuestagingflextopiccriticalalarmsC96584B6F00A464EAD1953AFF4B05118Parameter"
+      },
+      {
+        "scope": "Smoke test",
+        "id": "SmokeTestUdpAlarm",
+        "stages": ["development", "staging", "production"],
+        "Threshold": "1",
+        "EvaluationPeriods": "3",
+        "DatapointsToAlarm": "3",
+        "ComparisonOperator": "LessThanThreshold",
+        "TreatMissingData": "breaching",
+        "MetricName": "SmokeTestSuccess",
+        "Statistic": "Sum",
+        "ExtendedStatistic": "",
+        "AlarmActions": "SsmParameterValuedevelopmentflextopiccriticalalarmsC96584B6F00A464EAD1953AFF4B05118Parameter | SsmParameterValueproductionflextopiccriticalalarmsC96584B6F00A464EAD1953AFF4B05118Parameter | SsmParameterValuestagingflextopiccriticalalarmsC96584B6F00A464EAD1953AFF4B05118Parameter"
       },
       {
         "scope": "WAF",
@@ -680,7 +1142,7 @@
         "MetricName": "",
         "Statistic": "",
         "ExtendedStatistic": "",
-        "AlarmActions": "CriticalRelayTopic2C3B693C | SsmParameterValuedevelopmentflextopiccriticalalarmsC96584B6F00A464EAD1953AFF4B05118Parameter | SsmParameterValueproductionflextopiccriticalalarmsC96584B6F00A464EAD1953AFF4B05118Parameter | SsmParameterValuestagingflextopiccriticalalarmsC96584B6F00A464EAD1953AFF4B05118Parameter"
+        "AlarmActions": "SsmParameterValuedevelopmentflextopicwarningalarmsC96584B6F00A464EAD1953AFF4B05118Parameter | SsmParameterValueproductionflextopicwarningalarmsC96584B6F00A464EAD1953AFF4B05118Parameter | SsmParameterValuestagingflextopicwarningalarmsC96584B6F00A464EAD1953AFF4B05118Parameter | WarningRelayTopic0390E667"
       }
     ],
     "securityGroups": {
@@ -720,9 +1182,9 @@
       "ephemeral": 0
     },
     "kmsKeys": {
-      "development": 14,
-      "staging": 14,
-      "production": 14,
+      "development": 18,
+      "staging": 18,
+      "production": 18,
       "ephemeral": 3
     },
     "secrets": {
@@ -738,21 +1200,21 @@
       "ephemeral": 1
     },
     "iamRoles": {
-      "development": 64,
-      "staging": 49,
-      "production": 44,
+      "development": 65,
+      "staging": 50,
+      "production": 46,
       "ephemeral": 57
     },
     "iamRolesBounded": {
-      "development": 54,
-      "staging": 39,
-      "production": 34,
+      "development": 55,
+      "staging": 40,
+      "production": 36,
       "ephemeral": 49
     },
     "logGroups": {
       "development": 61,
       "staging": 47,
-      "production": 42,
+      "production": 43,
       "ephemeral": 57
     },
     "authorizers": {

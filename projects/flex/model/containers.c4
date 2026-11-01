@@ -444,7 +444,7 @@ model {
         tech 'FlexDomainStack · isolated tier'
         role 'Countries and events for the travel feature.'
         facts [
-          '<code>environments</code> is development and staging only, so it does not exist in production.',
+          '<code>environments</code> is all three stages since NOT-562 (#580); until 21 October 2026 it was development and staging only.',
           'Both routes are public on <code>/app/travel/**</code> and reach the travel gateway over the private API.'
         ]
         sourceId 'dtravel'
@@ -604,7 +604,7 @@ model {
         role 'Sole holder of the travel upstream credentials.'
         facts [
           'Runs in the egress tier because it reaches DynamoDB and STS over the public AWS endpoints through NAT, which isolated subnets cannot route to.',
-          '<code>environments</code> is development and staging only.'
+          '<code>environments</code> is all three stages since NOT-562 (#585, 23 October 2026), two days after the domain reached production; until then it was development and staging only.'
         ]
         sourceId 'gwtravel'
         order '22'

@@ -31,7 +31,7 @@ model {
       metadata {
         type 'GOV.UK Once system'
         tech 'Mobile client'
-        role 'The only external production caller of the public API; FLEX\'s own smoke-test Lambda also calls /app/udp/v1/users/me every five minutes.'
+        role 'The only external production caller of the public API; FLEX\'s own smoke-test Lambda also calls /app/udp/v1/users/me every minute.'
         facts [
           'Calls /app/{domain}/{version}/… over HTTPS with a Bearer token.',
           'Signs the user in through Cognito\'s hosted UI, which federates to GOV.UK One Login; FLEX is not in the loop and only ever sees the resulting Cognito access token.'

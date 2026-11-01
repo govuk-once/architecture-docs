@@ -1006,15 +1006,15 @@ model {
 
   security_smoke = platform 'Smoke-test canary' {
     #off-request-path
-    description 'no VPC · alarm reaches nobody'
-    technology 'Scheduled every 5 minutes'
+    description 'no VPC · every minute · critical'
+    technology 'Scheduled every minute'
     link https://github.com/govuk-once/flex/blob/main/platform/infra/flex/src/stacks/smoke-test.ts 'stacks/smoke-test.ts'
     metadata {
       type 'AWS::Lambda::Function'
-      tech 'Scheduled every 5 minutes'
-      role 'Exercises the whole public path, and tells nobody when it fails.'
+      tech 'Scheduled every minute'
+      role 'Exercises the whole public path with one probe per journey, and since FLEX-547 raises a critical alarm after three failures in a row.'
       facts [
-        'Its alarm has no action wired — the one alarm in the app that reaches no topic. Its role is hand-written and outside the permissions boundary.'
+        'Its three alarms — udp and travel success, and a valid token being refused — reach the critical topic through its SSM parameter; until FLEX-547 its one alarm reached no topic. Its role is hand-written and outside the permissions boundary.'
       ]
       sourceId 'smoke'
       order '34'
