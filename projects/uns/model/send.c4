@@ -204,7 +204,7 @@ model {
       link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/common/services/adapters/processingAdapterUDP.ts 'processingAdapterUDP.ts'
       link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/common/services/FetchSigV4Service.ts 'FetchSigV4Service.ts'
       metadata {
-        type 'GOV.UK Once system'
+        type 'GOV.UK Connect system'
         tech 'SigV4 · assumed role with external id UNS · x-api-key'
         role 'UDP\'s data API, under the <code>notifications</code> resource path FLEX assigned to UNS. The reply\'s <code>pushId</code> is the device.'
         facts [

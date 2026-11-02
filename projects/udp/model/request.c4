@@ -13,7 +13,7 @@ model {
     link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/consumer-config-construct.ts 'consumer-config-construct.ts'
     link https://github.com/govuk-once/user-data-platform/blob/main/libs/utils/schemas/routes/routes.ts 'routes.ts'
     metadata {
-      type 'GOV.UK Once system · consumer'
+      type 'GOV.UK Connect system · consumer'
       tech 'STS AssumeRole · SigV4'
       role 'Assumes the consumer role UDP created for it, signs the request, and adds the two headers every data route requires.'
       facts [

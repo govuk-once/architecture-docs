@@ -1,8 +1,8 @@
-# GOV.UK Once architecture
+# GOV.UK Connect architecture
 
 **→ [govuk-once.github.io/architecture-docs](https://govuk-once.github.io/architecture-docs/)**
 
-The architectures of the GOV.UK Once platforms, each documented as one interactive page and
+The architectures of the GOV.UK Connect platforms, and of the GOV.UK systems around them, each documented as one interactive page and
 derived from that platform's own code rather than from prior design documents.
 
 | Architecture               | State                                                           |

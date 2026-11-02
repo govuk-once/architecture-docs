@@ -174,7 +174,7 @@ model {
     description 'Security Event Tokens'
     link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/template.yaml 'backend · services/auth/template.yaml'
     metadata {
-      type 'Outside GOV.UK Once'
+      type 'Outside the App and GOV.UK Connect'
       tech 'Shared Signals Framework'
       role 'The one caller of the backend that is not the app.'
       facts [

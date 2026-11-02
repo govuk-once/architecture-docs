@@ -4,7 +4,7 @@
     "order": 1,
     "group": "Architecture",
     "audience": "Anyone new to FLEX, including non-engineers",
-    "blurb": "FLEX inside GOV.UK Once: the people it serves, its sibling systems, and the one organisation outside the boundary its request handling exchanges data with. C4 level 1 — runtime only.",
+    "blurb": "FLEX inside GOV.UK Connect: the people it serves, the systems beside it, and the one other organisation its request handling exchanges data with. C4 level 1 — runtime only.",
     "note": "6 domains · 3 service gateways · 2 shared APIs · 277+ AWS resources in production",
     "w": 1400,
     "h": 620

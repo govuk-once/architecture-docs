@@ -4,7 +4,7 @@
     "order": 1,
     "group": "Architecture",
     "audience": "Anyone new to the GOV.UK App, including non-engineers",
-    "blurb": "The GOV.UK App among the systems it talks to: the backend built for it, the platform it reaches GOV.UK Once through, and the services outside the programme it calls itself. C4 level 1 — runtime only.",
+    "blurb": "The GOV.UK App among the systems it talks to: the backend built for it, the platform it reaches GOV.UK Connect through, and the services outside both it calls itself. C4 level 1 — runtime only.",
     "note": "2 apps · 2 SAM stacks · 1 config repository · FLEX behind a remote flag",
     "w": 1660,
     "h": 600

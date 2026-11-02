@@ -154,7 +154,7 @@ model {
     link https://github.com/govuk-once/govuk-mobile-android-app/blob/main/feature/dvla/build.gradle.kts 'android · feature/dvla/build.gradle.kts'
     link https://github.com/govuk-once/govuk-mobile-ios-app/blob/main/Production/govuk_ios/Coordinators/DVLA/DVLAAuthenticationCoordinator.swift 'ios · DVLAAuthenticationCoordinator.swift'
     metadata {
-      type 'Outside GOV.UK Once'
+      type 'Outside the App and GOV.UK Connect'
       tech 'HTTPS, in the browser'
       role 'Where the user signs in to their driver and vehicle account and agrees to the link.'
       facts [
@@ -177,7 +177,7 @@ model {
     link https://github.com/govuk-once/govuk-mobile-ios-app/blob/main/Production/govuk_ios/Networking/GOVRequest/GOVRequest+UserState.swift 'ios · GOVRequest+UserState.swift'
     link https://github.com/govuk-once/govuk-mobile-android-app/blob/main/feature/dvla/src/main/kotlin/uk/gov/govuk/dvla/remote/DvlaApi.kt 'android · DvlaApi.kt'
     metadata {
-      type 'GOV.UK Once system'
+      type 'GOV.UK Connect system'
       tech 'HTTPS · Bearer JWT'
       role 'Records the link, then serves the licence and vehicle data through <code>/app/dvla/v1</code>.'
       facts [

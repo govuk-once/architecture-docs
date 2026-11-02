@@ -25,12 +25,17 @@
     },
     {
       "id": "govuk",
-      "label": "GOV.UK Once",
+      "label": "GOV.UK Connect",
       "colour": "teal"
     },
     {
+      "id": "appside",
+      "label": "GOV.UK App and Chat",
+      "colour": "indigo"
+    },
+    {
       "id": "third",
-      "label": "Outside GOV.UK Once",
+      "label": "Outside GOV.UK Connect",
       "colour": "amber"
     }
   ],

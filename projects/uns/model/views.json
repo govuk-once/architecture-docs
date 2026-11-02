@@ -4,7 +4,7 @@
     "order": 1,
     "group": "Architecture",
     "audience": "Anyone new to UNS, including non-engineers",
-    "blurb": "UNS among the systems it talks to: the departments that send, the two GOV.UK Once systems it reads from and is read by, and the push provider that reaches a phone. C4 level 1 — runtime only.",
+    "blurb": "UNS among the systems it talks to: the departments that send, the two GOV.UK Connect systems it reads from and is read by, and the push provider that reaches a phone. C4 level 1 — runtime only.",
     "note": "Nothing here is derived from CloudFormation. UNS's CDK app imports a package that only a private registry serves, so this page is read from the source and every count on it is prose.",
     "w": 1060,
     "h": 560,

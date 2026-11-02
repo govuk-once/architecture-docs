@@ -301,7 +301,7 @@ model {
     link https://github.com/govuk-once/govuk-mobile-android-app/blob/main/data/src/main/kotlin/uk/gov/govuk/data/di/NetworkModule.kt 'android · NetworkModule.kt'
     link https://github.com/govuk-once/govuk-mobile-ios-app/blob/main/Production/govuk_ios/Extensions/Container/Container+APIClients.swift 'ios · Container+APIClients.swift'
     metadata {
-      type 'GOV.UK Once system'
+      type 'GOV.UK Connect system'
       tech 'HTTPS · Bearer JWT'
       role 'One base URL for every call in this band. Documented on its own page.'
       facts [
@@ -432,7 +432,7 @@ model {
     description 'search · www.gov.uk'
     link https://github.com/govuk-once/govuk-mobile-ios-app/blob/main/Production/govuk_ios/Networking/GOVRequest/GOVRequest+Search.swift 'ios · GOVRequest+Search.swift'
     metadata {
-      type 'GOV.UK publishing · outside GOV.UK Once'
+      type 'GOV.UK publishing · outside GOV.UK Connect'
       tech 'HTTPS · JSON'
       role 'The search API and the www.gov.uk endpoints the app reads.'
       facts [

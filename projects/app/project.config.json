@@ -1,7 +1,7 @@
 {
   "name": "GOV.UK App",
   "title": "GOV.UK App Architecture Explorer",
-  "tagline": "GOV.UK Once · mobile app",
+  "tagline": "GOV.UK · mobile app",
   "blurb": "The GOV.UK App on iOS and Android, and the backend built for it: Cognito sign-in federated to GOV.UK One Login, the token proxy that can demand proof a request comes from the real app, the chat proxy, and the signed remote config that decides, among other things, whether the app talks to FLEX at all.",
   "inventoryView": "resources",
   "inventoryLabel": "AWS resources",
@@ -21,12 +21,12 @@
     },
     {
       "id": "govuk",
-      "label": "GOV.UK Once",
+      "label": "GOV.UK Connect",
       "colour": "teal"
     },
     {
       "id": "third",
-      "label": "Outside GOV.UK Once",
+      "label": "Outside the App and GOV.UK Connect",
       "colour": "amber"
     },
     {

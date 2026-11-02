@@ -14,7 +14,7 @@ describe("pasteShell", () => {
   const html = pasteShell(
     {
       title: "FLEX — architecture",
-      parent: "GOV.UK Once",
+      parent: "GOV.UK Connect",
       folder: "export/flex",
     },
     "<p>body</p>",
@@ -22,7 +22,7 @@ describe("pasteShell", () => {
 
   it("names the title and parent above the rule and starts the page with the title", () => {
     expect(html).toContain("<strong>Page title:</strong> FLEX — architecture");
-    expect(html).toContain("<strong>Parent page:</strong> GOV.UK Once");
+    expect(html).toContain("<strong>Parent page:</strong> GOV.UK Connect");
     expect(html).toContain("<code>export/flex/</code>");
     const rule = html.indexOf('id="copy-from-here"');
     expect(rule).toBeGreaterThan(0);

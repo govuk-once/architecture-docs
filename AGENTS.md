@@ -1,6 +1,6 @@
 # Working in this repository
 
-This repository documents the architectures of the GOV.UK Once platforms, each of which
+This repository documents the architectures of the GOV.UK Connect platforms, and the GOV.UK systems around them, each of which
 lives elsewhere. It holds a LikeC4 model per platform, the pipeline that renders each into an
 interactive page, an index over them, and the checks that keep model and code in step. It
 reads those repositories and never writes to them.

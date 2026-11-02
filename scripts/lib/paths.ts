@@ -78,11 +78,23 @@ export interface FitEdge {
   proposed?: boolean;
 }
 
+/**
+ * A programme drawn around the boxes it holds, as a zone is inside a page. The area is
+ * the smallest rectangle around its members, and the build refuses one that would take in
+ * a box that is not a member: a box inside the area is a claim that it belongs.
+ */
+export interface FitGroup {
+  id: string;
+  label: string;
+  members: string[];
+}
+
 export interface FitSketch {
   title: string;
   note: string;
   nodes: FitNode[];
   edges: FitEdge[];
+  groups?: FitGroup[];
 }
 
 export interface SiteConfig {
@@ -177,6 +189,18 @@ function readSiteConfig(): SiteConfig {
         throw new Error(
           `explorer.config.json: fit node ${n.id} names project ${n.project}, which the ` +
             `site does not publish`,
+        );
+    }
+    for (const g of fit.groups ?? []) {
+      if (!g.id || !g.label || !Array.isArray(g.members) || !g.members.length)
+        throw new Error(
+          `explorer.config.json: fit group ${JSON.stringify(g)} needs id, label and members`,
+        );
+      const stray = g.members.filter((m) => !ids.has(m));
+      if (stray.length)
+        throw new Error(
+          `explorer.config.json: fit group ${g.id} names ${stray.join(", ")}, which the ` +
+            `sketch does not have`,
         );
     }
     for (const e of fit.edges) {

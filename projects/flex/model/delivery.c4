@@ -504,7 +504,7 @@ model {
       link https://github.com/govuk-once/flex/blob/main/platform/infra/flex/src/ssm-keys.ts 'ssm-keys.ts'
       link https://github.com/govuk-once/flex/blob/main/platform/infra/flex/src/utils/lambda.ts 'lambda.ts'
       metadata {
-        type 'GOV.UK Once configuration source'
+        type 'GOV.UK Connect configuration source'
         tech 'SSM Parameter Store · Route 53'
         role 'Supplies the hosted zone, auth identifiers and consumer secrets.'
         facts [

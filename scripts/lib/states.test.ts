@@ -27,15 +27,15 @@ import {
 describe("foldComposed", () => {
   it("says a fault once, at the state it first appears, and where it is still in force", () => {
     const folded = foldComposed([
-      "context@s1·future: onelogin straddles the edge of zone govukonce",
-      "context@s1·changes: onelogin straddles the edge of zone govukonce",
-      "context@s2·future: onelogin straddles the edge of zone govukonce",
-      "context@s2·changes: onelogin straddles the edge of zone govukonce",
-      "context@s3·future: onelogin straddles the edge of zone govukonce",
-      "context@s3·changes: onelogin straddles the edge of zone govukonce",
+      "context@s1·future: onelogin straddles the edge of zone connect",
+      "context@s1·changes: onelogin straddles the edge of zone connect",
+      "context@s2·future: onelogin straddles the edge of zone connect",
+      "context@s2·changes: onelogin straddles the edge of zone connect",
+      "context@s3·future: onelogin straddles the edge of zone connect",
+      "context@s3·changes: onelogin straddles the edge of zone connect",
     ]);
     expect(folded).toEqual([
-      "context@s1: onelogin straddles the edge of zone govukonce — also at s2, s3",
+      "context@s1: onelogin straddles the edge of zone connect — also at s2, s3",
     ]);
   });
 

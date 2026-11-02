@@ -15,7 +15,7 @@ model {
     description 'a Cognito access token'
     link https://github.com/govuk-once/govuk-chat-v2/blob/main/README.md 'README.md'
     metadata {
-      type 'GOV.UK Once system'
+      type 'GOV.UK system · outside Connect'
       tech 'client credentials, not a person'
       role 'Whatever holds a client credential for this pool. The app backend proxies a person\'s question here, and is documented on the GOV.UK App page.'
       facts [
@@ -196,7 +196,7 @@ model {
     description 'Claude Sonnet 5'
     link https://github.com/govuk-once/govuk-chat-v2/blob/main/services/agui-agent/src/agui_agent/main.py 'agui_agent/main.py'
     metadata {
-      type 'AWS service · outside GOV.UK Once'
+      type 'AWS service · outside GOV.UK'
       tech 'through an inference profile'
       role 'Answers. The model is named in the agent, capped at 4,000 tokens, and reached with the runtime\'s own role rather than the caller\'s.'
       facts [

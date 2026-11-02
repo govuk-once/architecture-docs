@@ -200,7 +200,7 @@ model {
     link https://github.com/govuk-once/govuk-mobile-android-app/blob/main/feature/local/src/main/kotlin/uk/govuk/app/local/data/remote/LocalApi.kt 'android · LocalApi.kt'
     link https://github.com/govuk-once/govuk-mobile-ios-app/blob/main/Production/govuk_ios/Extensions/GovKit/Constants.swift 'ios · Constants.swift'
     metadata {
-      type 'GOV.UK publishing · outside GOV.UK Once'
+      type 'GOV.UK publishing · outside GOV.UK Connect'
       tech 'HTTPS · JSON APIs'
       role 'Search, search suggestions, the terms content item and the local-authority lookup.'
       facts [
@@ -219,13 +219,13 @@ model {
 
   context_flex = internal 'FLEX' {
     #request-path
-    description 'GOV.UK Once API layer'
+    description 'GOV.UK Connect API layer'
     link https://github.com/govuk-once/govuk-mobile-android-app/blob/main/data/src/main/kotlin/uk/gov/govuk/data/di/NetworkModule.kt 'android · NetworkModule.kt'
     link https://github.com/govuk-once/govuk-mobile-ios-app/blob/main/Production/govuk_ios/Extensions/Container/Container+APIClients.swift 'ios · Container+APIClients.swift'
     metadata {
-      type 'GOV.UK Once system'
+      type 'GOV.UK Connect system'
       tech 'HTTPS · Bearer JWT'
-      role 'The platform the app reaches every GOV.UK Once domain through. Documented on its own page.'
+      role 'The platform the app reaches every GOV.UK Connect domain through. Documented on its own page.'
       facts [
         'Staging is <code>staging.bl.once.service.gov.uk</code> and production <code>production.bl.once.service.gov.uk</code>.',
         'The app calls four of its domains — <code>udp</code>, <code>uns</code>, <code>dvla</code> and <code>groups</code> — always as <code>/app/{domain}/v1/…</code>. Both apps also declare <code>/app/travel/v1/countries</code>, and neither calls it.'
@@ -246,7 +246,7 @@ model {
     link https://github.com/govuk-once/govuk-mobile-android-app/blob/main/feature/dvla/build.gradle.kts 'android · feature/dvla/build.gradle.kts'
     link https://github.com/govuk-once/govuk-mobile-ios-app/blob/main/Production/govuk_ios/ViewModels/DVLA/DVLAAuthenticationViewModel.swift 'ios · DVLAAuthenticationViewModel.swift'
     metadata {
-      type 'Outside GOV.UK Once'
+      type 'Outside the App and GOV.UK Connect'
       tech 'HTTPS, in the browser'
       role 'Where a user signs in to their driver and vehicle account to link it to the app.'
       facts [
@@ -268,7 +268,7 @@ model {
     description 'the government sign-in'
     link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/template.yaml 'backend · services/auth/template.yaml'
     metadata {
-      type 'Outside GOV.UK Once'
+      type 'Outside the App and GOV.UK Connect'
       tech 'OIDC · Shared Signals'
       role 'The user pool\'s only identity provider, and the source of account events.'
       facts [

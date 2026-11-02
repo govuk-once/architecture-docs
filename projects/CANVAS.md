@@ -106,7 +106,7 @@ keeps its wider advances as a margin: it should refuse before the browser has to
    makes every line between those regions cross it. That was the seven-crossing draft.
 
 5. **One zone per owner, and a zone ends at its last box.** Two owners never share a
-   column: GOV.UK Once systems and third parties are different zones, placed where the
+   column: GOV.UK Connect systems and third parties are different zones, placed where the
    edges that reach them land — third parties under the NAT column they are reached
    through, sibling systems beside the endpoints that reach them. A zone drawn taller than
    its content invites a line through its empty tail.

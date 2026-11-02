@@ -153,6 +153,18 @@ main {
   stroke: var(--line-strong);
   stroke-width: 1.6;
 }
+/* A programme around the boxes it holds: the in-page zone, tinted, its name in capitals. */
+.fit .group rect {
+  fill: var(--zone-fill);
+}
+.fit .group text {
+  fill: var(--muted);
+  font:
+    600 11px/1 "IBM Plex Mono",
+    monospace;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
 /* A proposal: nothing built. The one dash on the sketch, and the note under it says so. */
 .fit .prop .box,
 .fit .prop .line {

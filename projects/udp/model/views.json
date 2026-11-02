@@ -4,10 +4,10 @@
     "order": 1,
     "group": "Architecture",
     "audience": "Anyone new to UDP, including non-engineers",
-    "blurb": "UDP among the systems that call it. Every caller is a GOV.UK Once system in its own AWS account; the person never reaches UDP directly, and nothing outside the programme does either. C4 level 1 — runtime only.",
+    "blurb": "UDP among the systems that call it. Every caller is a GOV.UK Connect system in its own AWS account; the person never reaches UDP directly, and nothing outside the programme does either. C4 level 1 — runtime only.",
     "note": "The consumers a deployment admits are an SSM parameter, not code. The two named here are the ones the committed development context lists.",
     "w": 840,
-    "h": 440
+    "h": 540
   },
   "request": {
     "name": "Request path",

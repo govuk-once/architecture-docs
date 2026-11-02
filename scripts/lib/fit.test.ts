@@ -4,7 +4,13 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { mergeFit, PROPOSED_NOTE, type ProposedFit, sketchFor } from "./fit.js";
+import {
+  groupStrays,
+  mergeFit,
+  PROPOSED_NOTE,
+  type ProposedFit,
+  sketchFor,
+} from "./fit.js";
 import type { FitSketch } from "./paths.js";
 
 const SITE: FitSketch = {
@@ -85,5 +91,49 @@ describe("sketchFor", () => {
     ] as unknown as Parameters<typeof sketchFor>[1];
     const fit = sketchFor(SITE, projects);
     expect(fit?.nodes.map((n) => n.id)).toEqual(["flex", "udp", "idx"]);
+  });
+});
+
+describe("groups", () => {
+  const GROUPED: FitSketch = {
+    ...SITE,
+    groups: [
+      { id: "connect", label: "GOV.UK Connect", members: ["flex", "udp"] },
+    ],
+  };
+
+  it("lets a proposed box join a group, and leaves the site's group as it was", () => {
+    const joining = { ...IDX, node: { ...IDX.node, group: "connect" } };
+    const fit = mergeFit(GROUPED, [{ id: "idx", fit: joining }]);
+    expect(fit?.groups?.[0]?.members).toEqual(["flex", "udp", "idx"]);
+    expect(GROUPED.groups?.[0]?.members).toEqual(["flex", "udp"]);
+    expect(fit?.nodes.at(-1)).not.toHaveProperty("group");
+  });
+
+  it("refuses a box joining a group the sketch does not have", () => {
+    const joining = { ...IDX, node: { ...IDX.node, group: "nope" } };
+    expect(() => mergeFit(GROUPED, [{ id: "idx", fit: joining }])).toThrow(
+      /joins group nope/,
+    );
+  });
+
+  it("finds nothing astray when every box in the area is a member", () => {
+    expect(groupStrays(GROUPED)).toEqual([]);
+  });
+
+  it("names a box the area takes in without it being a member", () => {
+    const wide: FitSketch = {
+      ...GROUPED,
+      nodes: [
+        ...GROUPED.nodes,
+        { id: "app", label: "App", sub: "phone", col: 0, row: 1 },
+        { id: "uns", label: "UNS", sub: "push", col: 1, row: 1 },
+      ],
+      groups: [{ id: "connect", label: "C", members: ["flex", "uns"] }],
+    };
+    expect(groupStrays(wide)).toEqual([
+      "udp sits inside group connect without being a member",
+      "app sits inside group connect without being a member",
+    ]);
   });
 });

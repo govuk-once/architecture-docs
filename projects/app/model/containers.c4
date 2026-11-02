@@ -431,7 +431,7 @@ model {
     description 'OIDC · shared signals'
     link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/template.yaml 'backend · services/auth/template.yaml'
     metadata {
-      type 'Outside GOV.UK Once'
+      type 'Outside the App and GOV.UK Connect'
       tech 'OIDC · SSF'
       role 'Authenticates the user for Cognito, and tells the stack when an account changes.'
       facts [

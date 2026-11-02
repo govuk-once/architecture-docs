@@ -10,7 +10,7 @@ model {
     description 'through its own VPC endpoint'
     link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/cdk.postdeploy.ssm.ts 'cdk.postdeploy.ssm.ts'
     metadata {
-      type 'GOV.UK Once system · consumer'
+      type 'GOV.UK Connect system · consumer'
       tech 'SigV4 with an invoker role · x-api-key'
       role 'Identifies the person by query string — <code>externalUserID</code> or <code>pushID</code> — the same id UDP handed back on the send path. There is no header, token or udpId.'
       sourceId 'flex'

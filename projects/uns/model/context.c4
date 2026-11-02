@@ -9,7 +9,7 @@ model {
     metadata {
       type 'Ownership boundary'
       tech 'a client certificate and an API key each'
-      role 'Government services outside GOV.UK Once that send notifications. Each is a named organisation with its own usage plan; the certificate says which.'
+      role 'Government services outside GOV.UK Connect that send notifications. Each is a named organisation with its own usage plan; the certificate says which.'
       sourceId 'departments'
       order '0'
       x '40'
@@ -43,12 +43,12 @@ model {
     }
   }
 
-  context_govukonce = boundary 'GOV.UK Once' {
+  context_connect = boundary 'GOV.UK Connect' {
     metadata {
       type 'Ownership boundary'
       tech '—'
       role 'The two sibling systems UNS talks to: FLEX reads what it holds, and UDP tells it who a person is.'
-      sourceId 'govukonce'
+      sourceId 'connect'
       order '0'
       x '410'
       y '30'
@@ -59,11 +59,11 @@ model {
 
     context_flex = internal 'FLEX' {
       #request-path
-      description 'GOV.UK Once · API layer'
+      description 'GOV.UK Connect · API layer'
       link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/constructs/UNSFlexResources.ts 'UNSFlexResources.ts'
       link https://github.com/govuk-once/gds-unified-notification-service/blob/main/infrastructure/cdk/cdk.postdeploy.ssm.ts 'cdk.postdeploy.ssm.ts'
       metadata {
-        type 'GOV.UK Once system'
+        type 'GOV.UK Connect system'
         tech 'reads a private API over a VPC endpoint'
         role 'The only reader. It lists, reads, marks and hides a person\'s notifications, and manages the groups they belong to, on the app\'s behalf. Documented on its own page.'
         facts [
@@ -89,7 +89,7 @@ model {
         tech 'AWS · TypeScript · serverless · two stacks'
         role 'Takes a message from a department, works out which device it is for, hands it to a push provider, and keeps the record FLEX reads back.'
         facts [
-          'Two APIs on one CDK app: PSO, public behind mTLS, for departments; FLEX, private, for GOV.UK Once.',
+          'Two APIs on one CDK app: PSO, public behind mTLS, for departments; FLEX, private, for GOV.UK Connect.',
           'A message is a title and a body for a <code>UserID</code>, with an optional deeplink, channel and days to live; a group message is the same for every device subscribed to a group.',
           'Every step publishes an analytics event: appended to the record, counted per campaign, logged, exported hourly to S3 for BigQuery.'
         ]
@@ -105,10 +105,10 @@ model {
 
     context_udp = internal 'UDP' {
       #request-path
-      description 'GOV.UK Once · user data'
+      description 'GOV.UK Connect · user data'
       link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/common/services/adapters/processingAdapterUDP.ts 'processingAdapterUDP.ts'
       metadata {
-        type 'GOV.UK Once system'
+        type 'GOV.UK Connect system'
         tech 'private API · SigV4 with an assumed role'
         role 'Turns the department\'s <code>UserID</code> into the device\'s push id. Documented on its own page.'
         facts [
@@ -154,7 +154,7 @@ model {
     description 'a person\'s phone'
     link https://github.com/govuk-once/gds-unified-notification-service/blob/main/src/lambdas/interfaces/IFlexNotification.ts 'IFlexNotification.ts'
     metadata {
-      type 'GOV.UK Once system'
+      type 'GOV.UK system · outside Connect'
       tech 'mobile client'
       role 'Receives the push, then reads the notification centre through FLEX. Documented on its own page.'
       sourceId 'app'
@@ -163,7 +163,7 @@ model {
       y '470'
       w '262'
       h '62'
-      ownership 'govuk'
+      ownership 'appside'
     }
   }
 
@@ -213,7 +213,7 @@ views {
   view context {
     title 'Context'
     include context_departments, context_departments.**
-    include context_govukonce, context_govukonce.**
+    include context_connect, context_connect.**
     include context_onesignal, context_app
   }
 }

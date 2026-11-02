@@ -2,7 +2,7 @@
   "name": "UNS",
   "title": "UNS Architecture Explorer",
   "tagline": "Unified Notification Service",
-  "blurb": "GOV.UK Once’s notification system: government services post a message or a group message over mTLS, UNS validates, processes and dispatches it, and FLEX reads the result back for the app. One CDK app, two APIs.",
+  "blurb": "GOV.UK Connect’s notification system: government services post a message or a group message over mTLS, UNS validates, processes and dispatches it, and FLEX reads the result back for the app. One CDK app, two APIs.",
   "repo": "https://github.com/govuk-once/gds-unified-notification-service/blob/main/",
   "inventoryView": "resources",
   "inventoryLabel": "AWS resources",
@@ -11,8 +11,9 @@
   "kinds": [
     { "id": "person", "label": "Person", "colour": "purple" },
     { "id": "uns", "label": "UNS", "colour": "blue" },
-    { "id": "govuk", "label": "GOV.UK Once", "colour": "teal" },
-    { "id": "third", "label": "Outside GOV.UK Once", "colour": "amber" }
+    { "id": "govuk", "label": "GOV.UK Connect", "colour": "teal" },
+    { "id": "appside", "label": "GOV.UK App and Chat", "colour": "indigo" },
+    { "id": "third", "label": "Outside GOV.UK Connect", "colour": "amber" }
   ],
   "stages": [
     {

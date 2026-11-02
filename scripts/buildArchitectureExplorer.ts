@@ -34,7 +34,7 @@ import { pathToFileURL } from "node:url";
 import { check } from "prettier";
 
 import type { Lifecycle, StateManifest, Why } from "./lib/composeStates.js";
-import { sketchFor } from "./lib/fit.js";
+import { groupCells, groupStrays, sketchFor } from "./lib/fit.js";
 import { loadLikeC4Views } from "./lib/loadLikeC4Views.js";
 import {
   DOCS_ROOT,
@@ -1286,6 +1286,8 @@ function plannedRow(
  * the sub-label 15 below it, both inset 16 past the 4px ownership bar.
  */
 const FIT = { w: 214, h: 62, gapX: 196, gapY: 72, pad: 16 };
+/* How far a group's area reaches past its outermost boxes: room for its name above. */
+const FIT_GROUP = { top: 32, side: 16 };
 /* IBM Plex Mono 10.5px, the advance the build's own canvas rules use. */
 const FIT_ADVANCE = 6.7;
 /* The first control-point multiplier app.js tries, and the one every line here takes. */
@@ -1362,6 +1364,11 @@ function fitSketch(built: Built[]): string {
     built.map((b) => b.project),
   );
   if (!fit) return "";
+  const strays = groupStrays(fit);
+  if (strays.length)
+    throw new Error(
+      `explorer.config.json: ${strays.join("; ")}. Move the box, or list it as a member.`,
+    );
   const views = new Map(
     built.map((b) => [b.project.id, new Set(b.views.map((v) => v.id))]),
   );
@@ -1460,10 +1467,34 @@ function fitSketch(built: Built[]): string {
     })
     .join("");
 
+  /* A group is a zone, drawn the way an unbounded zone is inside a page: a tinted area
+     with its name in capitals, under everything else. Its top padding holds the name. */
+  const groups = (fit.groups ?? [])
+    .map((g) => {
+      const c = groupCells(fit.nodes, g.members);
+      const x = FIT.pad + c.col0 * (FIT.w + FIT.gapX) - FIT_GROUP.side;
+      const y = FIT.pad + c.row0 * (FIT.h + FIT.gapY) - FIT_GROUP.top;
+      const w =
+        (c.col1 - c.col0 + 1) * FIT.w +
+        (c.col1 - c.col0) * FIT.gapX +
+        FIT_GROUP.side * 2;
+      const h =
+        (c.row1 - c.row0 + 1) * FIT.h +
+        (c.row1 - c.row0) * FIT.gapY +
+        FIT_GROUP.top +
+        FIT_GROUP.side;
+      return (
+        `<g class="group"><rect x="${String(x)}" y="${String(y)}" width="${String(w)}" height="${String(h)}" rx="12"/>` +
+        `<text x="${String(x + 16)}" y="${String(y + 19)}">${esc(g.label)}</text></g>`
+      );
+    })
+    .join("");
+
   return (
     `<span class="eyebrow">${esc(fit.title)}</span>` +
     `<div class="scroll"><svg viewBox="0 0 ${String(width)} ${String(height)}" role="img" aria-label="${esc(fit.title)}: who calls whom among the documented systems">` +
     `<defs><marker id="fit-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0.5 L7.5 4 L0 7.5 Z"/></marker></defs>` +
+    groups +
     edges +
     nodes +
     `</svg></div>` +

@@ -28,52 +28,31 @@ model {
     }
   }
 
-  context_govukonce = boundary 'GOV.UK Once' {
+  context_connect = boundary 'GOV.UK Connect' {
     metadata {
       type 'Ownership boundary'
       tech '—'
       role 'Every caller of UDP is a sibling system inside the programme, in its own AWS account, reaching a private API over a VPC endpoint.'
       facts [
-        'Nothing outside GOV.UK Once calls UDP. It holds a link record for DVLA, but DVLA never talks to it — the link is made through FLEX.',
+        'Nothing outside GOV.UK Connect calls UDP. It holds a link record for DVLA, but DVLA never talks to it — the link is made through FLEX.',
         'The consumers a deployment admits are an SSM parameter in UDP\'s account, not code: the committed development context names two, <code>flex</code> and <code>gdsuns</code>, each with an account id and a VPC endpoint id.'
       ]
-      sourceId 'govukonce'
+      sourceId 'connect'
       order '0'
       x '40'
-      y '150'
+      y '250'
       w '760'
       h '264'
       boundary 'hard'
     }
 
-    context_app = internal 'GOV.UK App' {
-      #request-path
-      description 'mobile client'
-      link https://github.com/govuk-once/user-data-platform/blob/main/libs/utils/schemas/endpoints/data/defaults.ts 'data/defaults.ts'
-      metadata {
-        type 'GOV.UK Once system'
-        tech 'Mobile client'
-        role 'Where the person\'s requests start. Documented on its own page.'
-        facts [
-          'UDP sees the app only as a name: the header <code>requesting-service</code>, whose example value in the schema is <code>GOVUKAPP</code>, beside <code>requesting-service-user-id</code>.'
-        ]
-        sourceId 'app'
-        order '2'
-        x '64'
-        y '200'
-        w '200'
-        h '62'
-        ownership 'govuk'
-      }
-    }
-
     context_flex = internal 'FLEX' {
       #request-path
-      description 'GOV.UK Once · API layer'
+      description 'GOV.UK Connect · API layer'
       link https://github.com/govuk-once/user-data-platform/blob/main/cdk/cdk.context.json 'cdk.context.json'
       link https://github.com/govuk-once/user-data-platform/blob/main/cdk/lib/constructs/consumer-config-construct.ts 'consumer-config-construct.ts'
       metadata {
-        type 'GOV.UK Once system'
+        type 'GOV.UK Connect system'
         tech 'AWS · consumer of the private API'
         role 'The consumer that carries every app request. Documented on its own page.'
         facts [
@@ -83,7 +62,7 @@ model {
         sourceId 'flex'
         order '3'
         x '64'
-        y '330'
+        y '430'
         w '200'
         h '62'
         ownership 'govuk'
@@ -95,7 +74,7 @@ model {
       description 'notifications'
       link https://github.com/govuk-once/user-data-platform/blob/main/cdk/cdk.context.json 'cdk.context.json'
       metadata {
-        type 'GOV.UK Once system'
+        type 'GOV.UK Connect system'
         tech 'AWS · consumer of the private API'
         role 'The second consumer the development context names, as <code>gdsuns</code>.'
         facts [
@@ -104,7 +83,7 @@ model {
         sourceId 'uns'
         order '4'
         x '480'
-        y '200'
+        y '300'
         w '200'
         h '62'
         ownership 'govuk'
@@ -130,11 +109,32 @@ model {
         sourceId 'udp'
         order '5'
         x '480'
-        y '330'
+        y '430'
         w '262'
         h '62'
         ownership 'udp'
       }
+    }
+  }
+
+  context_app = internal 'GOV.UK App' {
+    #request-path
+    description 'mobile client'
+    link https://github.com/govuk-once/user-data-platform/blob/main/libs/utils/schemas/endpoints/data/defaults.ts 'data/defaults.ts'
+    metadata {
+      type 'GOV.UK system · outside Connect'
+      tech 'Mobile client'
+      role 'Where the person\'s requests start. Documented on its own page.'
+      facts [
+        'UDP sees the app only as a name: the header <code>requesting-service</code>, whose example value in the schema is <code>GOVUKAPP</code>, beside <code>requesting-service-user-id</code>.'
+      ]
+      sourceId 'app'
+      order '2'
+      x '64'
+      y '150'
+      w '200'
+      h '62'
+      ownership 'appside'
     }
   }
 
@@ -187,6 +187,6 @@ views {
   view context {
     title 'Context'
     include context_user
-    include context_govukonce, context_govukonce.**
+    include context_connect, context_connect.**
   }
 }

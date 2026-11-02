@@ -23,15 +23,15 @@ model {
     }
   }
 
-  context_govukonce = boundary 'GOV.UK Once' {
+  context_govuk = boundary 'GOV.UK' {
     metadata {
       type 'Ownership boundary'
       tech '—'
-      role 'The app a person holds, and the backend that carries its questions here.'
+      role 'The app a person holds, and the backend that carries its questions here. None of it is part of GOV.UK Connect.'
       facts [
         'Which caller reaches this system is not provable from either repository: the app backend forwards to whatever the SSM parameter <code>/{config}/chat/api-url</code> names.'
       ]
-      sourceId 'govukonce'
+      sourceId 'govuk'
       order '0'
       x '40'
       y '170'
@@ -45,7 +45,7 @@ model {
       description 'a person\'s phone'
       link https://github.com/govuk-once/govuk-chat-v2/blob/main/README.md 'README.md'
       metadata {
-        type 'GOV.UK Once system'
+        type 'GOV.UK system · outside Connect'
         tech 'iOS and Android'
         role 'Where a question is typed. Documented on its own page.'
         sourceId 'app'
@@ -63,7 +63,7 @@ model {
       description 'in the app backend'
       link https://github.com/govuk-once/govuk-chat-v2/blob/main/README.md 'README.md'
       metadata {
-        type 'GOV.UK Once system'
+        type 'GOV.UK system · outside Connect'
         tech 'forwards to an SSM-named URL'
         role 'The app never calls this system directly: its own backend proxies the request. Documented on the GOV.UK App page.'
         sourceId 'proxy'
@@ -132,7 +132,7 @@ model {
     description 'the models'
     link https://github.com/govuk-once/govuk-chat-v2/blob/main/services/agui-agent/src/agui_agent/main.py 'agui_agent/main.py'
     metadata {
-      type 'AWS service · outside GOV.UK Once'
+      type 'AWS service · outside GOV.UK'
       tech 'Claude, through inference profiles'
       role 'Answers. The one agent names one model, Claude Sonnet 5 through an EU inference profile, at 4,000 tokens an answer.'
       facts [
@@ -222,7 +222,7 @@ views {
   view context {
     title 'Context'
     include context_user
-    include context_govukonce, context_govukonce.**
+    include context_govuk, context_govuk.**
     include context_agentcore, context_bedrock, context_prompts
   }
 }

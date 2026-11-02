@@ -11,7 +11,7 @@ model {
     description 'SigV4 over its VPC endpoint'
     link https://github.com/govuk-once/user-data-platform/blob/main/cdk/cdk.context.json 'cdk.context.json'
     metadata {
-      type 'GOV.UK Once system'
+      type 'GOV.UK Connect system'
       tech 'Assumed consumer role'
       role 'Every request comes from a consumer named in the SSM consumer config; the development context names FLEX and UNS.'
       sourceId 'flex'

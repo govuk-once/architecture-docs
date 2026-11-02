@@ -437,12 +437,13 @@ them wrong.
 **`ownership`** is who owns it — the thing a reader must not get wrong. The set is declared
 in each `project.config.json`; these are FLEX's:
 
-| `ownership` | Meaning                                                        |
-| ----------- | -------------------------------------------------------------- |
-| `person`    | A human role                                                   |
-| `flex`      | Owned by the FLEX platform                                     |
-| `govuk`     | Inside the GOV.UK Once boundary                                |
-| `third`     | Outside it — another government organisation, or a third party |
+| `ownership` | Meaning                                                          |
+| ----------- | ---------------------------------------------------------------- |
+| `person`    | A human role                                                     |
+| `flex`      | Owned by the FLEX platform                                       |
+| `govuk`     | Inside the GOV.UK Connect boundary                               |
+| `appside`   | GOV.UK, outside Connect — the App, its backend, and Chat         |
+| `third`     | Outside both — another government organisation, or a third party |
 
 **Plane** is whether it serves live traffic, carried by the `#request-path` and
 `#off-request-path` tags. Ownership is carried by colour, plane by border style, so the two

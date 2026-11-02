@@ -1,7 +1,7 @@
 {
-  "title": "GOV.UK Once architecture",
+  "title": "GOV.UK Connect architecture",
   "tagline": "How the platforms fit together",
-  "blurb": "Each architecture below is documented from its own source code rather than from prior design documents, and rebuilt against that code on every merge. Pick one to explore.",
+  "blurb": "Each architecture below is documented from its own source code rather than from prior design documents, and rebuilt against that code on every merge. FLEX, UDP and UNS make up GOV.UK Connect; the GOV.UK App, its backend and GOV.UK Chat are documented beside them, outside the programme. Pick one to explore.",
   "footer": "Each architecture here is documented from its own source repository and checked against it on every merge. The models are the only part written by hand, and every claim in one names the code that proves it.",
   "site": {
     "root": "site",
@@ -131,6 +131,13 @@
         "to": "app",
         "label": "the notification",
         "see": "uns#context"
+      }
+    ],
+    "groups": [
+      {
+        "id": "connect",
+        "label": "GOV.UK Connect",
+        "members": ["flex", "udp", "uns"]
       }
     ]
   }

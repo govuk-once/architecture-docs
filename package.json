@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "The GOV.UK Once architecture explorers: a LikeC4 model per platform, and the pipeline that renders and verifies them.",
+  "description": "The GOV.UK Connect architecture explorers: a LikeC4 model per platform, and the pipeline that renders and verifies them.",
   "packageManager": "pnpm@11.17.0",
   "scripts": {
     "sync": "tsx scripts/syncSource.ts",

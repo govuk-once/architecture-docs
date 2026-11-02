@@ -263,7 +263,7 @@ model {
     }
   }
 
-  containers_flexzone = boundary 'FLEX · the GOV.UK Once-facing half' {
+  containers_flexzone = boundary 'FLEX · the GOV.UK Connect-facing half' {
     metadata {
       type 'Construct tree · UNSFlexResources'
       tech 'in uns-{env}-stack'

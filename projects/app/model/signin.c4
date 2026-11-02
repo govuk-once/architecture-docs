@@ -157,7 +157,7 @@ model {
     description 'OIDC · openid email'
     link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/template.yaml 'backend · services/auth/template.yaml'
     metadata {
-      type 'Outside GOV.UK Once'
+      type 'Outside the App and GOV.UK Connect'
       tech 'OIDC'
       role 'Where the user proves who they are.'
       facts [
@@ -204,7 +204,7 @@ model {
     link https://github.com/govuk-once/govuk-mobile-ios-app/blob/main/Production/govuk_ios/Networking/APIServiceClient.swift 'ios · APIServiceClient.swift'
     link https://github.com/govuk-once/govuk-mobile-android-app/blob/main/data/src/main/kotlin/uk/gov/govuk/data/remote/AuthorizationInterceptor.kt 'android · AuthorizationInterceptor.kt'
     metadata {
-      type 'GOV.UK Once system'
+      type 'GOV.UK Connect system'
       tech 'HTTPS · Bearer JWT'
       role 'Where the access token goes first, once sign-in is done — if FLEX is switched on.'
       facts [

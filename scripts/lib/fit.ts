@@ -14,7 +14,8 @@ import type { Project } from "./projects.js";
 
 /** What a proposed project's config may add to the sketch. */
 export interface ProposedFit {
-  node: Omit<FitNode, "id" | "project" | "proposed">;
+  /** `group` names a group of the site's sketch the box joins, as a member. */
+  node: Omit<FitNode, "id" | "project" | "proposed"> & { group?: string };
   edges: Omit<FitEdge, "proposed">[];
 }
 
@@ -33,6 +34,10 @@ export function mergeFit(
 ): FitSketch | undefined {
   if (!site || !proposed.length) return site;
   const nodes: FitNode[] = [...site.nodes];
+  const groups = (site.groups ?? []).map((g) => ({
+    ...g,
+    members: [...g.members],
+  }));
   for (const { id, fit } of proposed) {
     if (nodes.some((n) => n.id === id))
       throw new Error(
@@ -46,7 +51,16 @@ export function mergeFit(
         `${id}: its fit box sits on col ${String(fit.node.col)}, row ` +
           `${String(fit.node.row)}, where ${on.id} already is`,
       );
-    nodes.push({ ...fit.node, id, project: id, proposed: true });
+    const { group, ...node } = fit.node;
+    if (group !== undefined) {
+      const g = groups.find((x) => x.id === group);
+      if (!g)
+        throw new Error(
+          `${id}: its fit box joins group ${group}, which the sketch does not have`,
+        );
+      g.members.push(id);
+    }
+    nodes.push({ ...node, id, project: id, proposed: true });
   }
   const ids = new Set(nodes.map((n) => n.id));
   const edges: FitEdge[] = [...site.edges];
@@ -63,7 +77,50 @@ export function mergeFit(
         );
       edges.push({ ...e, proposed: true });
     }
-  return { ...site, nodes, edges, note: `${site.note} ${PROPOSED_NOTE}` };
+  return {
+    ...site,
+    nodes,
+    edges,
+    groups,
+    note: `${site.note} ${PROPOSED_NOTE}`,
+  };
+}
+
+/** The grid cells a group's area spans: every cell between its outermost members. */
+export function groupCells(
+  nodes: FitNode[],
+  members: string[],
+): { col0: number; col1: number; row0: number; row1: number } {
+  const of = nodes.filter((n) => members.includes(n.id));
+  const cols = of.map((n) => n.col);
+  const rows = of.map((n) => n.row);
+  return {
+    col0: Math.min(...cols),
+    col1: Math.max(...cols),
+    row0: Math.min(...rows),
+    row1: Math.max(...rows),
+  };
+}
+
+/**
+ * Every box a group's area would take in without it being a member — refused, because a
+ * box inside the area reads as belonging to the programme whatever the config says.
+ */
+export function groupStrays(sketch: FitSketch): string[] {
+  const out: string[] = [];
+  for (const g of sketch.groups ?? []) {
+    const c = groupCells(sketch.nodes, g.members);
+    for (const n of sketch.nodes)
+      if (
+        !g.members.includes(n.id) &&
+        n.col >= c.col0 &&
+        n.col <= c.col1 &&
+        n.row >= c.row0 &&
+        n.row <= c.row1
+      )
+        out.push(`${n.id} sits inside group ${g.id} without being a member`);
+  }
+  return out;
 }
 
 /** The sketch a build draws: the site's, plus every proposed project among `projects`. */

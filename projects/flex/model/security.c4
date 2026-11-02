@@ -167,7 +167,7 @@ model {
     }
   }
 
-  security_z_outside = boundary 'Outside · GOV.UK Once' {
+  security_z_outside = boundary 'Outside · GOV.UK Connect' {
     metadata {
       type 'Ownership boundary'
       tech '—'
@@ -186,7 +186,7 @@ model {
     metadata {
       type 'Ownership boundary'
       tech '—'
-      role 'The one party FLEX calls that is not GOV.UK Once, and the network it is reached over.'
+      role 'The one third party FLEX calls, and the network it is reached over.'
       facts [
         'Only the egress tier can reach here, and only through the NAT gateways — the isolated tier has no route out at all.'
       ]
@@ -327,7 +327,7 @@ model {
     technology 'Mobile client'
     link https://github.com/govuk-once/flex/blob/main/platform/smoke-test/src/handler.ts 'smoke-test handler.ts'
     metadata {
-      type 'GOV.UK Once system'
+      type 'GOV.UK system · outside Connect'
       tech 'Mobile client'
       role 'The only external production caller.'
       facts [
@@ -339,7 +339,7 @@ model {
       y '20'
       w '262'
       h '62'
-      ownership 'govuk'
+      ownership 'appside'
     }
   }
 
@@ -914,7 +914,7 @@ model {
     technology 'Imported by id and client id from SSM'
     link https://github.com/govuk-once/flex/blob/main/platform/infra/flex/src/stacks/platform.ts 'stacks/platform.ts'
     metadata {
-      type 'GOV.UK Once system'
+      type 'GOV.UK system · outside Connect'
       tech 'Imported by id and client id from SSM'
       role 'Issues the access tokens the authorizer verifies.'
       facts [
@@ -927,7 +927,7 @@ model {
       y '640'
       w '282'
       h '62'
-      ownership 'govuk'
+      ownership 'appside'
       awsIcon 'cognito'
       resources [
         'ssm-imported'
@@ -941,7 +941,7 @@ model {
     technology 'Reached through the execute-api endpoint'
     link https://github.com/govuk-once/flex/blob/main/platform/domains/udp/gateway.config.ts 'udp gateway.config.ts'
     metadata {
-      type 'GOV.UK Once systems'
+      type 'GOV.UK Connect systems'
       tech 'Reached through the execute-api endpoint'
       role 'Sibling systems of record.'
       facts [
@@ -967,7 +967,7 @@ model {
       tech 'Egress tier only'
       role 'The one third party FLEX calls.'
       facts [
-        'The only line that leaves the GOV.UK Once boundary carrying FLEX traffic. The DVLA gateway sits in the egress tier for exactly this.'
+        'The only line that carries a person\'s data out of GOV.UK Connect. The DVLA gateway sits in the egress tier for exactly this.'
       ]
       sourceId 'dvla'
       order '32'
