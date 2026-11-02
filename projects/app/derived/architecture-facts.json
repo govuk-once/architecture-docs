@@ -1,0 +1,635 @@
+{
+  "generatedFrom": "backend:services/*/template.yaml counts={\"fnAuthProxy\":{\"type\":\"AWS::Serverless::Function\",\"logicalId\":\"^AuthProxyFunction$\"},\"fnRevoke\":{\"type\":\"AWS::Serverless::Function\",\"logicalId\":\"^RevokeRefreshTokenFunction$\"},\"fnLinking\":{\"type\":\"AWS::Serverless::Function\",\"logicalId\":\"^LinkingVerificationFunction$\"},\"fnSsAuthorizer\":{\"type\":\"AWS::Serverless::Function\",\"logicalId\":\"^SharedSignalAuthorizer$\"},\"fnSsReceiver\":{\"type\":\"AWS::Serverless::Function\",\"logicalId\":\"^SharedSignalReceiverFunction$\"},\"fnSsHealth\":{\"type\":\"AWS::Serverless::Function\",\"logicalId\":\"^SharedSignalHealthCheckFunction$\"},\"fnPagerDutyTest\":{\"type\":\"AWS::Serverless::Function\",\"logicalId\":\"^PagerDutyTestFunction$\"},\"fnSmokeTest\":{\"type\":\"AWS::Serverless::Function\",\"logicalId\":\"^SmokeTestFunction$\"},\"fnAcceptance\":{\"type\":\"AWS::Serverless::Function\",\"logicalId\":\"^AcceptanceTestingFunction$\"},\"fnMockTransmitter\":{\"type\":\"AWS::Serverless::Function\",\"logicalId\":\"^MockSharedSignalsTransmitterFunction$\"},\"fnChatAuthorizer\":{\"type\":\"AWS::Serverless::Function\",\"logicalId\":\"^ChatAuthorizerFunction$\"},\"apiTokenProxy\":{\"type\":\"AWS::Serverless::Api\",\"logicalId\":\"^AttestationProxyApi$\"},\"apiSharedSignals\":{\"type\":\"AWS::Serverless::Api\",\"logicalId\":\"^SharedSignalApi$\"},\"apiMockTransmitter\":{\"type\":\"AWS::Serverless::Api\",\"logicalId\":\"^MockSharedSignalsTransmitterApi$\"},\"apiChat\":{\"type\":\"AWS::ApiGateway::RestApi\"},\"alarmCount\":{\"type\":\"AWS::CloudWatch::Alarm\"},\"userPools\":{\"type\":\"AWS::Cognito::UserPool\"},\"userPoolClients\":{\"type\":\"AWS::Cognito::UserPoolClient\"},\"identityProviders\":{\"type\":\"AWS::Cognito::UserPoolIdentityProvider\"},\"webAcls\":{\"type\":\"AWS::WAFv2::WebACL\"},\"kmsKeys\":{\"type\":\"AWS::KMS::Key\"},\"logGroups\":{\"type\":\"AWS::Logs::LogGroup\"},\"metricFilters\":{\"type\":\"AWS::Logs::MetricFilter\"},\"iamRoles\":{\"type\":\"AWS::IAM::Role\"},\"snsTopics\":{\"type\":\"AWS::SNS::Topic\"},\"dashboards\":{\"type\":\"AWS::CloudWatch::Dashboard\"},\"alarms\":{\"type\":\"AWS::CloudWatch::Alarm\",\"distinctBy\":\"construct\",\"capture\":[\"Namespace\",\"MetricName\",\"Threshold\",\"ComparisonOperator\",\"EvaluationPeriods\",\"ActionsEnabled\",\"AlarmActions\"]}}",
+  "stages": ["dev", "staging", "integration", "production"],
+  "counts": {
+    "fnAuthProxy": {
+      "dev": 1,
+      "staging": 1,
+      "integration": 1,
+      "production": 1
+    },
+    "fnRevoke": { "dev": 1, "staging": 1, "integration": 1, "production": 1 },
+    "fnLinking": { "dev": 1, "staging": 1, "integration": 1, "production": 1 },
+    "fnSsAuthorizer": {
+      "dev": 1,
+      "staging": 1,
+      "integration": 1,
+      "production": 1
+    },
+    "fnSsReceiver": {
+      "dev": 1,
+      "staging": 1,
+      "integration": 1,
+      "production": 1
+    },
+    "fnSsHealth": { "dev": 1, "staging": 1, "integration": 1, "production": 1 },
+    "fnPagerDutyTest": {
+      "dev": 1,
+      "staging": 1,
+      "integration": 1,
+      "production": 0
+    },
+    "fnSmokeTest": {
+      "dev": 1,
+      "staging": 1,
+      "integration": 0,
+      "production": 1
+    },
+    "fnAcceptance": {
+      "dev": 1,
+      "staging": 1,
+      "integration": 0,
+      "production": 0
+    },
+    "fnMockTransmitter": {
+      "dev": 1,
+      "staging": 1,
+      "integration": 0,
+      "production": 0
+    },
+    "fnChatAuthorizer": {
+      "dev": 1,
+      "staging": 1,
+      "integration": 1,
+      "production": 1
+    },
+    "apiTokenProxy": {
+      "dev": 1,
+      "staging": 1,
+      "integration": 1,
+      "production": 1
+    },
+    "apiSharedSignals": {
+      "dev": 1,
+      "staging": 1,
+      "integration": 1,
+      "production": 1
+    },
+    "apiMockTransmitter": {
+      "dev": 1,
+      "staging": 1,
+      "integration": 0,
+      "production": 0
+    },
+    "apiChat": { "dev": 1, "staging": 1, "integration": 1, "production": 1 },
+    "alarmCount": {
+      "dev": 43,
+      "staging": 43,
+      "integration": 42,
+      "production": 43
+    },
+    "userPools": { "dev": 1, "staging": 1, "integration": 1, "production": 1 },
+    "userPoolClients": {
+      "dev": 2,
+      "staging": 2,
+      "integration": 2,
+      "production": 2
+    },
+    "identityProviders": {
+      "dev": 1,
+      "staging": 1,
+      "integration": 1,
+      "production": 1
+    },
+    "webAcls": { "dev": 4, "staging": 4, "integration": 4, "production": 4 },
+    "kmsKeys": {
+      "dev": 26,
+      "staging": 26,
+      "integration": 24,
+      "production": 26
+    },
+    "logGroups": {
+      "dev": 15,
+      "staging": 15,
+      "integration": 14,
+      "production": 15
+    },
+    "metricFilters": {
+      "dev": 11,
+      "staging": 11,
+      "integration": 11,
+      "production": 11
+    },
+    "iamRoles": { "dev": 11, "staging": 11, "integration": 8, "production": 9 },
+    "snsTopics": { "dev": 2, "staging": 2, "integration": 2, "production": 2 },
+    "dashboards": { "dev": 1, "staging": 1, "integration": 0, "production": 1 },
+    "alarms": [
+      {
+        "scope": "",
+        "id": "AttestationConcurrencyAlarm",
+        "stages": ["dev", "staging", "integration", "production"],
+        "Namespace": "AWS/Lambda",
+        "MetricName": "ConcurrentExecutions",
+        "Threshold": "800",
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "EvaluationPeriods": "1",
+        "ActionsEnabled": "true",
+        "AlarmActions": "CloudWatchAlarmTopicPagerDuty"
+      },
+      {
+        "scope": "",
+        "id": "AttestationLambdaErrorRateAlarm",
+        "stages": ["dev", "staging", "integration", "production"],
+        "Namespace": "",
+        "MetricName": "",
+        "Threshold": "10",
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "EvaluationPeriods": "1",
+        "ActionsEnabled": "true",
+        "AlarmActions": "CloudWatchAlarmTopicPagerDuty"
+      },
+      {
+        "scope": "",
+        "id": "AttestationLow200ResponseProportionAlarm",
+        "stages": ["dev", "staging", "integration", "production"],
+        "Namespace": "",
+        "MetricName": "",
+        "Threshold": "",
+        "ComparisonOperator": "LessThanLowerThreshold",
+        "EvaluationPeriods": "5",
+        "ActionsEnabled": "false",
+        "AlarmActions": "CloudWatchAlarmTopicPagerDuty"
+      },
+      {
+        "scope": "",
+        "id": "AttestationLowCompletionAlarm",
+        "stages": ["dev", "staging", "integration", "production"],
+        "Namespace": "",
+        "MetricName": "",
+        "Threshold": "75",
+        "ComparisonOperator": "LessThanOrEqualToThreshold",
+        "EvaluationPeriods": "1",
+        "ActionsEnabled": "true",
+        "AlarmActions": "CloudWatchAlarmTopicPagerDuty"
+      },
+      {
+        "scope": "",
+        "id": "AttestationThrottlesAlarm",
+        "stages": ["dev", "staging", "integration", "production"],
+        "Namespace": "AWS/Lambda",
+        "MetricName": "Throttles",
+        "Threshold": "1",
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "EvaluationPeriods": "1",
+        "ActionsEnabled": "true",
+        "AlarmActions": "CloudWatchAlarmTopicPagerDuty"
+      },
+      {
+        "scope": "",
+        "id": "AttestationTimeoutAlarm",
+        "stages": ["dev", "staging", "integration", "production"],
+        "Namespace": "${AWS::StackName}/Timeouts",
+        "MetricName": "AttestationFunctionTimeout",
+        "Threshold": "5",
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "EvaluationPeriods": "1",
+        "ActionsEnabled": "true",
+        "AlarmActions": "CloudWatchAlarmTopicPagerDuty"
+      },
+      {
+        "scope": "",
+        "id": "AuthProxyWafAlarm",
+        "stages": ["dev", "staging", "integration", "production"],
+        "Namespace": "AWS/WAFV2",
+        "MetricName": "BlockedRequests",
+        "Threshold": "300",
+        "ComparisonOperator": "GreaterThanThreshold",
+        "EvaluationPeriods": "5",
+        "ActionsEnabled": "true",
+        "AlarmActions": "CloudWatchAlarmTopicPagerDuty"
+      },
+      {
+        "scope": "",
+        "id": "CloudWatchAlarmAuthorizerConcurrency",
+        "stages": ["dev", "staging", "integration", "production"],
+        "Namespace": "AWS/Lambda",
+        "MetricName": "ConcurrentExecutions",
+        "Threshold": "800",
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "EvaluationPeriods": "1",
+        "ActionsEnabled": "true",
+        "AlarmActions": "arn:aws:sns:${AWS::Region}:${AWS::AccountId}:${AppBackendStackName}-cloudwatch-alarm-topic"
+      },
+      {
+        "scope": "",
+        "id": "CloudWatchAlarmAuthorizerThrottles",
+        "stages": ["dev", "staging", "integration", "production"],
+        "Namespace": "AWS/Lambda",
+        "MetricName": "Throttles",
+        "Threshold": "1",
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "EvaluationPeriods": "1",
+        "ActionsEnabled": "true",
+        "AlarmActions": "arn:aws:sns:${AWS::Region}:${AWS::AccountId}:${AppBackendStackName}-cloudwatch-alarm-topic"
+      },
+      {
+        "scope": "",
+        "id": "CloudWatchAlarmAuthorizerTimeouts",
+        "stages": ["dev", "staging", "integration", "production"],
+        "Namespace": "${AWS::StackName}/Timeouts",
+        "MetricName": "ChatAuthorizerFunctionTimeout",
+        "Threshold": "5",
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "EvaluationPeriods": "1",
+        "ActionsEnabled": "true",
+        "AlarmActions": "arn:aws:sns:${AWS::Region}:${AWS::AccountId}:${AppBackendStackName}-cloudwatch-alarm-topic"
+      },
+      {
+        "scope": "",
+        "id": "CloudwatchAlarmAuthProxy4xxErrors",
+        "stages": ["dev", "staging", "integration", "production"],
+        "Namespace": "Custom/ApiGateway",
+        "MetricName": "AttestationProxyApiNonWAF4xxMetricFilter",
+        "Threshold": "0.05",
+        "ComparisonOperator": "GreaterThanThreshold",
+        "EvaluationPeriods": "5",
+        "ActionsEnabled": "true",
+        "AlarmActions": "CloudWatchAlarmWarningsTopic"
+      },
+      {
+        "scope": "",
+        "id": "CloudwatchAlarmAuthProxy5xxErrors",
+        "stages": ["dev", "staging", "integration", "production"],
+        "Namespace": "AWS/ApiGateway",
+        "MetricName": "5XXError",
+        "Threshold": "0.05",
+        "ComparisonOperator": "GreaterThanThreshold",
+        "EvaluationPeriods": "3",
+        "ActionsEnabled": "true",
+        "AlarmActions": "CloudWatchAlarmWarningsTopic"
+      },
+      {
+        "scope": "",
+        "id": "CloudwatchAlarmAuthProxyLatencyErrors",
+        "stages": ["dev", "staging", "integration", "production"],
+        "Namespace": "AWS/ApiGateway",
+        "MetricName": "Latency",
+        "Threshold": "2500",
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "EvaluationPeriods": "5",
+        "ActionsEnabled": "true",
+        "AlarmActions": "CloudWatchAlarmTopicPagerDuty"
+      },
+      {
+        "scope": "",
+        "id": "CloudwatchAlarmAuthProxyLowCount",
+        "stages": ["dev", "staging", "integration", "production"],
+        "Namespace": "",
+        "MetricName": "",
+        "Threshold": "",
+        "ComparisonOperator": "LessThanLowerThreshold",
+        "EvaluationPeriods": "5",
+        "ActionsEnabled": "true",
+        "AlarmActions": "CloudWatchAlarmWarningsTopic"
+      },
+      {
+        "scope": "",
+        "id": "CloudwatchAlarmChatProxy5xxErrors",
+        "stages": ["dev", "staging", "integration", "production"],
+        "Namespace": "AWS/ApiGateway",
+        "MetricName": "5XXError",
+        "Threshold": "0.05",
+        "ComparisonOperator": "GreaterThanThreshold",
+        "EvaluationPeriods": "3",
+        "ActionsEnabled": "true",
+        "AlarmActions": "arn:aws:sns:${AWS::Region}:${AWS::AccountId}:${AppBackendStackName}-cloudwatch-alarm-warnings-topic"
+      },
+      {
+        "scope": "",
+        "id": "CloudWatchAlarmChatProxyWafAlarm",
+        "stages": ["dev", "staging", "integration", "production"],
+        "Namespace": "AWS/WAFV2",
+        "MetricName": "BlockedRequests",
+        "Threshold": "300",
+        "ComparisonOperator": "GreaterThanThreshold",
+        "EvaluationPeriods": "5",
+        "ActionsEnabled": "true",
+        "AlarmActions": "arn:aws:sns:${AWS::Region}:${AWS::AccountId}:${AppBackendStackName}-cloudwatch-alarm-topic"
+      },
+      {
+        "scope": "",
+        "id": "CloudWatchAlarmFederationThrottles",
+        "stages": ["dev", "staging", "integration", "production"],
+        "Namespace": "AWS/Cognito",
+        "MetricName": "FederationThrottles",
+        "Threshold": "5",
+        "ComparisonOperator": "GreaterThanThreshold",
+        "EvaluationPeriods": "5",
+        "ActionsEnabled": "true",
+        "AlarmActions": "CloudWatchAlarmTopicPagerDuty"
+      },
+      {
+        "scope": "",
+        "id": "CloudwatchAlarmRevokeToken4xxErrors",
+        "stages": ["dev", "staging", "integration", "production"],
+        "Namespace": "AWS/ApiGateway",
+        "MetricName": "4XXError",
+        "Threshold": "0.05",
+        "ComparisonOperator": "GreaterThanThreshold",
+        "EvaluationPeriods": "5",
+        "ActionsEnabled": "true",
+        "AlarmActions": "CloudWatchAlarmWarningsTopic"
+      },
+      {
+        "scope": "",
+        "id": "CloudWatchAlarmSignInThrottles",
+        "stages": ["dev", "staging", "integration", "production"],
+        "Namespace": "AWS/Cognito",
+        "MetricName": "SignInThrottles",
+        "Threshold": "5",
+        "ComparisonOperator": "GreaterThanThreshold",
+        "EvaluationPeriods": "5",
+        "ActionsEnabled": "true",
+        "AlarmActions": "CloudWatchAlarmTopicPagerDuty"
+      },
+      {
+        "scope": "",
+        "id": "CloudWatchAlarmSignUpThrottles",
+        "stages": ["dev", "staging", "integration", "production"],
+        "Namespace": "AWS/Cognito",
+        "MetricName": "SignUpThrottles",
+        "Threshold": "5",
+        "ComparisonOperator": "GreaterThanThreshold",
+        "EvaluationPeriods": "5",
+        "ActionsEnabled": "true",
+        "AlarmActions": "CloudWatchAlarmTopicPagerDuty"
+      },
+      {
+        "scope": "",
+        "id": "CloudWatchAlarmTokenRefreshThrottles",
+        "stages": ["dev", "staging", "integration", "production"],
+        "Namespace": "AWS/Cognito",
+        "MetricName": "TokenRefreshThrottles",
+        "Threshold": "5",
+        "ComparisonOperator": "GreaterThanThreshold",
+        "EvaluationPeriods": "5",
+        "ActionsEnabled": "true",
+        "AlarmActions": "CloudWatchAlarmTopicPagerDuty"
+      },
+      {
+        "scope": "",
+        "id": "CognitoWebApplicationFirewallAlarm",
+        "stages": ["dev", "staging", "integration", "production"],
+        "Namespace": "AWS/WAFV2",
+        "MetricName": "WAFErrorRate",
+        "Threshold": "5",
+        "ComparisonOperator": "GreaterThanThreshold",
+        "EvaluationPeriods": "5",
+        "ActionsEnabled": "true",
+        "AlarmActions": "CloudWatchAlarmTopicPagerDuty"
+      },
+      {
+        "scope": "",
+        "id": "LinkingVerificationConcurrencyAlarm",
+        "stages": ["dev", "staging", "integration", "production"],
+        "Namespace": "AWS/Lambda",
+        "MetricName": "ConcurrentExecutions",
+        "Threshold": "800",
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "EvaluationPeriods": "1",
+        "ActionsEnabled": "true",
+        "AlarmActions": "CloudWatchAlarmTopicPagerDuty"
+      },
+      {
+        "scope": "",
+        "id": "LinkingVerificationThrottlesAlarm",
+        "stages": ["dev", "staging", "integration", "production"],
+        "Namespace": "AWS/Lambda",
+        "MetricName": "Throttles",
+        "Threshold": "1",
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "EvaluationPeriods": "1",
+        "ActionsEnabled": "true",
+        "AlarmActions": "CloudWatchAlarmTopicPagerDuty"
+      },
+      {
+        "scope": "",
+        "id": "LinkingVerificationTimeoutAlarm",
+        "stages": ["dev", "staging", "integration", "production"],
+        "Namespace": "${AWS::StackName}/Timeouts",
+        "MetricName": "LinkingVerificationFunctionTimeout",
+        "Threshold": "5",
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "EvaluationPeriods": "1",
+        "ActionsEnabled": "true",
+        "AlarmActions": "CloudWatchAlarmTopicPagerDuty"
+      },
+      {
+        "scope": "",
+        "id": "RevokeRefreshTokenConcurrencyAlarm",
+        "stages": ["dev", "staging", "integration", "production"],
+        "Namespace": "AWS/Lambda",
+        "MetricName": "ConcurrentExecutions",
+        "Threshold": "800",
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "EvaluationPeriods": "1",
+        "ActionsEnabled": "true",
+        "AlarmActions": "CloudWatchAlarmTopicPagerDuty"
+      },
+      {
+        "scope": "",
+        "id": "RevokeRefreshTokenThrottlesAlarm",
+        "stages": ["dev", "staging", "integration", "production"],
+        "Namespace": "AWS/Lambda",
+        "MetricName": "Throttles",
+        "Threshold": "1",
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "EvaluationPeriods": "1",
+        "ActionsEnabled": "true",
+        "AlarmActions": "CloudWatchAlarmTopicPagerDuty"
+      },
+      {
+        "scope": "",
+        "id": "RevokeRefreshTokenTimeoutAlarm",
+        "stages": ["dev", "staging", "integration", "production"],
+        "Namespace": "${AWS::StackName}/Timeouts",
+        "MetricName": "RevokeRefreshTokenFunctionTimeout",
+        "Threshold": "5",
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "EvaluationPeriods": "1",
+        "ActionsEnabled": "true",
+        "AlarmActions": "CloudWatchAlarmTopicPagerDuty"
+      },
+      {
+        "scope": "",
+        "id": "SharedSignalApiGatewayAlarm4xxErrors",
+        "stages": ["dev", "staging", "integration", "production"],
+        "Namespace": "Custom/ApiGateway",
+        "MetricName": "SharedSignalApiNonWAF4xxMetricFilter",
+        "Threshold": "0.05",
+        "ComparisonOperator": "GreaterThanThreshold",
+        "EvaluationPeriods": "5",
+        "ActionsEnabled": "true",
+        "AlarmActions": "CloudWatchAlarmWarningsTopic"
+      },
+      {
+        "scope": "",
+        "id": "SharedSignalApiGatewayAlarm5xxErrors",
+        "stages": ["dev", "staging", "integration", "production"],
+        "Namespace": "AWS/ApiGateway",
+        "MetricName": "5XXError",
+        "Threshold": "0.05",
+        "ComparisonOperator": "GreaterThanThreshold",
+        "EvaluationPeriods": "3",
+        "ActionsEnabled": "true",
+        "AlarmActions": "CloudWatchAlarmWarningsTopic"
+      },
+      {
+        "scope": "",
+        "id": "SharedSignalAuthorizerConcurrencyAlarm",
+        "stages": ["dev", "staging", "integration", "production"],
+        "Namespace": "AWS/Lambda",
+        "MetricName": "ConcurrentExecutions",
+        "Threshold": "800",
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "EvaluationPeriods": "1",
+        "ActionsEnabled": "true",
+        "AlarmActions": "CloudWatchAlarmTopicPagerDuty"
+      },
+      {
+        "scope": "",
+        "id": "SharedSignalAuthorizerThrottlesAlarm",
+        "stages": ["dev", "staging", "integration", "production"],
+        "Namespace": "AWS/Lambda",
+        "MetricName": "Throttles",
+        "Threshold": "1",
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "EvaluationPeriods": "1",
+        "ActionsEnabled": "true",
+        "AlarmActions": "CloudWatchAlarmTopicPagerDuty"
+      },
+      {
+        "scope": "",
+        "id": "SharedSignalAuthorizerTimeoutAlarm",
+        "stages": ["dev", "staging", "integration", "production"],
+        "Namespace": "${AWS::StackName}/Timeouts",
+        "MetricName": "SharedSignalAuthFunctionTimeout",
+        "Threshold": "5",
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "EvaluationPeriods": "1",
+        "ActionsEnabled": "true",
+        "AlarmActions": "CloudWatchAlarmTopicPagerDuty"
+      },
+      {
+        "scope": "",
+        "id": "SharedSignalHealthCheckAlarmErrors",
+        "stages": ["dev", "staging", "integration", "production"],
+        "Namespace": "AWS/Lambda",
+        "MetricName": "Errors",
+        "Threshold": "1",
+        "ComparisonOperator": "GreaterThanThreshold",
+        "EvaluationPeriods": "2",
+        "ActionsEnabled": "true",
+        "AlarmActions": "CloudWatchAlarmTopicPagerDuty"
+      },
+      {
+        "scope": "",
+        "id": "SharedSignalHealthCheckAlarmFailedInvocations",
+        "stages": ["dev", "staging", "integration", "production"],
+        "Namespace": "AWS/Lambda",
+        "MetricName": "Invocations",
+        "Threshold": "0",
+        "ComparisonOperator": "LessThanOrEqualToThreshold",
+        "EvaluationPeriods": "2",
+        "ActionsEnabled": "true",
+        "AlarmActions": "CloudWatchAlarmTopicPagerDuty"
+      },
+      {
+        "scope": "",
+        "id": "SharedSignalHealthCheckConcurrencyAlarm",
+        "stages": ["dev", "staging", "integration", "production"],
+        "Namespace": "AWS/Lambda",
+        "MetricName": "ConcurrentExecutions",
+        "Threshold": "800",
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "EvaluationPeriods": "1",
+        "ActionsEnabled": "true",
+        "AlarmActions": "CloudWatchAlarmTopicPagerDuty"
+      },
+      {
+        "scope": "",
+        "id": "SharedSignalHealthCheckThrottlesAlarm",
+        "stages": ["dev", "staging", "integration", "production"],
+        "Namespace": "AWS/Lambda",
+        "MetricName": "Throttles",
+        "Threshold": "1",
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "EvaluationPeriods": "1",
+        "ActionsEnabled": "true",
+        "AlarmActions": "CloudWatchAlarmTopicPagerDuty"
+      },
+      {
+        "scope": "",
+        "id": "SharedSignalHealthCheckTimeoutAlarm",
+        "stages": ["dev", "staging", "integration", "production"],
+        "Namespace": "${AWS::StackName}/Timeouts",
+        "MetricName": "SharedSignalHealthCheckFunctionTimeout",
+        "Threshold": "5",
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "EvaluationPeriods": "1",
+        "ActionsEnabled": "true",
+        "AlarmActions": "CloudWatchAlarmTopicPagerDuty"
+      },
+      {
+        "scope": "",
+        "id": "SharedSignalReceiverConcurrencyAlarm",
+        "stages": ["dev", "staging", "integration", "production"],
+        "Namespace": "AWS/Lambda",
+        "MetricName": "ConcurrentExecutions",
+        "Threshold": "800",
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "EvaluationPeriods": "1",
+        "ActionsEnabled": "true",
+        "AlarmActions": "CloudWatchAlarmTopicPagerDuty"
+      },
+      {
+        "scope": "",
+        "id": "SharedSignalReceiverThrottlesAlarm",
+        "stages": ["dev", "staging", "integration", "production"],
+        "Namespace": "AWS/Lambda",
+        "MetricName": "Throttles",
+        "Threshold": "1",
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "EvaluationPeriods": "1",
+        "ActionsEnabled": "true",
+        "AlarmActions": "CloudWatchAlarmTopicPagerDuty"
+      },
+      {
+        "scope": "",
+        "id": "SharedSignalReceiverTimeoutAlarm",
+        "stages": ["dev", "staging", "integration", "production"],
+        "Namespace": "${AWS::StackName}/Timeouts",
+        "MetricName": "SharedSignalReceiverFunctionTimeout",
+        "Threshold": "5",
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "EvaluationPeriods": "1",
+        "ActionsEnabled": "true",
+        "AlarmActions": "CloudWatchAlarmTopicPagerDuty"
+      },
+      {
+        "scope": "",
+        "id": "SharedSignalWafThrottlingAlarm",
+        "stages": ["dev", "staging", "integration", "production"],
+        "Namespace": "AWS/WAFV2",
+        "MetricName": "BlockedRequests",
+        "Threshold": "6000",
+        "ComparisonOperator": "GreaterThanThreshold",
+        "EvaluationPeriods": "5",
+        "ActionsEnabled": "true",
+        "AlarmActions": "CloudWatchAlarmTopicPagerDuty"
+      },
+      {
+        "scope": "",
+        "id": "SmokeTestAlarm",
+        "stages": ["dev", "staging", "production"],
+        "Namespace": "GOVUKMobileAuth",
+        "MetricName": "SmokeTestSuccess",
+        "Threshold": "1",
+        "ComparisonOperator": "LessThanThreshold",
+        "EvaluationPeriods": "2",
+        "ActionsEnabled": "false",
+        "AlarmActions": "CloudWatchAlarmWarningsTopic"
+      }
+    ]
+  }
+}

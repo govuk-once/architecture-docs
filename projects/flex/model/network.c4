@@ -21,7 +21,8 @@ model {
       h '330'
       boundary 'hard'
       resources [
-        'kms-relay'
+        'kms-relay',
+        'kms-relay-health'
       ]
     }
 
@@ -588,7 +589,7 @@ model {
     }
   }
 
-  network_z_once = boundary 'GOV.UK Once accounts' {
+  network_z_connect = boundary 'GOV.UK Connect accounts' {
     metadata {
       type 'Ownership boundary'
       tech 'Other AWS accounts in the same organisation'
@@ -604,14 +605,14 @@ model {
 
     network_partners = internal 'UDP + UNS' {
       #request-path
-      description 'GOV.UK Once · private APIs'
+      description 'Connect · private APIs'
       technology 'AWS APIs · SigV4 as an assumed role'
       metadata {
-        type 'GOV.UK Once systems'
+        type 'GOV.UK Connect systems'
         tech 'AWS APIs · SigV4 as an assumed role'
         role 'Reached from the isolated tier through the API Gateway endpoint, never over the internet.'
         facts [
-          'Sibling systems in other GOV.UK Once accounts — inside the organisational boundary, outside this account.'
+          'Sibling systems in other GOV.UK Connect accounts — inside the organisational boundary, outside this account.'
         ]
         sourceId 'partners'
         order '16'
@@ -815,7 +816,7 @@ views {
     title 'Network'
     include network_z_use1, network_z_use1.**
     include network_z_euw2, network_z_euw2.**
-    include network_z_once, network_z_once.**
+    include network_z_connect, network_z_connect.**
     include network_internet, network_internet.**
   }
 }

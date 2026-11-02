@@ -1,0 +1,8 @@
+{
+  "name": "@govuk-connect/tag",
+  "version": "1.0.0",
+  "description": "A stand-in for the GOV.UK Connect tagging package, which is published only to a private registry. Every export is a no-op; see projects/udp/project.config.json synth.stubs.",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "private": true
+}

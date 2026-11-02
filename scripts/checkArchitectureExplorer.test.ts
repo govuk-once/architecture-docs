@@ -127,6 +127,31 @@ describe("measure — placement rules 1, 3 and 5", () => {
   });
 });
 
+describe("measure — chrome over the drawing", () => {
+  /* A hint pinned to the page floor, the way the stage pins its own. */
+  const hint = (top: number) =>
+    `<div id="hint" style="position:fixed;left:0;top:${String(top)}px;width:300px;height:30px"></div>`;
+
+  it("counts a box drawn under the hint, at whatever zoom the tab opened at", async () => {
+    // The svg is 900×700 at the page origin, so a box at y 600 sits at y 600 on screen.
+    const r = await measured(node("Low", 40, 600) + hint(610));
+    expect(r.under).toEqual(["Low under #hint"]);
+  });
+
+  it("counts nothing when the drawing is clear of it", async () => {
+    const r = await measured(node("High", 40, 40) + hint(610));
+    expect(r.under).toEqual([]);
+  });
+
+  it("ignores a strip the page has hidden", async () => {
+    const r = await measured(
+      node("Low", 40, 600) +
+        `<div id="tables" hidden style="position:fixed;left:0;top:610px;width:900px;height:40px"></div>`,
+    );
+    expect(r.under).toEqual([]);
+  });
+});
+
 describe("measure — soft geometry", () => {
   it("counts a line clipping a box it does not connect", async () => {
     const r = await measured(

@@ -10,3 +10,4 @@ coverage/
 # The source repositories this explorer documents, pulled in by `pnpm sync`.
 # Disposable: `pnpm clean` removes them.
 .sources/
+export/

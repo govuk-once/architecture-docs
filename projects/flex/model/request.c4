@@ -374,7 +374,7 @@ model {
       y '168'
       w '177'
       h '72'
-      ownership 'govuk'
+      ownership 'appside'
     }
   }
 
@@ -402,7 +402,7 @@ model {
 
   request_xudpuns = internal '10b. UDP · UNS' {
     #request-path
-    description 'GOV.UK Once · inside AWS'
+    description 'Connect · inside AWS'
     technology 'HTTPS · SigV4'
     link https://github.com/govuk-once/flex/blob/main/platform/domains/udp/gateway.config.ts 'platform/domains/udp/gateway.config.ts'
     link https://github.com/govuk-once/flex/blob/main/platform/domains/uns/gateway.config.ts 'platform/domains/uns/gateway.config.ts'

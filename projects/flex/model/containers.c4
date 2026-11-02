@@ -220,15 +220,15 @@ model {
 
     containers_cognito = internal 'Identity' {
       #request-path
-      description 'GOV.UK Once · Cognito user pool'
+      description 'app backend · Cognito user pool'
       technology 'Amazon Cognito user pool'
       link https://github.com/govuk-once/flex/blob/main/platform/infra/flex/src/stacks/platform.ts 'stacks/platform.ts'
       metadata {
-        type 'GOV.UK Once system'
+        type 'GOV.UK system · outside Connect'
         tech 'Amazon Cognito user pool'
         role 'Issues and signs the access tokens FLEX accepts.'
         facts [
-          'A sibling GOV.UK Once system, not a third party. In development the authorizer is pointed at a stub user pool and at FLEX\'s own JWKS Function URL instead.'
+          'Part of the GOV.UK App\'s backend: a GOV.UK system outside GOV.UK Connect, not a third party. In development the authorizer is pointed at a stub user pool and at FLEX\'s own JWKS Function URL instead.'
         ]
         sourceId 'cognito'
         order '7'
@@ -236,7 +236,7 @@ model {
         y '286'
         w '240'
         h '54'
-        ownership 'govuk'
+        ownership 'appside'
         awsIcon 'cognito'
       }
     }
@@ -444,7 +444,7 @@ model {
         tech 'FlexDomainStack · isolated tier'
         role 'Countries and events for the travel feature.'
         facts [
-          '<code>environments</code> is development and staging only, so it does not exist in production.',
+          '<code>environments</code> is all three stages since NOT-562 (#580); until 21 October 2026 it was development and staging only.',
           'Both routes are public on <code>/app/travel/**</code> and reach the travel gateway over the private API.'
         ]
         sourceId 'dtravel'
@@ -604,7 +604,7 @@ model {
         role 'Sole holder of the travel upstream credentials.'
         facts [
           'Runs in the egress tier because it reaches DynamoDB and STS over the public AWS endpoints through NAT, which isolated subnets cannot route to.',
-          '<code>environments</code> is development and staging only.'
+          '<code>environments</code> is all three stages since NOT-562 (#585, 23 October 2026), two days after the domain reached production; until then it was development and staging only.'
         ]
         sourceId 'gwtravel'
         order '22'
@@ -647,7 +647,7 @@ model {
         tech 'HTTPS via NAT'
         role 'Licence, vehicle and share-code services.'
         facts [
-          'The only upstream outside the GOV.UK Once boundary, and the only one reached over the public internet.'
+          'The only upstream outside the GOV.UK Connect boundary, and the only one reached over the public internet.'
         ]
         sourceId 'xdvla'
         order '18'
@@ -661,10 +661,10 @@ model {
 
     containers_xudp = internal 'UDP' {
       #request-path
-      description 'GOV.UK Once · shared'
+      description 'Connect · shared'
       technology 'AWS API, SigV4 + API key'
       metadata {
-        type 'GOV.UK Once system'
+        type 'GOV.UK Connect system'
         tech 'AWS API, SigV4 + API key'
         role 'Identity and preference store.'
         facts [
@@ -682,10 +682,10 @@ model {
 
     containers_xuns = internal 'UNS' {
       #request-path
-      description 'GOV.UK Once · private'
+      description 'Connect · private'
       technology 'AWS API, SigV4 + API key'
       metadata {
-        type 'GOV.UK Once system'
+        type 'GOV.UK Connect system'
         tech 'AWS API, SigV4 + API key'
         role 'Notification and group store.'
         facts [
@@ -728,10 +728,10 @@ model {
 
   containers_app = internal 'GOV.UK App' {
     #request-path
-    description 'GOV.UK Once · mobile'
+    description 'GOV.UK · mobile'
     technology 'Mobile client'
     metadata {
-      type 'GOV.UK Once system'
+      type 'GOV.UK system · outside Connect'
       tech 'Mobile client'
       role 'Calls the public API through CloudFront.'
       facts [
@@ -743,7 +743,7 @@ model {
       y '114'
       w '204'
       h '56'
-      ownership 'govuk'
+      ownership 'appside'
     }
   }
 

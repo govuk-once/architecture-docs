@@ -4,7 +4,7 @@
     "order": 1,
     "group": "Architecture",
     "audience": "Anyone new to FLEX, including non-engineers",
-    "blurb": "FLEX inside GOV.UK Once: the people it serves, its sibling systems, and the one organisation outside the boundary its request handling exchanges data with. C4 level 1 — runtime only.",
+    "blurb": "FLEX inside GOV.UK Connect: the people it serves, the systems beside it, and the one other organisation its request handling exchanges data with. C4 level 1 — runtime only.",
     "note": "6 domains · 3 service gateways · 2 shared APIs · 277+ AWS resources in production",
     "w": 1400,
     "h": 620
@@ -770,11 +770,11 @@
           ],
           [
             "Macie scan of the CloudFront access-log bucket",
-            "<code>FlexMacieStack</code>, persistent stages only",
+            "<code>FlexMacieStack</code> — written, but no longer deployed",
             "us-east-1",
-            "Weekly",
-            "Monday, 100% sampling, recommended managed identifiers; findings published every 15 minutes, results to a KMS-encrypted bucket",
-            "<code>app.ts</code> lines 11 and 93, <code>stacks/macie.ts</code>"
+            "Not running",
+            "Monday, 100% sampling, recommended managed identifiers; findings published every 15 minutes, results to a KMS-encrypted bucket — the schedule the stack carries when it is enabled. FLEX-491 (#522) disabled it in <code>app.ts</code> while a deployment issue is investigated with the Platform team, so no stage synthesises it today",
+            "<code>app.ts</code>, <code>stacks/macie.ts</code>"
           ]
         ]
       },
@@ -883,7 +883,7 @@
           [
             "Amazon Macie",
             "<code>FlexMacieStack</code>",
-            "Deployed to persistent stages since FLEX-491, which re-enabled it with an explicit custom-resource role — the Platform IAM guardrail that held it back is resolved. <code>validate:macie-coverage</code> runs in Hygiene on every pull request and posts a Slack notice for uncovered domains; it now reports against a stack that is deployed."
+            "Written, but not deployed. FLEX-491 re-enabled it with an explicit custom-resource role (#519), then reverted to the dynamic-role pattern and disabled the stack in <code>app.ts</code> (#522) while a deployment issue is investigated with the Platform team. No stage synthesises it today, so <code>validate:macie-coverage</code> in Hygiene reports against a stack that is not deployed."
           ],
           [
             "VPC flow logs",
@@ -912,7 +912,7 @@
     "group": "Cross-cutting",
     "audience": "Platform engineers and on-call",
     "blurb": "How code reaches production, and how production reaches a human when it goes wrong. Nothing on this tab is on a user's request path.",
-    "note": "A <b>solid line blocks the release; a dashed one runs beside it and blocks nothing</b> — the spine down the middle is the only path to production. Two of the paths drawn here do not work today. The canary's alarm has no alarm action, and the cross-region relay's inline handler has a syntax error, so the smoke test and every us-east-1 edge alarm reach nobody. A third is worth reading the test table for: the platform suite is the only test that can fail a deploy, and it is skipped in production.",
+    "note": "A <b>solid line blocks the release; a dashed one runs beside it and blocks nothing</b> — the spine down the middle is the only path to production. One of the paths drawn here does not work today: the canary's alarm has no alarm action, so the smoke test reaches nobody. The cross-region relay now forwards, but the six alarms that watch it publish to a topic nothing subscribes to. Another is worth reading the test table for: the platform suite is the only test that can fail a deploy, and it is skipped in production.",
     "dashMeans": "runs beside the release and blocks nothing",
     "tables": [
       {
@@ -930,7 +930,8 @@
           ["listE2eModules.ts", "scripts/listE2eModules.ts"],
           ["sonar-project.properties", "sonar-project.properties"],
           ["zap.yml", ".github/workflows/zap.yml"],
-          ["performance-tests.yml", ".github/workflows/performance-tests.yml"]
+          ["performance-tests.yml", ".github/workflows/performance-tests.yml"],
+          ["security-gate.sh", "scripts/zap/security-gate.sh"]
         ],
         "cols": ["Kind", "What it covers", "Where it runs", "Gates"],
         "rows": [
@@ -990,9 +991,9 @@
           ],
           [
             "DAST",
-            "ZAP against a committed OpenAPI document, not the live one",
-            "after a whole production run succeeds",
-            "No — a SARIF artifact nothing reads"
+            "ZAP against the OpenAPI the code generates, merged for the public API by <code>scripts/zap/merge-openapi.ts</code>",
+            "a reusable workflow: called by main.yml after the staging deploy, or by hand — since FLEX-528",
+            "<b>Yes</b> — <code>security-gate.sh</code> fails on any unapproved Medium or High finding not in the baseline; the SARIF goes to code scanning"
           ],
           [
             "Load",
@@ -1004,7 +1005,7 @@
       },
       {
         "name": "Every alarm, its threshold, and which topic it reaches",
-        "note": "19 alarm kinds: 18 from six constructs in <code>constructs/alarms/</code>, plus the smoke-test alarm in <code>stacks/smoke-test.ts</code>, which sets no action and so reaches nobody. Every one sets <code>treatMissingData: NOT_BREACHING</code>, so silence never fires an alarm. Critical and Warning are two separate SNS topics, wired in <code>constructs/alarms/actions.ts</code>. The CloudFront, CloudFront Function and Shield rows are measured in us-east-1, because that is the only region those metrics are emitted to — they reach the eu-west-2 topics through the cross-region relay.",
+        "note": "77 alarm kinds, after FLEX-547 rebuilt what is critical around five user journeys. 24 watch traffic and the relay from seven constructs in <code>constructs/alarms/</code>; of those only the CloudFront 5xx rate, the traffic cliff, the Shield attack and the WAF 90%-blocked alarms are still critical — the API Gateway 5xx, Lambda error, throttle and duration, CloudFront Function and WAF managed-rule alarms were made warnings, because user impact is now measured by the journeys. A journey alarm is a composite over two windows of the same failure rate — 5xx and 429 as a share of valid requests, read from metric filters on the API access log — and fires only when both breach, so a blip cannot wake anyone: fast burn is 1 hour and 5 minutes, slow burn 6 hours and 30 minutes, thresholds derived from each journey's SLO. The 20 window alarms are counted; the 10 composites are <code>AWS::CloudWatch::CompositeAlarm</code> and are not. The auth-failure composite works the same way over 15 and 5 minutes. The IAM, Lambda, CloudFormation, KMS-key, Cognito-user-pool and secret-rotation alerts are EventBridge rules that publish to the critical topic; each adds a <code>Lost</code> and an <code>Undelivered</code> alarm for an alert that could not be delivered there. Certificate expiry, the hourly credential monitor and DVLA's secret rotation add seven more. The smoke test now runs every minute, one probe per journey — udp everywhere, travel outside production — and its three alarms reach the critical topic through its SSM parameter; until FLEX-547 its one alarm reached nobody. The smoke-test and traffic-cliff alarms treat missing data as breaching; <code>DaysToExpiry</code> and the credential monitor's three state alarms ignore it; every other alarm treats it as not breaching, so silence never fires it. Critical and Warning are two separate SNS topics, wired in <code>constructs/alarms/actions.ts</code>; the credential monitor and smoke test reach them through their SSM parameters. The six relay-health rows publish to a third, <code>{stage}-flex-alerts-relay-health</code>, which the critical Slack channel now subscribes to across regions. The CloudFront, CloudFront Function, Shield, Certificate, us-east-1 change-alert and relay rows are measured in us-east-1, because that is where those metrics and IAM's events are emitted; all but the relay-health rows reach the eu-west-2 topics through the cross-region relay. The change alerts, credential monitor and DVLA rotation are not deployed to ephemeral stages. The design is <code>docs/critical-alerts.md</code>.",
         "code": [
           [
             "api-gateway.ts",
@@ -1025,7 +1026,73 @@
             "actions.ts",
             "platform/infra/flex/src/constructs/alarms/actions.ts"
           ],
-          ["smoke-test.ts", "platform/infra/flex/src/stacks/smoke-test.ts"]
+          ["smoke-test.ts", "platform/infra/flex/src/stacks/smoke-test.ts"],
+          [
+            "alarm-relay.ts",
+            "platform/infra/flex/src/constructs/alarms/alarm-relay.ts"
+          ],
+          [
+            "above-zero-alarm.ts",
+            "platform/infra/flex/src/constructs/alarms/above-zero-alarm.ts"
+          ],
+          [
+            "relay-health.ts",
+            "platform/infra/flex/src/constructs/alarms/relay-health.ts"
+          ],
+          [
+            "certificate.ts",
+            "platform/infra/flex/src/constructs/alarms/certificate.ts"
+          ],
+          [
+            "credential-monitor.ts",
+            "platform/infra/flex/src/constructs/alarms/credential-monitor.ts"
+          ],
+          [
+            "event-alert.ts",
+            "platform/infra/flex/src/constructs/alarms/event-alert.ts"
+          ],
+          [
+            "iam-change-alerts.ts",
+            "platform/infra/flex/src/constructs/alarms/iam-change-alerts.ts"
+          ],
+          [
+            "secret-rotation.ts",
+            "platform/infra/flex/src/constructs/alarms/secret-rotation.ts"
+          ],
+          [
+            "secret-rotation-alerts.ts",
+            "platform/infra/flex/src/stacks/core/secret-rotation-alerts.ts"
+          ],
+          [
+            "stacks/credential-monitor.ts",
+            "platform/infra/flex/src/stacks/credential-monitor.ts"
+          ],
+          [
+            "dvla-secret-rotation.ts",
+            "platform/infra/flex/src/stacks/core/dvla-secret-rotation.ts"
+          ],
+          [
+            "auth-failure.ts",
+            "platform/infra/flex/src/constructs/alarms/auth-failure.ts"
+          ],
+          [
+            "journeys.ts",
+            "platform/infra/flex/src/constructs/alarms/journeys.ts"
+          ],
+          [
+            "two-window-alarm.ts",
+            "platform/infra/flex/src/constructs/alarms/two-window-alarm.ts"
+          ],
+          [
+            "key-change-alerts.ts",
+            "platform/infra/flex/src/constructs/alarms/key-change-alerts.ts"
+          ],
+          ["smoke-test/probes.ts", "platform/smoke-test/src/probes.ts"],
+          ["critical-alerts.md", "docs/critical-alerts.md"],
+          [
+            "stacks/core/stack.ts",
+            "platform/infra/flex/src/stacks/core/stack.ts"
+          ]
         ],
         "derived": {
           "from": "counts.alarms",
@@ -1040,7 +1107,7 @@
             "<code>5XXError</code>",
             "above 1%",
             "5 × 1 min",
-            "Critical"
+            "Warning — since FLEX-547 user impact is the journey alarms' to raise"
           ],
           [
             "API Gateway",
@@ -1072,7 +1139,7 @@
             "<code>100 * errors / invocations</code>, only at 10+ invocations",
             "above 1%",
             "2 × 5 min, both must breach",
-            "Critical"
+            "Warning — since FLEX-547"
           ],
           [
             "Lambda",
@@ -1080,14 +1147,14 @@
             "<code>Throttles</code> sum",
             "above 0",
             "1 × 1 min",
-            "Critical"
+            "Warning — since FLEX-547"
           ],
           [
             "Lambda",
             "<code>Duration</code>",
-            "<code>Duration</code> p99",
+            "<code>Duration</code> p99, zeroed below 10 invocations so cold starts do not alarm",
             "above 80% of the function timeout",
-            "1 × 5 min",
+            "3 × 5 min, 2 must breach",
             "Warning"
           ],
           [
@@ -1120,7 +1187,7 @@
             "<code>FunctionExecutionErrors</code>",
             "above 0",
             "5 × 1 min",
-            "Critical"
+            "Warning — since FLEX-547"
           ],
           [
             "CloudFront Function",
@@ -1128,7 +1195,7 @@
             "<code>FunctionThrottles</code>",
             "above 0",
             "5 × 1 min",
-            "Critical"
+            "Warning — since FLEX-547"
           ],
           [
             "CloudFront Function",
@@ -1160,7 +1227,7 @@
             "Blocked by a managed rule",
             "above 0",
             "1 × 5 min",
-            "Critical"
+            "Warning — since FLEX-547"
           ],
           [
             "WAF",
@@ -1179,12 +1246,476 @@
             "Warning"
           ],
           [
-            "Smoke test",
-            "<code>SmokeTestAlarm</code>",
-            "<code>SmokeTestSuccess</code> sum",
+            "Alarm relay",
+            "<code>CriticalRelayErrors</code>",
+            "<code>Errors</code> sum",
+            "above 0",
+            "1 × 5 min",
+            "Relay health — no subscriber"
+          ],
+          [
+            "Alarm relay",
+            "<code>CriticalRelayFailureQueueNotEmpty</code>",
+            "<code>ApproximateNumberOfMessagesVisible</code> max",
+            "above 0",
+            "1 × 5 min",
+            "Relay health — no subscriber"
+          ],
+          [
+            "Alarm relay",
+            "<code>CriticalRelayFailureQueueUndelivered</code>",
+            "<code>DestinationDeliveryFailures</code> sum",
+            "above 0",
+            "1 × 5 min",
+            "Relay health — no subscriber"
+          ],
+          [
+            "Alarm relay",
+            "<code>WarningRelayErrors</code>",
+            "<code>Errors</code> sum",
+            "above 0",
+            "1 × 5 min",
+            "Relay health — no subscriber"
+          ],
+          [
+            "Alarm relay",
+            "<code>WarningRelayFailureQueueNotEmpty</code>",
+            "<code>ApproximateNumberOfMessagesVisible</code> max",
+            "above 0",
+            "1 × 5 min",
+            "Relay health — no subscriber"
+          ],
+          [
+            "Alarm relay",
+            "<code>WarningRelayFailureQueueUndelivered</code>",
+            "<code>DestinationDeliveryFailures</code> sum",
+            "above 0",
+            "1 × 5 min",
+            "Relay health — no subscriber"
+          ],
+          [
+            "Change alerts · us-east-1",
+            "<code>IamChangeAlertLost</code>",
+            "<code>InvocationsFailedToBeSentToDlq</code> sum, on the rule",
+            "above 0",
+            "1 × 5 min",
+            "Warning"
+          ],
+          [
+            "Change alerts · us-east-1",
+            "<code>IamChangeAlertUndelivered</code>",
+            "<code>ApproximateNumberOfMessagesVisible</code> max, on the dead-letter queue",
+            "above 0",
+            "1 × 5 min",
+            "Warning"
+          ],
+          [
+            "Change alerts · us-east-1",
+            "<code>LambdaChangeAlertLost</code>",
+            "<code>InvocationsFailedToBeSentToDlq</code> sum, on the rule",
+            "above 0",
+            "1 × 5 min",
+            "Warning"
+          ],
+          [
+            "Change alerts · us-east-1",
+            "<code>LambdaChangeAlertUndelivered</code>",
+            "<code>ApproximateNumberOfMessagesVisible</code> max, on the dead-letter queue",
+            "above 0",
+            "1 × 5 min",
+            "Warning"
+          ],
+          [
+            "Change alerts · us-east-1",
+            "<code>CloudFormationChangeAlertLost</code>",
+            "<code>InvocationsFailedToBeSentToDlq</code> sum, on the rule",
+            "above 0",
+            "1 × 5 min",
+            "Warning"
+          ],
+          [
+            "Change alerts · us-east-1",
+            "<code>CloudFormationChangeAlertUndelivered</code>",
+            "<code>ApproximateNumberOfMessagesVisible</code> max, on the dead-letter queue",
+            "above 0",
+            "1 × 5 min",
+            "Warning"
+          ],
+          [
+            "Change alerts · eu-west-2",
+            "<code>LambdaChangeAlertLost</code>",
+            "<code>InvocationsFailedToBeSentToDlq</code> sum, on the rule",
+            "above 0",
+            "1 × 5 min",
+            "Warning"
+          ],
+          [
+            "Change alerts · eu-west-2",
+            "<code>LambdaChangeAlertUndelivered</code>",
+            "<code>ApproximateNumberOfMessagesVisible</code> max, on the dead-letter queue",
+            "above 0",
+            "1 × 5 min",
+            "Warning"
+          ],
+          [
+            "Change alerts · eu-west-2",
+            "<code>CloudFormationChangeAlertLost</code>",
+            "<code>InvocationsFailedToBeSentToDlq</code> sum, on the rule",
+            "above 0",
+            "1 × 5 min",
+            "Warning"
+          ],
+          [
+            "Change alerts · eu-west-2",
+            "<code>CloudFormationChangeAlertUndelivered</code>",
+            "<code>ApproximateNumberOfMessagesVisible</code> max, on the dead-letter queue",
+            "above 0",
+            "1 × 5 min",
+            "Warning"
+          ],
+          [
+            "Change alerts · eu-west-2",
+            "<code>SecretRotationAlertLost</code>",
+            "<code>InvocationsFailedToBeSentToDlq</code> sum, on the rule",
+            "above 0",
+            "1 × 5 min",
+            "Warning"
+          ],
+          [
+            "Change alerts · eu-west-2",
+            "<code>SecretRotationAlertUndelivered</code>",
+            "<code>ApproximateNumberOfMessagesVisible</code> max, on the dead-letter queue",
+            "above 0",
+            "1 × 5 min",
+            "Warning"
+          ],
+          [
+            "Certificate",
+            "<code>DaysToExpiry</code>",
+            "<code>DaysToExpiry</code> min",
+            "below 30 days",
+            "1 × 1 day",
+            "Critical"
+          ],
+          [
+            "Credential monitor",
+            "<code>CognitoConfigDrift</code>",
+            "<code>CognitoConfigDrift</code> max",
+            "above 0",
+            "1 × 1 h",
+            "Critical"
+          ],
+          [
+            "Credential monitor",
+            "<code>SecretRotationOverdue</code>",
+            "<code>SecretRotationOverdue</code> max: a credential 7+ days past rotation",
+            "above 0",
+            "1 × 1 h",
+            "Warning"
+          ],
+          [
+            "Credential monitor",
+            "<code>SecretRotationUnverifiable</code>",
+            "<code>SecretRotationUnverifiable</code> max",
+            "above 0",
+            "1 × 1 h",
+            "Warning"
+          ],
+          [
+            "Credential monitor",
+            "<code>NotReporting</code>",
+            "<code>CredentialMonitorSuccess</code> sum, missing as 0",
             "below 1",
+            "4 × 1 h, 3 must breach",
+            "Warning"
+          ],
+          [
+            "Credential monitor",
+            "<code>Failing</code>",
+            "the monitor's <code>Errors</code> sum, missing as 0",
+            "above 0",
+            "3 × 1 h, all 3 must breach",
+            "Warning"
+          ],
+          [
+            "DVLA secret rotation",
+            "<code>Failed</code>",
+            "the rotation Lambda's <code>Errors</code> sum",
+            "above 0",
+            "1 × 5 min",
+            "Critical"
+          ],
+          [
+            "CloudFront",
+            "<code>TrafficCliff</code>",
+            "<code>Requests</code> sum, anomaly detection at 3 std devs",
+            "below the band, or no data at all",
+            "3 × 5 min, all must breach · staging and production only",
+            "Critical"
+          ],
+          [
+            "API Gateway",
+            "<code>AuthFailure15m</code>",
+            "401 and 403 as a share of all requests, from metric filters on the access log, at 20+ requests",
+            "above 50%",
             "1 × 15 min",
-            "— no action wired"
+            "Neither alone: the <code>AuthFailure</code> composite fires when both do → Critical"
+          ],
+          [
+            "API Gateway",
+            "<code>AuthFailure5m</code>",
+            "401 and 403 as a share of all requests, from metric filters on the access log, at 20+ requests",
+            "above 50%",
+            "1 × 5 min",
+            "Neither alone: the <code>AuthFailure</code> composite fires when both do → Critical"
+          ],
+          [
+            "Journeys",
+            "<code>ReadsFastBurn1h</code>",
+            "5xx and 429 as a share of valid requests on user data reads · GET on /app/udp, /app/topics, /app/groups, from metric filters on the access log, at 20+ requests",
+            "above 7.2% — a 14.4× burn of the 99.5% SLO",
+            "1 × 1 h",
+            "Neither alone: the <code>ReadsFastBurn</code> composite fires when both do → Critical"
+          ],
+          [
+            "Journeys",
+            "<code>ReadsFastBurn5m</code>",
+            "5xx and 429 as a share of valid requests on user data reads · GET on /app/udp, /app/topics, /app/groups, from metric filters on the access log, at 20+ requests",
+            "above 7.2% — a 14.4× burn of the 99.5% SLO",
+            "1 × 5 min",
+            "Neither alone: the <code>ReadsFastBurn</code> composite fires when both do → Critical"
+          ],
+          [
+            "Journeys",
+            "<code>ReadsSlowBurn6h</code>",
+            "5xx and 429 as a share of valid requests on user data reads · GET on /app/udp, /app/topics, /app/groups, from metric filters on the access log, at 20+ requests",
+            "above 3% — a 6× burn of the 99.5% SLO",
+            "1 × 6 h",
+            "Neither alone: the <code>ReadsSlowBurn</code> composite fires when both do → Warning"
+          ],
+          [
+            "Journeys",
+            "<code>ReadsSlowBurn30m</code>",
+            "5xx and 429 as a share of valid requests on user data reads · GET on /app/udp, /app/topics, /app/groups, from metric filters on the access log, at 20+ requests",
+            "above 3% — a 6× burn of the 99.5% SLO",
+            "1 × 30 min",
+            "Neither alone: the <code>ReadsSlowBurn</code> composite fires when both do → Warning"
+          ],
+          [
+            "Journeys",
+            "<code>WritesFastBurn1h</code>",
+            "5xx and 429 as a share of valid requests on user data updates · POST, PATCH, PUT, DELETE on the same paths, from metric filters on the access log, at 20+ requests",
+            "above 1.44% — a 14.4× burn of the 99.9% SLO",
+            "1 × 1 h",
+            "Neither alone: the <code>WritesFastBurn</code> composite fires when both do → Critical"
+          ],
+          [
+            "Journeys",
+            "<code>WritesFastBurn5m</code>",
+            "5xx and 429 as a share of valid requests on user data updates · POST, PATCH, PUT, DELETE on the same paths, from metric filters on the access log, at 20+ requests",
+            "above 1.44% — a 14.4× burn of the 99.9% SLO",
+            "1 × 5 min",
+            "Neither alone: the <code>WritesFastBurn</code> composite fires when both do → Critical"
+          ],
+          [
+            "Journeys",
+            "<code>WritesSlowBurn6h</code>",
+            "5xx and 429 as a share of valid requests on user data updates · POST, PATCH, PUT, DELETE on the same paths, from metric filters on the access log, at 20+ requests",
+            "above 0.6% — a 6× burn of the 99.9% SLO",
+            "1 × 6 h",
+            "Neither alone: the <code>WritesSlowBurn</code> composite fires when both do → Warning"
+          ],
+          [
+            "Journeys",
+            "<code>WritesSlowBurn30m</code>",
+            "5xx and 429 as a share of valid requests on user data updates · POST, PATCH, PUT, DELETE on the same paths, from metric filters on the access log, at 20+ requests",
+            "above 0.6% — a 6× burn of the 99.9% SLO",
+            "1 × 30 min",
+            "Neither alone: the <code>WritesSlowBurn</code> composite fires when both do → Warning"
+          ],
+          [
+            "Journeys",
+            "<code>DrivingFastBurn1h</code>",
+            "5xx and 429 as a share of valid requests on /app/dvla/v1/*, test-notification excluded, from metric filters on the access log, at 20+ requests",
+            "above 7.2% — a 14.4× burn of the 99.5% SLO",
+            "1 × 1 h",
+            "Neither alone: the <code>DrivingFastBurn</code> composite fires when both do → Critical"
+          ],
+          [
+            "Journeys",
+            "<code>DrivingFastBurn5m</code>",
+            "5xx and 429 as a share of valid requests on /app/dvla/v1/*, test-notification excluded, from metric filters on the access log, at 20+ requests",
+            "above 7.2% — a 14.4× burn of the 99.5% SLO",
+            "1 × 5 min",
+            "Neither alone: the <code>DrivingFastBurn</code> composite fires when both do → Critical"
+          ],
+          [
+            "Journeys",
+            "<code>DrivingSlowBurn6h</code>",
+            "5xx and 429 as a share of valid requests on /app/dvla/v1/*, test-notification excluded, from metric filters on the access log, at 20+ requests",
+            "above 3% — a 6× burn of the 99.5% SLO",
+            "1 × 6 h",
+            "Neither alone: the <code>DrivingSlowBurn</code> composite fires when both do → Warning"
+          ],
+          [
+            "Journeys",
+            "<code>DrivingSlowBurn30m</code>",
+            "5xx and 429 as a share of valid requests on /app/dvla/v1/*, test-notification excluded, from metric filters on the access log, at 20+ requests",
+            "above 3% — a 6× burn of the 99.5% SLO",
+            "1 × 30 min",
+            "Neither alone: the <code>DrivingSlowBurn</code> composite fires when both do → Warning"
+          ],
+          [
+            "Journeys",
+            "<code>NotificationsFastBurn1h</code>",
+            "5xx and 429 as a share of valid requests on /app/uns/v1/*, from metric filters on the access log, at 20+ requests",
+            "above 7.2% — a 14.4× burn of the 99.5% SLO",
+            "1 × 1 h",
+            "Neither alone: the <code>NotificationsFastBurn</code> composite fires when both do → Critical"
+          ],
+          [
+            "Journeys",
+            "<code>NotificationsFastBurn5m</code>",
+            "5xx and 429 as a share of valid requests on /app/uns/v1/*, from metric filters on the access log, at 20+ requests",
+            "above 7.2% — a 14.4× burn of the 99.5% SLO",
+            "1 × 5 min",
+            "Neither alone: the <code>NotificationsFastBurn</code> composite fires when both do → Critical"
+          ],
+          [
+            "Journeys",
+            "<code>NotificationsSlowBurn6h</code>",
+            "5xx and 429 as a share of valid requests on /app/uns/v1/*, from metric filters on the access log, at 20+ requests",
+            "above 3% — a 6× burn of the 99.5% SLO",
+            "1 × 6 h",
+            "Neither alone: the <code>NotificationsSlowBurn</code> composite fires when both do → Warning"
+          ],
+          [
+            "Journeys",
+            "<code>NotificationsSlowBurn30m</code>",
+            "5xx and 429 as a share of valid requests on /app/uns/v1/*, from metric filters on the access log, at 20+ requests",
+            "above 3% — a 6× burn of the 99.5% SLO",
+            "1 × 30 min",
+            "Neither alone: the <code>NotificationsSlowBurn</code> composite fires when both do → Warning"
+          ],
+          [
+            "Journeys",
+            "<code>TravelFastBurn1h</code>",
+            "5xx and 429 as a share of valid requests on /app/travel/v1/*, from metric filters on the access log, at 20+ requests",
+            "above 14.4% — a 14.4× burn of the 99% SLO",
+            "1 × 1 h",
+            "Neither alone: the <code>TravelFastBurn</code> composite fires when both do → Warning"
+          ],
+          [
+            "Journeys",
+            "<code>TravelFastBurn5m</code>",
+            "5xx and 429 as a share of valid requests on /app/travel/v1/*, from metric filters on the access log, at 20+ requests",
+            "above 14.4% — a 14.4× burn of the 99% SLO",
+            "1 × 5 min",
+            "Neither alone: the <code>TravelFastBurn</code> composite fires when both do → Warning"
+          ],
+          [
+            "Journeys",
+            "<code>TravelSlowBurn6h</code>",
+            "5xx and 429 as a share of valid requests on /app/travel/v1/*, from metric filters on the access log, at 20+ requests",
+            "above 6% — a 6× burn of the 99% SLO",
+            "1 × 6 h",
+            "Neither alone: the <code>TravelSlowBurn</code> composite fires when both do → Warning"
+          ],
+          [
+            "Journeys",
+            "<code>TravelSlowBurn30m</code>",
+            "5xx and 429 as a share of valid requests on /app/travel/v1/*, from metric filters on the access log, at 20+ requests",
+            "above 6% — a 6× burn of the 99% SLO",
+            "1 × 30 min",
+            "Neither alone: the <code>TravelSlowBurn</code> composite fires when both do → Warning"
+          ],
+          [
+            "Smoke test",
+            "<code>SmokeTestUdpAlarm</code>",
+            "<code>SmokeTestSuccess</code> sum, journey <code>udp</code>",
+            "below 1, or no data",
+            "3 × 1 min, all must breach",
+            "Critical, through the topic's SSM parameter"
+          ],
+          [
+            "Smoke test",
+            "<code>SmokeTestTravelAlarm</code>",
+            "<code>SmokeTestSuccess</code> sum, journey <code>travel</code>",
+            "below 1, or no data",
+            "3 × 1 min, all must breach · development and staging only",
+            "Critical, through the topic's SSM parameter"
+          ],
+          [
+            "Smoke test",
+            "<code>SmokeTestAuthRejectedAlarm</code>",
+            "<code>SmokeTestAuthRejected</code> sum — a valid token answered 401 or 403",
+            "above 0",
+            "3 × 1 min, all must breach",
+            "Critical, through the topic's SSM parameter"
+          ],
+          [
+            "Change alerts · us-east-1",
+            "<code>KmsKeyChangeAlertLost</code>",
+            "<code>InvocationsFailedToBeSentToDlq</code> sum, on the rule",
+            "above 0",
+            "1 × 5 min",
+            "Warning"
+          ],
+          [
+            "Change alerts · us-east-1",
+            "<code>KmsKeyChangeAlertUndelivered</code>",
+            "<code>ApproximateNumberOfMessagesVisible</code> max, on the dead-letter queue",
+            "above 0",
+            "1 × 5 min",
+            "Warning"
+          ],
+          [
+            "Change alerts · us-east-1",
+            "<code>CognitoUserPoolChangeAlertLost</code>",
+            "<code>InvocationsFailedToBeSentToDlq</code> sum, on the rule",
+            "above 0",
+            "1 × 5 min",
+            "Warning"
+          ],
+          [
+            "Change alerts · us-east-1",
+            "<code>CognitoUserPoolChangeAlertUndelivered</code>",
+            "<code>ApproximateNumberOfMessagesVisible</code> max, on the dead-letter queue",
+            "above 0",
+            "1 × 5 min",
+            "Warning"
+          ],
+          [
+            "Change alerts · eu-west-2",
+            "<code>KmsKeyChangeAlertLost</code>",
+            "<code>InvocationsFailedToBeSentToDlq</code> sum, on the rule",
+            "above 0",
+            "1 × 5 min",
+            "Warning"
+          ],
+          [
+            "Change alerts · eu-west-2",
+            "<code>KmsKeyChangeAlertUndelivered</code>",
+            "<code>ApproximateNumberOfMessagesVisible</code> max, on the dead-letter queue",
+            "above 0",
+            "1 × 5 min",
+            "Warning"
+          ],
+          [
+            "Change alerts · eu-west-2",
+            "<code>CognitoUserPoolChangeAlertLost</code>",
+            "<code>InvocationsFailedToBeSentToDlq</code> sum, on the rule",
+            "above 0",
+            "1 × 5 min",
+            "Warning"
+          ],
+          [
+            "Change alerts · eu-west-2",
+            "<code>CognitoUserPoolChangeAlertUndelivered</code>",
+            "<code>ApproximateNumberOfMessagesVisible</code> max, on the dead-letter queue",
+            "above 0",
+            "1 × 5 min",
+            "Warning"
           ]
         ]
       }

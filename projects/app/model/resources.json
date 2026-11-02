@@ -1,0 +1,667 @@
+{
+  "groups": [
+    {
+      "name": "Identity · Amazon Cognito",
+      "note": null,
+      "table": null,
+      "items": [
+        {
+          "id": "cognito-pool",
+          "name": "User pool",
+          "n": { "dev": 1, "stg": 1, "int": 1, "prod": 1 },
+          "from": "counts.userPools",
+          "meta": ["auth stack", "email as username"],
+          "d": {
+            "type": "AWS::Cognito::UserPool",
+            "role": "Every signed-in user.",
+            "facts": [
+              "Deletion protection is on unless the stack is ephemeral.",
+              "Advanced security in audit mode, and the Plus tier, in production only."
+            ],
+            "code": [
+              [
+                "services/auth/template.yaml",
+                "backend:services/auth/template.yaml"
+              ]
+            ]
+          }
+        },
+        {
+          "id": "cognito-clients",
+          "name": "User pool clients",
+          "n": { "dev": 2, "stg": 2, "int": 2, "prod": 2 },
+          "from": "counts.userPoolClients",
+          "meta": ["auth stack"],
+          "d": {
+            "type": "AWS::Cognito::UserPoolClient",
+            "role": "The app's client, and a client-credentials client for shared signals.",
+            "facts": [
+              "The app's client has a secret, the authorization code flow and token revocation."
+            ],
+            "code": [
+              [
+                "services/auth/template.yaml",
+                "backend:services/auth/template.yaml"
+              ]
+            ]
+          }
+        },
+        {
+          "id": "cognito-idp",
+          "name": "One Login identity provider",
+          "n": { "dev": 1, "stg": 1, "int": 1, "prod": 1 },
+          "from": "counts.identityProviders",
+          "meta": ["auth stack", "OIDC"],
+          "d": {
+            "type": "AWS::Cognito::UserPoolIdentityProvider",
+            "role": "Federation to GOV.UK One Login.",
+            "facts": [
+              "Maps One Login's <code>sub</code> to the username, and its email to the email attribute."
+            ],
+            "code": [
+              [
+                "services/auth/template.yaml",
+                "backend:services/auth/template.yaml"
+              ]
+            ]
+          }
+        },
+        {
+          "id": "cognito-domain",
+          "name": "Hosted UI domain",
+          "n": { "dev": 1, "stg": 1, "int": 1, "prod": 1 },
+          "meta": ["auth stack", "prefix domain"],
+          "d": {
+            "type": "AWS::Cognito::UserPoolDomain",
+            "role": "The authorize endpoint's host.",
+            "facts": [
+              "The prefix is read from SSM; there is no custom domain."
+            ],
+            "code": [
+              [
+                "services/auth/template.yaml",
+                "backend:services/auth/template.yaml"
+              ]
+            ]
+          }
+        },
+        {
+          "id": "cognito-resource-server",
+          "name": "Resource server",
+          "n": { "dev": 1, "stg": 1, "int": 1, "prod": 1 },
+          "meta": ["auth stack"],
+          "d": {
+            "type": "AWS::Cognito::UserPoolResourceServer",
+            "role": "The scope the shared-signals client is issued.",
+            "facts": [
+              "One scope, named by the <code>CustomScopeName</code> parameter, <code>read</code> by default."
+            ],
+            "code": [
+              [
+                "services/auth/template.yaml",
+                "backend:services/auth/template.yaml"
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Compute · AWS Lambda through SAM",
+      "note": "Declared as <code>AWS::Serverless::Function</code>; SAM expands each into a Lambda function, and a role where the template gives none.",
+      "table": null,
+      "items": [
+        {
+          "id": "fn-auth-proxy",
+          "name": "Auth proxy",
+          "n": { "dev": 1, "stg": 1, "int": 1, "prod": 1 },
+          "from": "counts.fnAuthProxy",
+          "meta": ["auth stack", "nodejs22.x"],
+          "d": {
+            "type": "AWS::Serverless::Function",
+            "role": "Forwards token grants to Cognito with the client secret.",
+            "facts": [
+              "Checks the App Check token while the attestation flag is on."
+            ],
+            "code": [
+              [
+                "services/auth/template.yaml",
+                "backend:services/auth/template.yaml"
+              ],
+              ["proxy.ts", "backend:services/auth/proxy/proxy.ts"]
+            ]
+          }
+        },
+        {
+          "id": "fn-revoke",
+          "name": "Revoke refresh token",
+          "n": { "dev": 1, "stg": 1, "int": 1, "prod": 1 },
+          "from": "counts.fnRevoke",
+          "meta": ["auth stack", "nodejs22.x"],
+          "d": {
+            "type": "AWS::Serverless::Function",
+            "role": "Revokes a refresh token on sign-out.",
+            "facts": ["Calls <code>RevokeToken</code> on the user pool."],
+            "code": [
+              [
+                "services/auth/template.yaml",
+                "backend:services/auth/template.yaml"
+              ],
+              [
+                "revoke-refresh-token.ts",
+                "backend:services/auth/revoke-token/revoke-refresh-token.ts"
+              ]
+            ]
+          }
+        },
+        {
+          "id": "fn-linking",
+          "name": "Linking verification",
+          "n": { "dev": 1, "stg": 1, "int": 1, "prod": 1 },
+          "from": "counts.fnLinking",
+          "meta": ["auth stack", "nodejs22.x"],
+          "d": {
+            "type": "AWS::Serverless::Function",
+            "role": "Mints DVLA linking tokens.",
+            "facts": [
+              "Signs with a KMS RSA key and encrypts to DVLA's public key."
+            ],
+            "code": [
+              [
+                "services/auth/template.yaml",
+                "backend:services/auth/template.yaml"
+              ],
+              [
+                "linking-verification/app.ts",
+                "backend:services/auth/linking-verification/app.ts"
+              ]
+            ]
+          }
+        },
+        {
+          "id": "fn-ss-authorizer",
+          "name": "Shared-signals authorizer",
+          "n": { "dev": 1, "stg": 1, "int": 1, "prod": 1 },
+          "from": "counts.fnSsAuthorizer",
+          "meta": ["auth stack", "nodejs22.x"],
+          "d": {
+            "type": "AWS::Serverless::Function",
+            "role": "Admits only the shared-signals client's tokens.",
+            "facts": ["A TOKEN authorizer on the Authorization header."],
+            "code": [
+              [
+                "services/auth/template.yaml",
+                "backend:services/auth/template.yaml"
+              ],
+              [
+                "shared-signal-authorizer/app.ts",
+                "backend:services/auth/shared-signal-authorizer/app.ts"
+              ]
+            ]
+          }
+        },
+        {
+          "id": "fn-ss-receiver",
+          "name": "Shared-signals receiver",
+          "n": { "dev": 1, "stg": 1, "int": 1, "prod": 1 },
+          "from": "counts.fnSsReceiver",
+          "meta": ["auth stack", "nodejs22.x"],
+          "d": {
+            "type": "AWS::Serverless::Function",
+            "role": "Acts on One Login's account events.",
+            "facts": ["Answers 503 while its SSM feature flag is off."],
+            "code": [
+              [
+                "services/auth/template.yaml",
+                "backend:services/auth/template.yaml"
+              ],
+              [
+                "credential-change-handler.ts",
+                "backend:services/auth/shared-signal-receiver/handlers/credential-change-handler.ts"
+              ]
+            ]
+          }
+        },
+        {
+          "id": "fn-ss-health",
+          "name": "Shared-signals health check",
+          "n": { "dev": 1, "stg": 1, "int": 1, "prod": 1 },
+          "from": "counts.fnSsHealth",
+          "meta": ["auth stack", "nodejs22.x"],
+          "d": {
+            "type": "AWS::Serverless::Function",
+            "role": "Checks the shared-signals link every 10 minutes.",
+            "facts": ["Scheduled, with two retries."],
+            "code": [
+              [
+                "services/auth/template.yaml",
+                "backend:services/auth/template.yaml"
+              ]
+            ]
+          }
+        },
+        {
+          "id": "fn-smoke-test",
+          "name": "Smoke test",
+          "n": { "dev": 1, "stg": 1, "int": 0, "prod": 1 },
+          "from": "counts.fnSmokeTest",
+          "meta": ["auth stack", "nodejs22.x"],
+          "d": {
+            "type": "AWS::Serverless::Function",
+            "role": "Signs a test user in end to end.",
+            "facts": [
+              "Weekdays, every 5 minutes between 9 and 5, London time. Not in integration."
+            ],
+            "code": [
+              [
+                "services/auth/template.yaml",
+                "backend:services/auth/template.yaml"
+              ],
+              ["smoke-test/app.ts", "backend:services/auth/smoke-test/app.ts"]
+            ]
+          }
+        },
+        {
+          "id": "fn-pagerduty-test",
+          "name": "PagerDuty stand-in",
+          "n": { "dev": 1, "stg": 1, "int": 1, "prod": 0 },
+          "from": "counts.fnPagerDutyTest",
+          "meta": ["auth stack", "nodejs22.x"],
+          "d": {
+            "type": "AWS::Serverless::Function",
+            "role": "Logs what the paging topic sends, where there is no PagerDuty.",
+            "facts": ["Everywhere but production."],
+            "code": [
+              [
+                "services/auth/template.yaml",
+                "backend:services/auth/template.yaml"
+              ]
+            ]
+          }
+        },
+        {
+          "id": "fn-acceptance",
+          "name": "Acceptance testing",
+          "n": { "dev": 1, "stg": 1, "int": 0, "prod": 0 },
+          "from": "counts.fnAcceptance",
+          "meta": ["auth stack", "nodejs22.x"],
+          "d": {
+            "type": "AWS::Serverless::Function",
+            "role": "Runs allowlisted AWS SDK commands for the acceptance tests.",
+            "facts": ["Development and staging only."],
+            "code": [
+              [
+                "services/auth/template.yaml",
+                "backend:services/auth/template.yaml"
+              ]
+            ]
+          }
+        },
+        {
+          "id": "fn-mock-transmitter",
+          "name": "Mock shared-signals transmitter",
+          "n": { "dev": 1, "stg": 1, "int": 0, "prod": 0 },
+          "from": "counts.fnMockTransmitter",
+          "meta": ["auth stack", "nodejs22.x"],
+          "d": {
+            "type": "AWS::Serverless::Function",
+            "role": "Serves a JWKS for testing the receiver.",
+            "facts": ["Everywhere but production and integration."],
+            "code": [
+              [
+                "services/auth/template.yaml",
+                "backend:services/auth/template.yaml"
+              ]
+            ]
+          }
+        },
+        {
+          "id": "fn-chat-authorizer",
+          "name": "Chat authorizer",
+          "n": { "dev": 1, "stg": 1, "int": 1, "prod": 1 },
+          "from": "counts.fnChatAuthorizer",
+          "meta": ["chat stack", "nodejs22.x"],
+          "d": {
+            "type": "AWS::Serverless::Function",
+            "role": "Verifies the app's token and supplies the service token.",
+            "facts": ["The only function in the chat stack."],
+            "code": [
+              [
+                "services/chat/template.yaml",
+                "backend:services/chat/template.yaml"
+              ],
+              [
+                "authorizer-client.ts",
+                "backend:services/chat/authorizer/client/authorizer-client.ts"
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "APIs · Amazon API Gateway",
+      "note": null,
+      "table": null,
+      "items": [
+        {
+          "id": "api-token-proxy",
+          "name": "Token proxy API",
+          "n": { "dev": 1, "stg": 1, "int": 1, "prod": 1 },
+          "from": "counts.apiTokenProxy",
+          "meta": ["auth stack", "REST"],
+          "d": {
+            "type": "AWS::Serverless::Api",
+            "role": "Token, revoke and linking.",
+            "facts": ["No authorizer; its own WAF."],
+            "code": [
+              [
+                "services/auth/template.yaml",
+                "backend:services/auth/template.yaml"
+              ]
+            ]
+          }
+        },
+        {
+          "id": "api-shared-signals",
+          "name": "Shared-signals API",
+          "n": { "dev": 1, "stg": 1, "int": 1, "prod": 1 },
+          "from": "counts.apiSharedSignals",
+          "meta": ["auth stack", "REGIONAL"],
+          "d": {
+            "type": "AWS::Serverless::Api",
+            "role": "Receives One Login's account events.",
+            "facts": [
+              "A Cognito client-credentials authorizer, and a WAF with an IP allowlist."
+            ],
+            "code": [
+              [
+                "services/auth/template.yaml",
+                "backend:services/auth/template.yaml"
+              ]
+            ]
+          }
+        },
+        {
+          "id": "api-mock-transmitter",
+          "name": "Mock transmitter API",
+          "n": { "dev": 1, "stg": 1, "int": 0, "prod": 0 },
+          "from": "counts.apiMockTransmitter",
+          "meta": ["auth stack", "test only"],
+          "d": {
+            "type": "AWS::Serverless::Api",
+            "role": "Serves the mock JWKS.",
+            "facts": ["No WAF, no access logging and no throttling."],
+            "code": [
+              [
+                "services/auth/template.yaml",
+                "backend:services/auth/template.yaml"
+              ]
+            ]
+          }
+        },
+        {
+          "id": "api-chat",
+          "name": "Chat proxy API",
+          "n": { "dev": 1, "stg": 1, "int": 1, "prod": 1 },
+          "from": "counts.apiChat",
+          "meta": ["chat stack", "REST"],
+          "d": {
+            "type": "AWS::ApiGateway::RestApi",
+            "role": "Proxies any path to the chat service.",
+            "facts": ["A REQUEST authorizer with a 300-second cache."],
+            "code": [
+              [
+                "services/chat/template.yaml",
+                "backend:services/chat/template.yaml"
+              ]
+            ]
+          }
+        },
+        {
+          "id": "ss-domain",
+          "name": "Shared-signals custom domain",
+          "n": { "dev": 1, "stg": 1, "int": 1, "prod": 1 },
+          "meta": ["auth stack", "TLS 1.2"],
+          "d": {
+            "type": "AWS::ApiGateway::DomainName",
+            "role": "<code>shared-signals.{env}.app-backend.service.gov.uk</code>.",
+            "facts": ["The certificate ARN is read from SSM."],
+            "code": [
+              [
+                "services/auth/template.yaml",
+                "backend:services/auth/template.yaml"
+              ]
+            ]
+          }
+        },
+        {
+          "id": "ss-dns",
+          "name": "Shared-signals DNS record",
+          "n": { "dev": 1, "stg": 1, "int": 1, "prod": 1 },
+          "meta": ["auth stack", "Route 53"],
+          "d": {
+            "type": "AWS::Route53::RecordSet",
+            "role": "An alias to the custom domain.",
+            "facts": ["The hosted zone ID is read from SSM."],
+            "code": [
+              [
+                "services/auth/template.yaml",
+                "backend:services/auth/template.yaml"
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Protection, keys and access",
+      "note": null,
+      "table": null,
+      "items": [
+        {
+          "id": "web-acls",
+          "name": "Web ACLs",
+          "n": { "dev": 4, "stg": 4, "int": 4, "prod": 4 },
+          "from": "counts.webAcls",
+          "meta": ["both stacks", "REGIONAL"],
+          "d": {
+            "type": "AWS::WAFv2::WebACL",
+            "role": "User pool, token proxy, shared signals, chat proxy.",
+            "facts": [
+              "Three per-IP rate limits of 300, and 6,000 a minute for shared signals."
+            ],
+            "code": [
+              [
+                "services/auth/template.yaml",
+                "backend:services/auth/template.yaml"
+              ],
+              [
+                "services/chat/template.yaml",
+                "backend:services/chat/template.yaml"
+              ]
+            ]
+          }
+        },
+        {
+          "id": "kms-keys",
+          "name": "KMS keys",
+          "n": { "dev": 26, "stg": 26, "int": 24, "prod": 26 },
+          "from": "counts.kmsKeys",
+          "meta": ["both stacks"],
+          "d": {
+            "type": "AWS::KMS::Key",
+            "role": "Logs, function environments, alarm topics, and linking-token signing.",
+            "facts": [
+              "The config signing key is not among them: it is created outside these repositories."
+            ],
+            "code": [
+              [
+                "services/auth/template.yaml",
+                "backend:services/auth/template.yaml"
+              ],
+              [
+                "services/chat/template.yaml",
+                "backend:services/chat/template.yaml"
+              ]
+            ]
+          }
+        },
+        {
+          "id": "iam-roles",
+          "name": "IAM roles",
+          "n": { "dev": 11, "stg": 11, "int": 8, "prod": 9 },
+          "from": "counts.iamRoles",
+          "meta": ["both stacks"],
+          "d": {
+            "type": "AWS::IAM::Role",
+            "role": "Roles the templates declare.",
+            "facts": [
+              "Roles SAM generates for functions without one are not counted."
+            ],
+            "code": [
+              [
+                "services/auth/template.yaml",
+                "backend:services/auth/template.yaml"
+              ],
+              [
+                "services/chat/template.yaml",
+                "backend:services/chat/template.yaml"
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Observability · CloudWatch, SNS",
+      "note": null,
+      "table": null,
+      "items": [
+        {
+          "id": "alarms",
+          "name": "CloudWatch alarms",
+          "n": { "dev": 43, "stg": 43, "int": 42, "prod": 43 },
+          "from": "counts.alarmCount",
+          "meta": ["both stacks"],
+          "d": {
+            "type": "AWS::CloudWatch::Alarm",
+            "role": "Every alarm, listed on Delivery.",
+            "facts": ["Two have actions disabled."],
+            "code": [
+              [
+                "services/auth/template.yaml",
+                "backend:services/auth/template.yaml"
+              ],
+              [
+                "services/chat/template.yaml",
+                "backend:services/chat/template.yaml"
+              ]
+            ]
+          }
+        },
+        {
+          "id": "log-groups",
+          "name": "Log groups",
+          "n": { "dev": 15, "stg": 15, "int": 14, "prod": 15 },
+          "from": "counts.logGroups",
+          "meta": ["both stacks"],
+          "d": {
+            "type": "AWS::Logs::LogGroup",
+            "role": "Functions, APIs and WAFs.",
+            "facts": ["365 days in production, 30 elsewhere."],
+            "code": [
+              [
+                "services/auth/template.yaml",
+                "backend:services/auth/template.yaml"
+              ],
+              [
+                "services/chat/template.yaml",
+                "backend:services/chat/template.yaml"
+              ]
+            ]
+          }
+        },
+        {
+          "id": "metric-filters",
+          "name": "Metric filters",
+          "n": { "dev": 11, "stg": 11, "int": 11, "prod": 11 },
+          "from": "counts.metricFilters",
+          "meta": ["both stacks"],
+          "d": {
+            "type": "AWS::Logs::MetricFilter",
+            "role": "Timeouts, and 4xx responses the WAF did not cause.",
+            "facts": [
+              "Several alarms watch metrics no filter here publishes — see Security."
+            ],
+            "code": [
+              [
+                "services/auth/template.yaml",
+                "backend:services/auth/template.yaml"
+              ],
+              [
+                "services/chat/template.yaml",
+                "backend:services/chat/template.yaml"
+              ]
+            ]
+          }
+        },
+        {
+          "id": "sns-topics",
+          "name": "Alarm topics",
+          "n": { "dev": 2, "stg": 2, "int": 2, "prod": 2 },
+          "from": "counts.snsTopics",
+          "meta": ["auth stack"],
+          "d": {
+            "type": "AWS::SNS::Topic",
+            "role": "Paging and warnings.",
+            "facts": [
+              "Both KMS-encrypted; the chat stack's alarms use them by name."
+            ],
+            "code": [
+              [
+                "services/auth/template.yaml",
+                "backend:services/auth/template.yaml"
+              ]
+            ]
+          }
+        },
+        {
+          "id": "dashboards",
+          "name": "Smoke-test dashboard",
+          "n": { "dev": 1, "stg": 1, "int": 0, "prod": 1 },
+          "from": "counts.dashboards",
+          "meta": ["auth stack"],
+          "d": {
+            "type": "AWS::CloudWatch::Dashboard",
+            "role": "The smoke test's success metric and logs.",
+            "facts": ["Wherever the smoke test runs."],
+            "code": [
+              [
+                "services/auth/template.yaml",
+                "backend:services/auth/template.yaml"
+              ]
+            ]
+          }
+        },
+        {
+          "id": "chatbot",
+          "name": "Slack channel configuration",
+          "n": { "dev": 1, "stg": 1, "int": 1, "prod": 1 },
+          "meta": ["auth stack", "AWS Chatbot"],
+          "d": {
+            "type": "AWS::Chatbot::SlackChannelConfiguration",
+            "role": "Both topics, into one Slack channel.",
+            "facts": ["Its role has no policies attached."],
+            "code": [
+              [
+                "services/auth/template.yaml",
+                "backend:services/auth/template.yaml"
+              ]
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

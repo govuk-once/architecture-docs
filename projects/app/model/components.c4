@@ -1,0 +1,579 @@
+// GOV.UK App architecture — Components.
+//
+// Code, not infrastructure: the middleware each backend function runs a request through, in
+// order, and the layer both apps send every request through. Nothing here is an AWS
+// service, so no box carries an icon.
+
+model {
+
+  components_proxy = boundary 'Auth proxy · one request, in order' {
+    metadata {
+      type 'Middy middleware chain'
+      tech 'services/auth/proxy/handler.ts'
+      role 'What happens to a token request between API Gateway and Cognito.'
+      facts [
+        'The chain is declared in one place, <code>createHandler</code>, and runs top to bottom; a middleware that throws ends the request at the error handler.'
+      ]
+      sourceId 'proxy'
+      order '0'
+      x '40'
+      y '30'
+      w '318'
+      h '760'
+      boundary 'soft'
+    }
+
+    components_p1 = internal 'Logger · tracer · body' {
+      #request-path
+      description 'Powertools · form-encoded'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/proxy/handler.ts 'backend · proxy/handler.ts'
+      metadata {
+        type 'Middleware'
+        tech 'injectLambdaContext · httpUrlEncodeBodyParser · captureLambdaHandler'
+        role 'Correlates the logs with the API Gateway request id, parses the form body, traces the invocation.'
+        facts [
+          'The correlation id is <code>requestContext.requestId</code>.'
+        ]
+        sourceId 'p1'
+        order '1'
+        x '64'
+        y '80'
+        w '270'
+        h '62'
+        ownership 'app'
+      }
+    }
+
+    components_p2 = internal 'Feature flags' {
+      #request-path
+      description 'SSM · cached 15 minutes'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/proxy/middleware/feature-flags.ts 'backend · middleware/feature-flags.ts'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/proxy/feature-flags.ts 'backend · feature-flags.ts'
+      metadata {
+        type 'Middleware'
+        tech 'Powertools parameters'
+        role 'Reads whether attestation is on, and puts the answer on the request context.'
+        facts [
+          'The parameter is <code>/{ConfigStackName}/feature-flags/attestation</code>, cached with <code>maxAge: 900</code>.'
+        ]
+        sourceId 'p2'
+        order '2'
+        x '64'
+        y '190'
+        w '270'
+        h '62'
+        ownership 'app'
+      }
+    }
+
+    components_p3 = internal 'Sanitise headers' {
+      #request-path
+      description 'allowlist, by schema'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/proxy/sanitize-headers.ts 'backend · sanitize-headers.ts'
+      metadata {
+        type 'Middleware'
+        tech 'zod'
+        role 'Keeps only the headers the schema names, and only in the shapes it allows.'
+        facts [
+          '<code>content-type</code>, <code>accept</code>, <code>user-agent</code> and <code>connection</code>; <code>x-attestation-token</code> only when attestation is on. Everything else, including <code>host</code>, is dropped.'
+        ]
+        sourceId 'p3'
+        order '3'
+        x '64'
+        y '300'
+        w '270'
+        h '62'
+        ownership 'app'
+      }
+    }
+
+    components_p4 = internal 'Attestation' {
+      #request-path
+      description 'Firebase App Check JWT'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/proxy/middleware/attestation.ts 'backend · middleware/attestation.ts'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/proxy/firebaseJwt.ts 'backend · firebaseJwt.ts'
+      metadata {
+        type 'Middleware'
+        tech 'jose · Firebase JWKS'
+        role 'Rejects a token request that does not carry proof it came from the app — while the flag is on.'
+        facts [
+          'Verifies the header against <code>firebaseappcheck.googleapis.com/v1/jwks</code>: RS256 only, <code>typ: JWT</code>, the Firebase project as issuer, an app id as subject, the project among the audiences.',
+          'Skipped entirely when the flag is off.'
+        ]
+        sourceId 'p4'
+        order '4'
+        x '64'
+        y '410'
+        w '270'
+        h '62'
+        ownership 'app'
+      }
+    }
+
+    components_p5 = internal 'Body schema' {
+      #request-path
+      description 'code + PKCE, or refresh'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/proxy/validation/body.ts 'backend · validation/body.ts'
+      metadata {
+        type 'Middleware'
+        tech 'Powertools parser · zod discriminated union'
+        role 'Admits exactly two grant shapes and nothing else.'
+        facts [
+          '<code>authorization_code</code> needs <code>client_id</code>, <code>redirect_uri</code>, <code>code</code>, <code>code_verifier</code> and <code>scope</code>; <code>refresh_token</code> needs the token and <code>client_id</code>.'
+        ]
+        sourceId 'p5'
+        order '5'
+        x '64'
+        y '520'
+        w '270'
+        h '62'
+        ownership 'app'
+      }
+    }
+
+    components_p6 = internal 'Handler · proxy to Cognito' {
+      #request-path
+      description 'adds client_secret'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/proxy/proxy.ts 'backend · proxy.ts'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/proxy/secret.ts 'backend · secret.ts'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/proxy/config.ts 'backend · config.ts'
+      metadata {
+        type 'Handler'
+        tech 'POST {cognito}/oauth2/token'
+        role 'Re-encodes the body with the client secret and forwards it.'
+        facts [
+          'The secret is the <code>client_secret</code> field of the Secrets Manager entry the config names.',
+          'The Cognito host is built from the SSM domain prefix and checked before the call, so a request cannot redirect it.',
+          'Cognito\'s status, headers and body come back unchanged; a non-2xx is logged as a warning by the response middleware.'
+        ]
+        sourceId 'p6'
+        order '6'
+        x '64'
+        y '630'
+        w '270'
+        h '62'
+        ownership 'app'
+      }
+    }
+
+    components_p7 = internal 'Error handler' {
+      #request-path
+      description 'last in the chain'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/proxy/middleware/global-error-handler.ts 'backend · middleware/global-error-handler.ts'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/proxy/middleware/log-cognito-response.ts 'backend · middleware/log-cognito-response.ts'
+      metadata {
+        type 'Middleware'
+        tech 'middy onError'
+        role 'Turns whatever was thrown above into the response the app sees.'
+        facts [
+          'A failed attestation becomes a 401.'
+        ]
+        sourceId 'p7'
+        order '7'
+        x '64'
+        y '720'
+        w '270'
+        h '62'
+        ownership 'app'
+      }
+    }
+  }
+
+  components_receiver = boundary 'Shared-signals receiver · in order' {
+    metadata {
+      type 'Middy middleware chain'
+      tech 'services/auth/shared-signal-receiver/handler.ts'
+      role 'What happens to an account event between the authorizer and Cognito.'
+      facts [
+        'By the time the function runs, the WAF has checked the IP and the authorizer the caller\'s token; this chain checks the event.'
+      ]
+      sourceId 'receiver'
+      order '0'
+      x '388'
+      y '30'
+      w '318'
+      h '580'
+      boundary 'soft'
+    }
+
+    components_r1 = internal 'Logger · tracer · parser' {
+      #request-path
+      description 'the body must be a string'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/shared-signal-receiver/handler.ts 'backend · shared-signal-receiver/handler.ts'
+      metadata {
+        type 'Middleware'
+        tech 'Powertools parser · z.string()'
+        role 'Correlates the logs and takes the raw body as the compact JWT it should be.'
+        facts [
+          'The schema is <code>z.string()</code> over the API Gateway envelope: anything but a string body is refused before it is decoded.'
+        ]
+        sourceId 'r1'
+        order '8'
+        x '412'
+        y '80'
+        w '270'
+        h '62'
+        ownership 'app'
+      }
+    }
+
+    components_r2 = internal 'Verify the SET' {
+      #request-path
+      description 'JWKS · iss · aud · typ'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/shared-signal-receiver/middleware/decode-set.ts 'backend · middleware/decode-set.ts'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/shared-signal-receiver/signature-verification/verify-signature.ts 'backend · verify-signature.ts'
+  
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/template.yaml 'backend · services/auth/template.yaml'
+    metadata {
+        type 'Middleware'
+        tech 'jose · remote JWKS'
+        role 'Checks the Security Event Token\'s signature and claims, and puts the payload on the context.'
+        facts [
+          'Issuer <code>https://ssf.account.gov.uk/</code>, audience the receiver\'s own domain, algorithm RS256 and <code>typ: secevent+jwt</code>, against the JWKS URL the template sets per environment.',
+          'The JWKS is cached by the shared library for six hours; the ten-minute value in the environment is never read.'
+        ]
+        sourceId 'r2'
+        order '9'
+        x '412'
+        y '190'
+        w '270'
+        h '62'
+        ownership 'app'
+      }
+    }
+
+    components_r3 = internal 'Feature flag' {
+      #request-path
+      description '503 while off'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/shared-signal-receiver/handlers/request-handler.ts 'backend · handlers/request-handler.ts'
+  
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/template.yaml 'backend · services/auth/template.yaml'
+    metadata {
+        type 'Handler'
+        tech 'ENABLE_SHARED_SIGNAL'
+        role 'Refuses every event until the SSM flag says otherwise.'
+        facts [
+          'The value is resolved when the stack deploys, so changing the flag means redeploying.'
+        ]
+        sourceId 'r3'
+        order '10'
+        x '412'
+        y '300'
+        w '270'
+        h '62'
+        ownership 'app'
+      }
+    }
+
+    components_r4 = internal 'Route by event type' {
+      #request-path
+      description 'three schemas, first match'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/shared-signal-receiver/handlers/request-handler.ts 'backend · handlers/request-handler.ts'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/shared-signal-receiver/handlers/signal-verification-handler.ts 'backend · signal-verification-handler.ts'
+      metadata {
+        type 'Handler'
+        tech 'zod safeParse per schema'
+        role 'Matches the payload against CAEP credential-change, RISC account-purged and SSE verification, in that order.'
+        facts [
+          'A verification event is answered 202 and does nothing. An event matching no schema is a 400.',
+          'For the other two, the user is looked up first; an unknown user is answered 202 with no action.'
+        ]
+        sourceId 'r4'
+        order '11'
+        x '412'
+        y '410'
+        w '270'
+        h '62'
+        ownership 'app'
+      }
+    }
+
+    components_r5 = internal 'Act on Cognito' {
+      #request-path
+      description 'sign out · delete'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/shared-signal-receiver/handlers/credential-change-handler.ts 'backend · credential-change-handler.ts'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/shared-signal-receiver/handlers/account-purged-handler.ts 'backend · account-purged-handler.ts'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/auth/shared-signal-receiver/common/toCognitoUsername.ts 'backend · toCognitoUsername.ts'
+      metadata {
+        type 'Handler'
+        tech 'AdminUserGlobalSignOut · AdminDeleteUser'
+        role 'The only two things an event can do to a user.'
+        facts [
+          'The Cognito username is <code>onelogin_</code> followed by the event\'s subject.',
+          'A credential change signs the user out everywhere; an account purge does that, then deletes the user. Both answer 202.'
+        ]
+        sourceId 'r5'
+        order '12'
+        x '412'
+        y '520'
+        w '270'
+        h '62'
+        ownership 'app'
+      }
+    }
+  }
+
+  components_chatauth = boundary 'Chat authorizer' {
+    metadata {
+      type 'Middy middleware chain'
+      tech 'services/chat/authorizer/app.ts'
+      role 'How the app\'s token becomes the upstream\'s token.'
+      facts [
+        'Runs once per distinct Authorization header every 300 seconds; API Gateway caches the answer in between.'
+      ]
+      sourceId 'chatauth'
+      order '0'
+      x '736'
+      y '30'
+      w '318'
+      h '470'
+      boundary 'soft'
+    }
+
+    components_c1 = internal 'Parse the header' {
+      #request-path
+      description 'Authorization must be there'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/chat/authorizer/app.ts 'backend · chat/authorizer/app.ts'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/chat/authorizer/middleware/global-error-handler.ts 'backend · chat · global-error-handler.ts'
+      metadata {
+        type 'Middleware'
+        tech 'Powertools parser · zod'
+        role 'Requires a string Authorization header; a parse failure is a Deny.'
+        facts [
+          'Any other error is only logged, and reaches API Gateway as a failed invocation.'
+        ]
+        sourceId 'c1'
+        order '13'
+        x '760'
+        y '80'
+        w '270'
+        h '62'
+        ownership 'app'
+      }
+    }
+
+    components_c2 = internal 'Load the secret' {
+      #request-path
+      description 'cached for the lifetime'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/chat/authorizer/app.ts 'backend · chat/authorizer/app.ts'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/chat/authorizer/types.ts 'backend · chat/authorizer/types.ts'
+      metadata {
+        type 'Middleware'
+        tech '@middy/secrets-manager'
+        role 'Fetches the one secret the authorizer needs, once per container.'
+        facts [
+          'Three fields: <code>userPoolId</code>, <code>clientId</code> and <code>bearerToken</code>. The cache never expires, so rotating the secret means a cold start.'
+        ]
+        sourceId 'c2'
+        order '14'
+        x '760'
+        y '190'
+        w '270'
+        h '62'
+        ownership 'app'
+      }
+    }
+
+    components_c3 = internal 'Verify the access token' {
+      #request-path
+      description 'aws-jwt-verify'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/chat/authorizer/client/authorizer-client.ts 'backend · chat · authorizer-client.ts'
+      metadata {
+        type 'Client'
+        tech 'CognitoJwtVerifier · tokenUse: access'
+        role 'Checks the Bearer token against the pool and client in the secret.'
+        facts [
+          'The token is the second space-separated part of the header; missing or empty means Deny with principal <code>unknown</code>.',
+          'On success the principal is the token\'s <code>sub</code>.'
+        ]
+        sourceId 'c3'
+        order '15'
+        x '760'
+        y '300'
+        w '270'
+        h '62'
+        ownership 'app'
+      }
+    }
+
+    components_c4 = internal 'Build the policy' {
+      #request-path
+      description 'Allow *, plus context'
+      link https://github.com/alphagov/govuk-mobile-backend/blob/main/services/chat/authorizer/client/getAuthorizerResult.ts 'backend · chat · getAuthorizerResult.ts'
+      metadata {
+        type 'Client'
+        tech 'IAM policy document'
+        role 'What API Gateway caches and what the proxy integration reads.'
+        facts [
+          '<code>execute-api:Invoke</code> on <code>Resource: *</code>, and a context of <code>bearerToken</code> — <code>Bearer</code> plus the service token — and <code>Govuk-Chat-End-User-Id</code>, the user\'s <code>sub</code>.'
+        ]
+        sourceId 'c4'
+        order '16'
+        x '760'
+        y '410'
+        w '270'
+        h '62'
+        ownership 'app'
+      }
+    }
+  }
+
+  components_client = boundary 'The apps · every request' {
+    metadata {
+      type 'HTTP layer'
+      tech 'Swift · Kotlin'
+      role 'The code every call to FLEX, chat and the backend passes through, on each platform.'
+      facts [
+        'Neither platform pins certificates, and neither sends an attestation header anywhere but the token proxy.'
+      ]
+      sourceId 'client'
+      order '0'
+      x '1084'
+      y '30'
+      w '612'
+      h '360'
+      boundary 'soft'
+    }
+
+    components_i1 = internal 'iOS · GOVRequest' {
+      #request-path
+      description 'one struct per call'
+      link https://github.com/govuk-once/govuk-mobile-ios-app/blob/main/Production/govuk_ios/Networking/GOVRequest.swift 'ios · GOVRequest.swift'
+      link https://github.com/govuk-once/govuk-mobile-ios-app/blob/main/Production/govuk_ios/Networking/RequestBuilder.swift 'ios · RequestBuilder.swift'
+      metadata {
+        type 'Struct'
+        tech 'Networking/GOVRequest/*.swift'
+        role 'Names the path, method, body, whether the call needs the token, and which signing key checks the response.'
+        facts [
+          'Ten extensions, one per backend: App, Chat, DVLA, LocalAuthority, NotificationCentre, Search, TermsAndConditions, Topics, Travel, UserState, and Authentication.'
+        ]
+        sourceId 'i1'
+        order '17'
+        x '1108'
+        y '80'
+        w '270'
+        h '62'
+        ownership 'app'
+      }
+    }
+
+    components_i2 = internal 'iOS · APIServiceClient' {
+      #request-path
+      description 'Bearer · retry · signature'
+      link https://github.com/govuk-once/govuk-mobile-ios-app/blob/main/Production/govuk_ios/Networking/APIServiceClient.swift 'ios · APIServiceClient.swift'
+      link https://github.com/govuk-once/govuk-mobile-ios-app/blob/main/Production/govuk_ios/Networking/ResponseHandler.swift 'ios · ResponseHandler.swift'
+      metadata {
+        type 'Class'
+        tech 'URLSession · CryptoKit'
+        role 'Sends the request, and does the three things every response needs.'
+        facts [
+          'Adds <code>Authorization: Bearer</code> from its token provider when the request asks for it.',
+          'On a 401 or 403, asks the provider to refresh and retries once.',
+          'When the request names a signing key, verifies the P-256 signature in <code>x-amz-meta-govuk-sig</code> before the body is trusted.'
+        ]
+        sourceId 'i2'
+        order '18'
+        x '1108'
+        y '190'
+        w '270'
+        h '62'
+        ownership 'app'
+      }
+    }
+
+    components_a1 = internal 'Android · Retrofit interfaces' {
+      #request-path
+      description 'one per feature'
+      link https://github.com/govuk-once/govuk-mobile-android-app/blob/main/data/src/main/kotlin/uk/gov/govuk/data/di/NetworkModule.kt 'android · NetworkModule.kt'
+      link https://github.com/govuk-once/govuk-mobile-android-app/blob/main/feature/chat/src/main/kotlin/uk/gov/govuk/chat/di/ChatModule.kt 'android · ChatModule.kt'
+      metadata {
+        type 'Interface'
+        tech 'Retrofit · Gson'
+        role 'Declares each call; the client it is built on decides the base URL and the headers.'
+        facts [
+          'Every FLEX interface is built on the one <code>FlexRetrofit</code> client; chat has its own client with the same interceptors on a different base URL.'
+        ]
+        sourceId 'a1'
+        order '19'
+        x '1402'
+        y '80'
+        w '270'
+        h '62'
+        ownership 'app'
+      }
+    }
+
+    components_a2 = internal 'Android · interceptors and retry' {
+      #request-path
+      description 'Content-Type · Bearer · 401/403'
+      link https://github.com/govuk-once/govuk-mobile-android-app/blob/main/data/src/main/kotlin/uk/gov/govuk/data/remote/AuthorizationInterceptor.kt 'android · AuthorizationInterceptor.kt'
+      link https://github.com/govuk-once/govuk-mobile-android-app/blob/main/data/src/main/kotlin/uk/gov/govuk/data/remote/AuthenticatedApiCall.kt 'android · AuthenticatedApiCall.kt'
+      link https://github.com/govuk-once/govuk-mobile-android-app/blob/main/data/src/main/kotlin/uk/gov/govuk/data/remote/ApiCall.kt 'android · ApiCall.kt'
+      metadata {
+        type 'OkHttp interceptors · suspend wrappers'
+        tech 'HeaderInterceptor · AuthorizationInterceptor · withAuthRetry'
+        role 'Adds the two headers, and turns a response into a typed result.'
+        facts [
+          '<code>withAuthRetry</code> refreshes and retries once on 401 or 403; <code>safeApiCall</code> maps offline, HTTP failures and a bad signature to typed results.',
+          '<code>GET users/me</code> is the one FLEX call made without the retry.'
+        ]
+        sourceId 'a2'
+        order '20'
+        x '1402'
+        y '190'
+        w '270'
+        h '62'
+        ownership 'app'
+      }
+    }
+
+    components_a3 = internal 'Android · SignatureValidator' {
+      #request-path
+      description 'SHA256withECDSA'
+      link https://github.com/govuk-once/govuk-mobile-android-app/blob/main/config/src/main/kotlin/uk/gov/govuk/config/SignatureValidator.kt 'android · SignatureValidator.kt'
+      link https://github.com/govuk-once/govuk-mobile-android-app/blob/main/config/src/main/kotlin/uk/gov/govuk/config/data/remote/source/GovUkConfigDataSource.kt 'android · GovUkConfigDataSource.kt'
+      metadata {
+        type 'Class'
+        tech 'java.security · CONFIG_PUBLIC_KEY'
+        role 'Checks the signed config the same way iOS does, for the config call only.'
+        facts [
+          'The public key is compiled in, the same for every build type; an empty signature header fails.'
+        ]
+        sourceId 'a3'
+        order '21'
+        x '1402'
+        y '300'
+        w '270'
+        h '62'
+        ownership 'app'
+      }
+    }
+  }
+
+  components_p1 -> components_p2 'then' { metadata { protocol 'middy before' auth '—' carries 'The request, with a correlation id' order '1' } }
+  components_p2 -> components_p3 'then' { metadata { protocol 'middy before' auth '—' carries 'The request, knowing whether attestation is on' order '2' } }
+  components_p3 -> components_p4 'then' { metadata { protocol 'middy before' auth '—' carries 'Only the allowed headers' order '3' } }
+  components_p4 -> components_p5 'then' { metadata { protocol 'middy before' auth '—' carries 'A request the app is proven to have sent, if the flag is on' order '4' } }
+  components_p5 -> components_p6 'then' { metadata { protocol 'middy handler' auth '—' carries 'A typed grant' order '5' } }
+  components_p6 -> components_p7 'on error' { metadata { protocol 'middy onError' auth '—' carries 'Whatever was thrown, from any step' edgeStyle 'dash' order '6' } }
+  components_r1 -> components_r2 'then' { metadata { protocol 'middy before' auth '—' carries 'The compact JWT' order '7' } }
+  components_r2 -> components_r3 'then' { metadata { protocol 'middy handler' auth '—' carries 'The verified payload' order '8' } }
+  components_r3 -> components_r4 'then' { metadata { protocol 'function call' auth '—' carries 'The payload, if the flag is on' order '9' } }
+  components_r4 -> components_r5 'then' { metadata { protocol 'function call' auth '—' carries 'The event and its subject' order '10' } }
+  components_c1 -> components_c2 'then' { metadata { protocol 'middy before' auth '—' carries 'The header' order '11' } }
+  components_c2 -> components_c3 'then' { metadata { protocol 'middy handler' auth '—' carries 'The header and the secret' order '12' } }
+  components_c3 -> components_c4 'then' { metadata { protocol 'function call' auth '—' carries 'Allow or Deny, and the principal' order '13' } }
+  components_i1 -> components_i2 'sent by' { metadata { protocol 'Swift' auth '—' carries 'A GOVRequest' order '14' } }
+  components_a1 -> components_a2 'built on' { metadata { protocol 'Kotlin' auth '—' carries 'Every call' order '15' } }
+  components_a2 -> components_a3 'config only' { metadata { protocol 'Kotlin' auth '—' carries 'The config body and its signature header' edgeStyle 'dash' order '16' } }
+}
+
+views {
+  view components {
+    title 'Components'
+    include components_proxy, components_proxy.**
+    include components_receiver, components_receiver.**
+    include components_chatauth, components_chatauth.**
+    include components_client, components_client.**
+  }
+}

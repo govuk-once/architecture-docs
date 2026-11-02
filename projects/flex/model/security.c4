@@ -12,7 +12,7 @@ model {
       tech '—'
       role 'Everything a request meets before it reaches London: DNS, certificate, CloudFront, the CloudFront Web ACL, Shield, and the viewer-request function.'
       facts [
-        'The only stack outside eu-west-2. Its alarms reach the London topics through a cross-region relay whose inline handler has a syntax error, so every us-east-1 alarm currently reaches nobody — see Delivery.'
+        'The only stack outside eu-west-2. Its alarms reach the London topics through a cross-region relay; the relay\'s own six alarms go to a health topic nothing subscribes to — see Delivery.'
       ]
       sourceId 'z-edge'
       order '1'
@@ -23,7 +23,8 @@ model {
       boundary 'hard'
       resources [
         's3-cflogs',
-        'kms-relay'
+        'kms-relay',
+        'kms-relay-health'
       ]
     }
   }
@@ -166,7 +167,7 @@ model {
     }
   }
 
-  security_z_outside = boundary 'Outside · GOV.UK Once' {
+  security_z_outside = boundary 'Outside · GOV.UK Connect' {
     metadata {
       type 'Ownership boundary'
       tech '—'
@@ -185,7 +186,7 @@ model {
     metadata {
       type 'Ownership boundary'
       tech '—'
-      role 'The one party FLEX calls that is not GOV.UK Once, and the network it is reached over.'
+      role 'The one third party FLEX calls, and the network it is reached over.'
       facts [
         'Only the egress tier can reach here, and only through the NAT gateways — the isolated tier has no route out at all.'
       ]
@@ -326,7 +327,7 @@ model {
     technology 'Mobile client'
     link https://github.com/govuk-once/flex/blob/main/platform/smoke-test/src/handler.ts 'smoke-test handler.ts'
     metadata {
-      type 'GOV.UK Once system'
+      type 'GOV.UK system · outside Connect'
       tech 'Mobile client'
       role 'The only external production caller.'
       facts [
@@ -338,7 +339,7 @@ model {
       y '20'
       w '262'
       h '62'
-      ownership 'govuk'
+      ownership 'appside'
     }
   }
 
@@ -843,20 +844,21 @@ model {
     }
   }
 
-  security_kms = platform 'KMS keys × 3' {
+  security_kms = platform 'KMS keys × 5' {
     #off-request-path
-    description 'flow logs · alarm topics · relay'
+    description 'flow logs · alarms · relay · logs'
     technology 'Customer-managed'
     link https://github.com/govuk-once/flex/blob/main/platform/infra/flex/src/utils/lambda.ts 'utils/lambda.ts'
     link https://github.com/govuk-once/flex/blob/main/platform/infra/flex/src/constructs/lambda/flex-public-function.ts 'flex-public-function.ts'
     link https://github.com/govuk-once/flex/blob/main/platform/infra/flex/src/stacks/core/vpc.ts 'core/vpc.ts'
+    link https://github.com/govuk-once/flex/blob/main/platform/infra/flex/src/constructs/kms/log-group-key.ts 'kms/log-group-key.ts'
     metadata {
       type 'AWS::KMS::Key'
       tech 'Customer-managed'
       role 'What is encrypted with a key FLEX owns.'
       facts [
-        'Created: <code>alias/flex-vpc-flow-logs-key</code> and <code>alias/flex-alerts-key</code> in eu-west-2, <code>alias/{stage}-flex-alerts-relay-key</code> in us-east-1.',
-        'The fourth is imported, not created: /{env}/flex-param/secret/encryption-key encrypts the environment variables of every function built on the Flex* constructs, each of which is then granted decrypt on it.',
+        'Created: <code>alias/flex-vpc-flow-logs-key</code> and <code>alias/flex-alerts-key</code> in eu-west-2, <code>alias/{stage}-flex-alerts-relay-key</code> and <code>alias/{stage}-flex-alerts-relay-health-key</code> in us-east-1, and a log-group key in the core, global and Macie stacks — <code>alias/flex-log-group-key</code>, <code>alias/{stage}-flex-global-log-group-key</code> and <code>alias/flex-macie-log-group-key</code>. Every log group is encrypted: those three stacks with their own key, every other stack with the core key\'s ARN read from SSM.',
+        'One more is imported, not created: /{env}/flex-param/secret/encryption-key encrypts the environment variables of every function built on the Flex* constructs, each of which is then granted decrypt on it.',
         '<b>Defect:</b> that key is read with <code>StringParameter.valueForStringParameter</code> rather than <code>BaseStack.import()</code>, so it records no stack-dependency edge and gets no synth-time existence check — a missing parameter fails at deploy instead of at synth, unlike every other imported value.',
         'The flow-log key grants only the write path to <code>delivery.logs.amazonaws.com</code>. No reader grant is written on top of CDK\'s default account-root <code>kms:*</code> statement, so decrypt is delegated to IAM rather than blocked outright.'
       ]
@@ -872,6 +874,8 @@ model {
         'kms-flowlog',
         'kms-alerts',
         'kms-relay',
+        'kms-relay-health',
+        'kms-log-group',
         'kms-lambda-env'
       ]
     }
@@ -910,7 +914,7 @@ model {
     technology 'Imported by id and client id from SSM'
     link https://github.com/govuk-once/flex/blob/main/platform/infra/flex/src/stacks/platform.ts 'stacks/platform.ts'
     metadata {
-      type 'GOV.UK Once system'
+      type 'GOV.UK system · outside Connect'
       tech 'Imported by id and client id from SSM'
       role 'Issues the access tokens the authorizer verifies.'
       facts [
@@ -923,7 +927,7 @@ model {
       y '640'
       w '282'
       h '62'
-      ownership 'govuk'
+      ownership 'appside'
       awsIcon 'cognito'
       resources [
         'ssm-imported'
@@ -937,7 +941,7 @@ model {
     technology 'Reached through the execute-api endpoint'
     link https://github.com/govuk-once/flex/blob/main/platform/domains/udp/gateway.config.ts 'udp gateway.config.ts'
     metadata {
-      type 'GOV.UK Once systems'
+      type 'GOV.UK Connect systems'
       tech 'Reached through the execute-api endpoint'
       role 'Sibling systems of record.'
       facts [
@@ -963,7 +967,7 @@ model {
       tech 'Egress tier only'
       role 'The one third party FLEX calls.'
       facts [
-        'The only line that leaves the GOV.UK Once boundary carrying FLEX traffic. The DVLA gateway sits in the egress tier for exactly this.'
+        'The only line that carries a person\'s data out of GOV.UK Connect. The DVLA gateway sits in the egress tier for exactly this.'
       ]
       sourceId 'dvla'
       order '32'
@@ -1002,15 +1006,15 @@ model {
 
   security_smoke = platform 'Smoke-test canary' {
     #off-request-path
-    description 'no VPC · alarm reaches nobody'
-    technology 'Scheduled every 5 minutes'
+    description 'no VPC · every minute · critical'
+    technology 'Scheduled every minute'
     link https://github.com/govuk-once/flex/blob/main/platform/infra/flex/src/stacks/smoke-test.ts 'stacks/smoke-test.ts'
     metadata {
       type 'AWS::Lambda::Function'
-      tech 'Scheduled every 5 minutes'
-      role 'Exercises the whole public path, and tells nobody when it fails.'
+      tech 'Scheduled every minute'
+      role 'Exercises the whole public path with one probe per journey, and since FLEX-547 raises a critical alarm after three failures in a row.'
       facts [
-        'Its alarm has no action wired — the one alarm in the app that reaches no topic. Its role is hand-written and outside the permissions boundary.'
+        'Its three alarms — udp and travel success, and a valid token being refused — reach the critical topic through its SSM parameter; until FLEX-547 its one alarm reached no topic. Its role is hand-written and outside the permissions boundary.'
       ]
       sourceId 'smoke'
       order '34'

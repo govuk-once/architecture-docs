@@ -1,0 +1,17 @@
+{
+  "repo": "https://github.com/govuk-once/govuk-chat-v2.git",
+  "ref": "main",
+  "derived": {
+    "sha": "2ae22ca9f4f4032e9a3b0a30cd8789a68aa6640a",
+    "subject": "Merge pull request #427 from govuk-once/autobump-private-repo-79fbe1a",
+    "committed": "2026-10-29T13:55:19Z",
+    "builtFrom": "nothing derived — this project's counts are prose",
+    "derivation": "af35b68e0ec835a9",
+    "facts": ""
+  },
+  "read": {
+    "sha": "2ae22ca9f4f4032e9a3b0a30cd8789a68aa6640a",
+    "committed": "2026-10-29T13:55:19Z",
+    "subject": "Merge pull request #427 from govuk-once/autobump-private-repo-79fbe1a"
+  }
+}

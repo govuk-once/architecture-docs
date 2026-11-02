@@ -20,9 +20,21 @@
     "CertificateManager": "acm",
     "Macie": "macie",
     "SNS": "sns",
-    "Events": "eventbridge"
+    "Events": "eventbridge",
+    "SQS": "sqs",
+    "DSQL": "aurora",
+    "ElastiCache": "elasticache",
+    "ECS": "ecs",
+    "BedrockAgentCore": "bedrock-agentcore",
+    "CodeBuild": "codebuild",
+    "Signer": "signer",
+    "Backup": "backup",
+    "AppConfig": "appconfig",
+    "ACMPCA": "acm-pca"
   },
   "type": {
+    "AWS::Serverless::Function": "lambda",
+    "AWS::Serverless::Api": "apigateway",
     "AWS::CloudFront::Function": "cloudfront-functions",
     "AWS::EC2::NatGateway": "vpc-nat",
     "AWS::EC2::InternetGateway": "vpc-igw",
